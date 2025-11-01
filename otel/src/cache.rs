@@ -1,8 +1,8 @@
 use redis::{Client, Commands, Connection};
-use serde::{Deserialize, Serialize};
 use crate::entity::todo;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct RedisCache {
     client: Client,
 }

@@ -10,6 +10,7 @@ redis = "0.32.7"
 opentelemetry = "0.31.0"
 opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 opentelemetry-prometheus = "0.29.1"
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 tokio = { version = "1.42.0", features = ["full"] }
@@ -19,7 +20,7 @@ uuid = { version = "1.11.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 axum-extra = { version = "0.10.3", features = ["typed-header"] }
 metrics = "0.24.1"
-prometheus = "0.13.4"
+prometheus = "0.14.0"
 tracing-opentelemetry = "0.29.0"
 sea-orm-migration = "1.1.17"
 tower = "0.5.1"

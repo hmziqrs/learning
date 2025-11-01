@@ -24,7 +24,7 @@ use tracing::info;
 
 use handlers::{AppState, todo_routes};
 use health::health_routes;
-use migration::Migrator;
+use migration::{Migrator, MigratorTrait};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
