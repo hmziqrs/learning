@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: todos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8.2.2
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  quickwit:
+    image: quickwit/quickwit:0.8.2
+    ports:
+      - "7280:7280"
+      - "7281:7281"
+    volumes:
+      - quickwit_data:/quickwit/data
+    command: ["run"]
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+volumes:
+  postgres_data:
+  redis_data:
+  quickwit_data:
+  prometheus_data:
