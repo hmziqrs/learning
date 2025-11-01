@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
 use uuid::Uuid;
 
-use crate::cache::RedisCache;
 use crate::handlers::AppState;
-use crate::config::Config;
 
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
@@ -26,7 +24,6 @@ pub struct ServiceHealthResponse {
     message: Option<String>,
 }
 
-#[instrument(skip(state))]
 pub async fn health_check() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),

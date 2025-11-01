@@ -5,7 +5,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set, TryIntoModel};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
 use uuid::Uuid;
@@ -130,7 +130,7 @@ pub async fn update_todo(
                 active_model.title = Set(title);
             }
             if let Some(description) = payload.description {
-                active_model.description = Set(description);
+                active_model.description = Set(Some(description));
             }
             if let Some(completed) = payload.completed {
                 active_model.completed = Set(completed);

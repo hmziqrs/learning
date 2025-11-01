@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::Set;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -29,11 +30,5 @@ impl ActiveModelBehavior for ActiveModel {
         }
     }
 
-    fn before_save<C>(mut self, _db: &C, _insert: bool) -> Result<Self, DbErr>
-    where
-        C: ConnectionTrait,
-    {
-        self.updated_at = Set(chrono::Utc::now().into());
-        Ok(self)
-    }
+
 }
