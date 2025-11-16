@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.root.tauriapp",
+  "app": {
+    "windows": [
+      {
+        "title": "Tauri App",
+        "width": 800,
+        "height": 600,
+        "fullscreen": false
+      }
+    ]
+  },
+  "android": {
+    "minSdkVersion": 24,
+    "versionCode": 1,
+    "autoIncrementVersionCode": true
+  }
+}
