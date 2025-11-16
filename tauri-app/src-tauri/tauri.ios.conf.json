@@ -10,8 +10,5 @@
         "fullscreen": false
       }
     ]
-  },
-  "ios": {
-    "minimumSystemVersion": "14.0"
   }
 }
