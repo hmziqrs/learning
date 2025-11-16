@@ -18,6 +18,9 @@ Everything is grouped module-by-module, and each module has its own one-screen i
 8. [In-App Purchases Module](#8️⃣-in-app-purchases-module)
 9. [SQL + Storage Module](#9️⃣-sql--storage-module)
 10. [Network & Realtime Module](#🔟-network--realtime-module)
+11. [Contacts Module](#1️⃣1️⃣-contacts-module)
+12. [Gallery / Media Library Module](#1️⃣2️⃣-gallery--media-library-module)
+13. [Camera Module (Photo + Video Capture)](#1️⃣3️⃣-camera-module-photo--video-capture)
 
 ---
 
@@ -336,6 +339,179 @@ bun add @tauri-apps/plugin-upload
 
 ---
 
+## 1️⃣1️⃣ Contacts Module
+
+### Purpose
+Access device contacts (read-only or read/write depending on platform).
+
+### Plugins Required
+📌 **No official Tauri plugin exists yet**
+
+Community approaches:
+- `tauri-plugin-contacts` (community, early-stage)
+- **OR** build your own custom mobile plugin
+
+### Integration Steps
+
+1. **Create a custom plugin (mobile-only)**
+
+   **Android (Kotlin)**:
+   - Request `android.permission.READ_CONTACTS`
+   - Query `ContactsContract.Contacts`
+
+   **iOS (Swift)**:
+   - Request permission via `CNContactStore`
+   - Fetch contacts via `unifiedContacts`
+
+2. **Expose Tauri command**:
+   ```rust
+   #[tauri::command]
+   async fn get_contacts() -> Vec<Contact> {
+       // call mobile-side plugin
+   }
+   ```
+
+3. **Frontend integration**
+   ```typescript
+   const contacts = await invoke("get_contacts");
+   ```
+
+### UI for This Screen
+- **Button**: "Load Contacts"
+- **Search input**: Filter contacts
+- **List**: Name, phone, email
+- **Panel**: Permission status (granted/denied)
+
+---
+
+## 1️⃣2️⃣ Gallery / Media Library Module
+
+### Purpose
+Allow user to pick photos/videos from their device storage or gallery.
+
+### Plugins Required
+Use the View/Opener plugins from Tauri mobile plugin system:
+- `tauri-plugin-view` → lets you view/open files
+- `tauri-plugin-opener` → open external apps
+
+📌 **For gallery selection, use custom plugin**:
+- **Android**: Native intent `ACTION_PICK` / `ACTION_GET_CONTENT`
+- **iOS**: `PHPickerViewController`
+
+### Integration Steps
+
+1. **Mobile Plugin functions**
+   - `pick_image()` → returns file URI/path
+   - `pick_video()`
+   - `pick_multiple_media()`
+
+   **Android**:
+   ```kotlin
+   val intent = Intent(Intent.ACTION_PICK)
+   intent.type = "image/*"
+   startActivityForResult(intent, REQUEST_CODE)
+   ```
+
+   **iOS**:
+   ```swift
+   let picker = PHPickerViewController(configuration)
+   picker.delegate = self
+   ```
+
+2. **Convert URI/path to WebView usable URL**
+   ```typescript
+   import { convertFileSrc } from '@tauri-apps/api/core';
+   const webViewUrl = convertFileSrc(path);
+   ```
+
+3. **Display preview**
+   ```tsx
+   <img src={convertFileSrc(path)} />
+   <video src={convertFileSrc(path)} />
+   ```
+
+### UI for This Screen
+- **Button**: Pick Image
+- **Button**: Pick Video
+- **Button**: Pick Multiple
+- **Thumbnail Grid**: Selected media
+- **Tap to preview**: Fullscreen view
+
+---
+
+## 1️⃣3️⃣ Camera Module (Photo + Video Capture)
+
+### Purpose
+Use device camera to take photos/videos.
+
+### Plugins Required
+📌 **No official camera plugin yet**
+
+**Approach A: Use WebView camera via `getUserMedia`** (EASIEST)
+- Works on Desktop, Android, iOS (with permissions)
+```typescript
+navigator.mediaDevices.getUserMedia({
+  video: true,
+  audio: false
+})
+```
+
+**Approach B: Native camera** (best UX)
+- Via custom plugin
+
+### Integration Steps
+
+1. **For WebView approach**:
+   - Enable camera permission in Tauri mobile manifest
+   - Use HTML5 `getUserMedia` API
+   - Capture frame to canvas
+   - Save as blob/file
+
+2. **For Native plugin**:
+
+   **Android**:
+   - Use `MediaStore.ACTION_IMAGE_CAPTURE`
+   - Use `FileProvider` to return file URI
+   - Save JPEG/MP4 file
+
+   **iOS**:
+   - `UIImagePickerController`
+   - OR better: `AVCaptureSession` for advanced control
+
+3. **Implement plugin commands**:
+   ```rust
+   #[tauri::command]
+   async fn open_camera() -> String {
+       // open camera UI, return file path
+   }
+
+   #[tauri::command]
+   async fn record_video() -> String {
+       // open video recorder
+   }
+
+   #[tauri::command]
+   async fn take_photo() -> String {
+       // return stored image path
+   }
+   ```
+
+4. **Frontend**:
+   ```typescript
+   const path = await invoke("take_photo");
+   const imgUrl = convertFileSrc(path);
+   ```
+
+5. **Store captured media** in `AppLocalData`
+
+### UI for This Screen
+- **Live Camera Preview**: Via `getUserMedia`
+- **Button**: Take Photo
+- **Button**: Record Video
+- **Panel**: Last 5 captured media thumbnails
+
+---
+
 ## 🔥 Final App Structure (All Screens)
 
 ```
@@ -349,7 +525,10 @@ bun add @tauri-apps/plugin-upload
  ├── 📅 Calendar (ICS Export)
  ├── 💰 In-App Purchases
  ├── 💾 Storage & SQL
- └── 🌐 Network & Realtime
+ ├── 🌐 Network & Realtime
+ ├── 👤 Contacts
+ ├── 🖼️ Gallery / Media Library
+ └── 📷 Camera (Photo + Video)
 ```
 
 ---
@@ -377,6 +556,15 @@ bun add tauri-plugin-iap
 bun add tauri-plugin-in-app-purchase
 ```
 
+### Mobile-Specific (Custom Plugins Required)
+**Note**: These require custom mobile plugin development
+- Contacts (Android: Contacts Provider, iOS: CNContactStore)
+- Gallery/Media Library (Android: ACTION_PICK, iOS: PHPickerViewController)
+- Camera (Android: MediaStore, iOS: UIImagePickerController/AVCaptureSession)
+
+**WebView Alternative for Camera**:
+- Use HTML5 `getUserMedia` API (works on all platforms with permissions)
+
 ---
 
 ## 🚀 Implementation Order
@@ -386,6 +574,7 @@ bun add tauri-plugin-in-app-purchase
 3. **Rich Features**: Media → Calendar → Alarms
 4. **Platform Integration**: In-App Purchases
 5. **Advanced**: Network & Realtime
+6. **Mobile Features**: Gallery → Camera → Contacts (requires custom plugins)
 
 ---
 
@@ -403,6 +592,7 @@ bun add tauri-plugin-in-app-purchase
 
 Track your implementation progress:
 
+### Core Modules
 - [ ] Filesystem Module
 - [ ] Notifications + Scheduling Module
 - [ ] Deep Linking Module
@@ -413,6 +603,11 @@ Track your implementation progress:
 - [ ] In-App Purchases Module
 - [ ] SQL + Storage Module
 - [ ] Network & Realtime Module
+
+### Mobile-Specific Modules
+- [ ] Contacts Module (custom plugin)
+- [ ] Gallery / Media Library Module (custom plugin)
+- [ ] Camera Module (WebView or custom plugin)
 
 ---
 
