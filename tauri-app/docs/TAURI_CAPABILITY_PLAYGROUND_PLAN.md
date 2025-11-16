@@ -21,6 +21,19 @@ Everything is grouped module-by-module, and each module has its own one-screen i
 11. [Contacts Module](#1️⃣1️⃣-contacts-module)
 12. [Gallery / Media Library Module](#1️⃣2️⃣-gallery--media-library-module)
 13. [Camera Module (Photo + Video Capture)](#1️⃣3️⃣-camera-module-photo--video-capture)
+14. [Sensors & Device Hardware Module](#1️⃣4️⃣-sensors--device-hardware-module)
+15. [Networking & Radio Access Module](#1️⃣5️⃣-networking--radio-access-module)
+16. [Background Tasks Module](#1️⃣6️⃣-background-tasks-module)
+17. [System Services Module](#1️⃣7️⃣-system-services-module)
+18. [App Lifecycle & OS Integration Module](#1️⃣8️⃣-app-lifecycle--os-integration-module)
+19. [Haptics / Vibrations Module](#1️⃣9️⃣-haptics--vibrations-module)
+20. [Speech & Media Intelligence Module](#2️⃣0️⃣-speech--media-intelligence-module)
+21. [File Sharing & Social Integration Module](#2️⃣1️⃣-file-sharing--social-integration-module)
+22. [System Info & Device Profiling Module](#2️⃣2️⃣-system-info--device-profiling-module)
+23. [Security & Biometrics Module](#2️⃣3️⃣-security--biometrics-module)
+24. [Maps & Navigation Module](#2️⃣4️⃣-maps--navigation-module)
+25. [Printing & PDF / Document Handling Module](#2️⃣5️⃣-printing--pdf--document-handling-module)
+26. [Local Web Server Module](#2️⃣6️⃣-local-web-server-module)
 
 ---
 
@@ -512,6 +525,616 @@ navigator.mediaDevices.getUserMedia({
 
 ---
 
+## 1️⃣4️⃣ Sensors & Device Hardware Module
+
+### Purpose
+Access device sensors for motion-controlled UI, compass apps, AR apps, and GPS/location tracking.
+
+### Plugins Required
+📌 **Custom plugins required for most sensors**
+
+**A. Gyroscope / Accelerometer / Magnetometer**
+- Android: `SensorManager`
+- iOS: `CoreMotion`
+
+**B. GPS / Geolocation**
+- Web API: `navigator.geolocation` (simplest)
+- Native precision:
+  - Android: Location Services
+  - iOS: CoreLocation
+
+### Integration Steps
+
+1. **For Web API (Geolocation)**:
+   ```typescript
+   navigator.geolocation.getCurrentPosition(
+     (position) => {
+       const { latitude, longitude } = position.coords;
+     }
+   );
+   ```
+
+2. **For Native Sensors (Custom Plugin)**:
+
+   **Android**:
+   ```kotlin
+   val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+   val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+   ```
+
+   **iOS**:
+   ```swift
+   let motionManager = CMMotionManager()
+   motionManager.startAccelerometerUpdates()
+   ```
+
+3. **Rust commands**:
+   ```rust
+   #[tauri::command]
+   async fn get_sensor_data() -> SensorData {
+       // call mobile plugin
+   }
+   ```
+
+### UI for This Screen
+- **Live 3-axis graph**: X, Y, Z acceleration
+- **Button**: "Shake to trigger action"
+- **Compass**: Heading display
+- **GPS Panel**: Coordinates, accuracy
+- **Button**: "Track movement"
+- **Map preview**: Leaflet.js + OpenStreetMap
+
+---
+
+## 1️⃣5️⃣ Networking & Radio Access Module
+
+### Purpose
+Access Bluetooth Low Energy (BLE) devices and scan Wi-Fi networks.
+
+### Plugins Required
+📌 **Custom plugins required**
+
+**A. Bluetooth (BLE)**
+- Android: `BluetoothGatt`
+- iOS: `CoreBluetooth`
+
+**B. Wi-Fi Scanning**
+- Android: `WifiManager`
+- Desktop: OS tools via CLI
+
+### Integration Steps
+
+1. **Bluetooth Plugin**:
+
+   **Android**:
+   ```kotlin
+   val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+   val bluetoothAdapter = bluetoothManager.adapter
+   bluetoothLeScanner.startScan(scanCallback)
+   ```
+
+   **iOS**:
+   ```swift
+   centralManager = CBCentralManager(delegate: self, queue: nil)
+   centralManager.scanForPeripherals(withServices: nil)
+   ```
+
+2. **Rust commands**:
+   ```rust
+   #[tauri::command]
+   async fn scan_bluetooth_devices() -> Vec<BluetoothDevice> {}
+
+   #[tauri::command]
+   async fn connect_device(id: String) -> Result<(), String> {}
+   ```
+
+### UI for This Screen
+- **Button**: Scan BLE devices
+- **List**: Available devices with RSSI
+- **Button**: Connect/Disconnect
+- **Panel**: Read/write characteristics
+- **Wi-Fi List**: Nearby SSIDs
+- **RSSI Graph**: Signal strength
+- **Panel**: Frequency band info
+
+---
+
+## 1️⃣6️⃣ Background Tasks Module
+
+### Purpose
+Real background processing even when app is killed or in background.
+
+### Plugins Required
+📌 **Custom plugin required**
+
+- **Android**: WorkManager
+- **iOS**: Background Fetch / BGTaskScheduler
+
+### Integration Steps
+
+1. **Android WorkManager**:
+   ```kotlin
+   val workRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+       .build()
+   WorkManager.getInstance(context).enqueue(workRequest)
+   ```
+
+2. **iOS Background Tasks**:
+   ```swift
+   BGTaskScheduler.shared.register(
+       forTaskWithIdentifier: "com.app.refresh",
+       using: nil
+   ) { task in
+       handleBackgroundTask(task: task as! BGAppRefreshTask)
+   }
+   ```
+
+3. **Use cases**:
+   - Sync notes
+   - Refresh location
+   - Background uploads
+   - Periodic API calls
+
+### UI for This Screen
+- **Button**: Schedule background task
+- **Input**: Interval (minutes)
+- **Log panel**: Last 10 background executions
+- **Toggle**: Enable/disable background sync
+- **Button**: Trigger notification on completion
+
+---
+
+## 1️⃣7️⃣ System Services Module
+
+### Purpose
+Access clipboard, system audio devices, and battery/power information.
+
+### Plugins Required
+- **Clipboard**: `@tauri-apps/plugin-clipboard-manager`
+- **Battery**: Web API or custom plugin
+- **Audio devices**: Custom plugin
+
+### Integration Steps
+
+1. **Clipboard**:
+   ```bash
+   bun add @tauri-apps/plugin-clipboard-manager
+   ```
+
+   ```typescript
+   import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
+   ```
+
+2. **Battery API (Web)**:
+   ```typescript
+   const battery = await navigator.getBattery();
+   console.log(battery.level * 100); // percentage
+   console.log(battery.charging); // boolean
+   ```
+
+3. **Native Battery (Custom Plugin)**:
+
+   **Android**:
+   ```kotlin
+   val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+   val batteryLevel = batteryManager.getIntProperty(BATTERY_PROPERTY_CAPACITY)
+   ```
+
+### UI for This Screen
+- **Input**: Text to copy
+- **Button**: Copy to clipboard
+- **Button**: Paste from clipboard
+- **Panel**: Clipboard history (last 5)
+- **Audio Devices List**: Speakers, headphones, Bluetooth
+- **Battery Panel**: Percentage, charging state, temperature
+
+---
+
+## 1️⃣8️⃣ App Lifecycle & OS Integration Module
+
+### Purpose
+Monitor app lifecycle events, create system tray, and manage multiple windows.
+
+### Plugins Required
+- System tray: Built-in Tauri
+- Multiple windows: Built-in Tauri
+- Lifecycle: Custom mobile plugin
+
+### Integration Steps
+
+1. **App Lifecycle Hooks**:
+   ```rust
+   #[tauri::command]
+   fn on_app_foreground() {
+       println!("App moved to foreground");
+   }
+   ```
+
+2. **System Tray (Desktop)**:
+   ```rust
+   use tauri::SystemTray;
+
+   let tray = SystemTray::new()
+       .with_menu(menu);
+   ```
+
+3. **Multiple Windows**:
+   ```rust
+   use tauri::WindowBuilder;
+
+   WindowBuilder::new(
+       &app,
+       "secondary",
+       tauri::WindowUrl::App("index.html".into())
+   ).build()?;
+   ```
+
+### UI for This Screen
+- **Log panel**: Lifecycle events (foreground, background, pause, resume)
+- **Button**: Create system tray icon
+- **Button**: Open new window
+- **Input**: Window message
+- **Button**: Send message to other window
+- **Toggle**: Background mode
+
+---
+
+## 1️⃣9️⃣ Haptics / Vibrations Module
+
+### Purpose
+Provide tactile feedback on mobile devices.
+
+### Plugins Required
+📌 **Custom mobile plugin**
+
+- Android: Vibrator API
+- iOS: UIFeedbackGenerator
+
+### Integration Steps
+
+1. **Android**:
+   ```kotlin
+   val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+   vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+   ```
+
+2. **iOS**:
+   ```swift
+   let generator = UIImpactFeedbackGenerator(style: .medium)
+   generator.impactOccurred()
+   ```
+
+3. **Rust command**:
+   ```rust
+   #[tauri::command]
+   async fn vibrate(intensity: String) {
+       // call mobile plugin
+   }
+   ```
+
+### UI for This Screen
+- **Button**: Light tap
+- **Button**: Medium impact
+- **Button**: Heavy impact
+- **Button**: Success vibration
+- **Button**: Error vibration
+- **Button**: Warning vibration
+
+---
+
+## 2️⃣0️⃣ Speech & Media Intelligence Module
+
+### Purpose
+Speech-to-text transcription and text-to-speech synthesis.
+
+### Plugins Required
+**Approach A: Web Speech API** (works on most platforms)
+**Approach B: Native APIs** (better quality)
+
+### Integration Steps
+
+1. **Speech-to-Text (Web)**:
+   ```typescript
+   const recognition = new webkitSpeechRecognition();
+   recognition.onresult = (event) => {
+       const transcript = event.results[0][0].transcript;
+   };
+   recognition.start();
+   ```
+
+2. **Text-to-Speech (Web)**:
+   ```typescript
+   const utterance = new SpeechSynthesisUtterance('Hello world');
+   speechSynthesis.speak(utterance);
+   ```
+
+3. **Native STT/TTS (Custom Plugin)**:
+
+   **Android**:
+   ```kotlin
+   val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+   val textToSpeech = TextToSpeech(context) { status -> }
+   ```
+
+   **iOS**:
+   ```swift
+   let recognizer = SFSpeechRecognizer()
+   let synthesizer = AVSpeechSynthesizer()
+   ```
+
+### UI for This Screen
+- **Button**: Press to speak (STT)
+- **Panel**: Live transcript
+- **Button**: Save transcript
+- **Input**: Text to speak (TTS)
+- **Button**: Play voice
+- **Dropdown**: Select voice
+- **Slider**: Speech rate
+
+---
+
+## 2️⃣1️⃣ File Sharing & Social Integration Module
+
+### Purpose
+Share files via native share sheet and receive files from other apps.
+
+### Plugins Required
+📌 **Custom mobile plugin**
+
+### Integration Steps
+
+1. **Share Sheet (Android)**:
+   ```kotlin
+   val shareIntent = Intent().apply {
+       action = Intent.ACTION_SEND
+       putExtra(Intent.EXTRA_TEXT, "Share content")
+       type = "text/plain"
+   }
+   startActivity(Intent.createChooser(shareIntent, null))
+   ```
+
+2. **Share Sheet (iOS)**:
+   ```swift
+   let activityController = UIActivityViewController(
+       activityItems: ["Share content"],
+       applicationActivities: nil
+   )
+   present(activityController, animated: true)
+   ```
+
+3. **Receiving Shared Files**:
+   - Android: Intent filter in manifest
+   - iOS: Share extension
+
+### UI for This Screen
+- **Button**: Share text
+- **Button**: Share image
+- **Button**: Share file
+- **Panel**: Files received from other apps
+- **Thumbnail preview**: Shared media
+
+---
+
+## 2️⃣2️⃣ System Info & Device Profiling Module
+
+### Purpose
+Display hardware information and performance benchmarks.
+
+### Plugins Required
+- `@tauri-apps/plugin-os`
+- Custom plugin for extended info
+
+### Integration Steps
+
+1. **Install plugin**:
+   ```bash
+   bun add @tauri-apps/plugin-os
+   ```
+
+2. **Get system info**:
+   ```typescript
+   import { platform, version, arch } from '@tauri-apps/plugin-os';
+   ```
+
+3. **Performance benchmarks**:
+   ```rust
+   #[tauri::command]
+   async fn benchmark_performance() -> BenchmarkResults {
+       // Test JS loop, command latency, file I/O, etc.
+   }
+   ```
+
+### UI for This Screen
+- **Panel**: Hardware info (CPU, GPU, RAM, storage)
+- **Panel**: OS info (platform, version, arch)
+- **Panel**: Device model
+- **Button**: Run benchmark
+- **Graph**: Performance results
+- **Metrics**: Command latency, file I/O speed, DB operations
+
+---
+
+## 2️⃣3️⃣ Security & Biometrics Module
+
+### Purpose
+Biometric authentication (fingerprint, face) and secure crypto operations.
+
+### Plugins Required
+📌 **Custom mobile plugin**
+
+- Android: BiometricPrompt
+- iOS: LocalAuthentication
+
+### Integration Steps
+
+1. **Android Biometrics**:
+   ```kotlin
+   val biometricPrompt = BiometricPrompt(this, executor, callback)
+   val promptInfo = BiometricPrompt.PromptInfo.Builder()
+       .setTitle("Authenticate")
+       .setNegativeButtonText("Cancel")
+       .build()
+   biometricPrompt.authenticate(promptInfo)
+   ```
+
+2. **iOS Biometrics**:
+   ```swift
+   let context = LAContext()
+   context.evaluatePolicy(
+       .deviceOwnerAuthenticationWithBiometrics,
+       localizedReason: "Authenticate"
+   ) { success, error in }
+   ```
+
+3. **Secure storage**:
+   - Android: Keystore
+   - iOS: Keychain
+
+### UI for This Screen
+- **Button**: "Authenticate with biometrics"
+- **Panel**: Authentication result
+- **Panel**: Available biometric methods
+- **Button**: Generate encryption key
+- **Button**: Encrypt data
+- **Button**: Decrypt data
+
+---
+
+## 2️⃣4️⃣ Maps & Navigation Module
+
+### Purpose
+Display interactive maps with user location, markers, and routing.
+
+### Plugins Required
+```bash
+bun add leaflet
+bun add @types/leaflet -D
+```
+
+### Integration Steps
+
+1. **Setup Leaflet.js**:
+   ```typescript
+   import L from 'leaflet';
+
+   const map = L.map('map').setView([51.505, -0.09], 13);
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+   ```
+
+2. **Add markers**:
+   ```typescript
+   L.marker([lat, lng]).addTo(map)
+       .bindPopup('Marker content');
+   ```
+
+3. **Get user location** (from Sensors module):
+   ```typescript
+   navigator.geolocation.getCurrentPosition((pos) => {
+       map.setView([pos.coords.latitude, pos.coords.longitude], 13);
+   });
+   ```
+
+### UI for This Screen
+- **Map view**: Interactive Leaflet map
+- **Button**: Show my location
+- **Button**: Drop marker
+- **Input**: Search location
+- **Panel**: Route calculator (optional)
+- **List**: Saved markers
+
+---
+
+## 2️⃣5️⃣ Printing & PDF / Document Handling Module
+
+### Purpose
+System print dialog and PDF viewing/annotation.
+
+### Plugins Required
+- Printing: Built-in browser API
+- PDF: `react-pdf` or `pdf.js`
+
+### Integration Steps
+
+1. **Print HTML (Desktop)**:
+   ```typescript
+   window.print();
+   ```
+
+2. **Generate PDF** (use library like `jsPDF`):
+   ```bash
+   bun add jspdf
+   ```
+
+   ```typescript
+   import jsPDF from 'jspdf';
+   const doc = new jsPDF();
+   doc.text('Hello world', 10, 10);
+   doc.save('document.pdf');
+   ```
+
+3. **View PDF**:
+   ```bash
+   bun add react-pdf
+   ```
+
+### UI for This Screen
+- **Button**: Print current page
+- **Button**: Generate PDF
+- **PDF Viewer**: Display PDF with zoom/pan
+- **Button**: Download PDF
+- **Button**: Share PDF
+
+---
+
+## 2️⃣6️⃣ Local Web Server Module
+
+### Purpose
+Embed a Rust HTTP server inside Tauri for local APIs, webhooks, and multi-process communication.
+
+### Plugins Required
+Add to `Cargo.toml`:
+```toml
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+```
+
+### Integration Steps
+
+1. **Create Axum server**:
+   ```rust
+   use axum::{Router, routing::get};
+
+   #[tauri::command]
+   async fn start_local_server() {
+       let app = Router::new()
+           .route("/", get(|| async { "Hello from local server!" }));
+
+       tokio::spawn(async {
+           axum::Server::bind(&"127.0.0.1:3030".parse().unwrap())
+               .serve(app.into_make_service())
+               .await
+               .unwrap();
+       });
+   }
+   ```
+
+2. **Test from frontend**:
+   ```typescript
+   const response = await fetch('http://localhost:3030');
+   const data = await response.text();
+   ```
+
+### UI for This Screen
+- **Button**: Start local server
+- **Button**: Stop server
+- **Panel**: Server status (running/stopped)
+- **Input**: API endpoint
+- **Button**: Test endpoint
+- **Panel**: Response output
+- **Log**: Request history
+
+---
+
 ## 🔥 Final App Structure (All Screens)
 
 ```
@@ -528,7 +1151,20 @@ navigator.mediaDevices.getUserMedia({
  ├── 🌐 Network & Realtime
  ├── 👤 Contacts
  ├── 🖼️ Gallery / Media Library
- └── 📷 Camera (Photo + Video)
+ ├── 📷 Camera (Photo + Video)
+ ├── 🧭 Sensors & Motion
+ ├── 📡 Bluetooth & Wi-Fi
+ ├── ⚙️ Background Tasks
+ ├── 📋 Clipboard & Battery
+ ├── 🔄 App Lifecycle & System Tray
+ ├── 📳 Haptics & Vibrations
+ ├── 🎤 Speech (TTS & STT)
+ ├── 📤 File Sharing & Share Sheet
+ ├── 📊 System Info & Device Profile
+ ├── 🔐 Biometrics & Secure Storage
+ ├── 🗺️ Maps & Geolocation
+ ├── 🖨️ Printing & PDF
+ └── 🌐 Local Web Server
 ```
 
 ---
@@ -546,6 +1182,11 @@ bun add @tauri-apps/plugin-store
 bun add @tauri-apps/plugin-opener
 bun add @tauri-apps/plugin-websocket
 bun add @tauri-apps/plugin-upload
+bun add @tauri-apps/plugin-clipboard-manager
+bun add @tauri-apps/plugin-os
+bun add @tauri-apps/plugin-process
+bun add @tauri-apps/plugin-shell
+bun add @tauri-apps/plugin-global-shortcut
 ```
 
 ### Media & Advanced
@@ -556,25 +1197,103 @@ bun add tauri-plugin-iap
 bun add tauri-plugin-in-app-purchase
 ```
 
-### Mobile-Specific (Custom Plugins Required)
-**Note**: These require custom mobile plugin development
-- Contacts (Android: Contacts Provider, iOS: CNContactStore)
-- Gallery/Media Library (Android: ACTION_PICK, iOS: PHPickerViewController)
-- Camera (Android: MediaStore, iOS: UIImagePickerController/AVCaptureSession)
+### Geolocation & Maps
+```bash
+bun add @tauri-apps/plugin-geolocation
+# Leaflet.js for maps (frontend)
+bun add leaflet
+bun add @types/leaflet -D
+```
 
-**WebView Alternative for Camera**:
-- Use HTML5 `getUserMedia` API (works on all platforms with permissions)
+### HTTP & Networking
+```bash
+# For embedded web server (add to Cargo.toml)
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+```
+
+### Custom Plugins Required
+**Note**: These require custom mobile/desktop plugin development
+
+#### Mobile-Specific
+- **Contacts** (Android: Contacts Provider, iOS: CNContactStore)
+- **Gallery/Media Library** (Android: ACTION_PICK, iOS: PHPickerViewController)
+- **Camera** (Android: MediaStore, iOS: UIImagePickerController/AVCaptureSession)
+  - *Alternative*: Use HTML5 `getUserMedia` API (works on all platforms with permissions)
+
+#### Sensors & Hardware
+- **Sensors** (Android: SensorManager, iOS: CoreMotion)
+- **Bluetooth LE** (Android: BluetoothGatt, iOS: CoreBluetooth)
+- **Wi-Fi Management** (Android: WifiManager, iOS: NEHotspotConfiguration)
+
+#### System Integration
+- **Background Tasks** (Android: WorkManager, iOS: BGTaskScheduler)
+- **Battery Info** (Android: BatteryManager, iOS: UIDevice)
+- **Audio Devices** (Desktop: cpal, Mobile: AudioManager/AVAudioSession)
+- **Haptics** (Android: Vibrator API, iOS: UIFeedbackGenerator)
+- **System Tray** (Desktop: built-in Tauri, Mobile: N/A)
+- **Multi-Window** (Desktop: built-in Tauri, Mobile: N/A)
+
+#### Security & Biometrics
+- **Biometric Auth** (Android: BiometricPrompt, iOS: LocalAuthentication)
+- **Secure Storage** (Use @tauri-apps/plugin-store with encryption)
+
+#### Document & Media
+- **Speech-to-Text** (WebView: Web Speech API, Native: Android SpeechRecognizer, iOS: SFSpeechRecognizer)
+- **Text-to-Speech** (WebView: Web Speech API, Native: Android TextToSpeech, iOS: AVSpeechSynthesizer)
+- **Share Sheet** (Android: ACTION_SEND, iOS: UIActivityViewController)
+- **PDF Generation** (jsPDF on frontend, or rust-pdf backend)
+- **Printing** (Desktop: native dialogs, Mobile: PrintManager/UIPrintInteractionController)
 
 ---
 
 ## 🚀 Implementation Order
 
-1. **Start Simple**: Filesystem → Storage → Notifications
-2. **Add Interaction**: Drag & Drop → Deep Linking
-3. **Rich Features**: Media → Calendar → Alarms
-4. **Platform Integration**: In-App Purchases
-5. **Advanced**: Network & Realtime
-6. **Mobile Features**: Gallery → Camera → Contacts (requires custom plugins)
+### Phase 1: Foundation (Modules 1-5)
+1. **Filesystem** - Basic file operations
+2. **Storage & SQL** - Data persistence
+3. **Notifications** - Simple alerts
+4. **Drag & Drop** - File interaction
+5. **Deep Linking** - URL handling
+
+### Phase 2: Media & Content (Modules 6-8)
+6. **Media Player** - Audio/video playback
+7. **Calendar** - Event management
+8. **Alarms** - Scheduled notifications
+
+### Phase 3: Monetization & Networking (Modules 9-10)
+9. **In-App Purchases** - Payment integration
+10. **Network & Realtime** - HTTP, WebSocket, SSE
+
+### Phase 4: Mobile Integration (Modules 11-13)
+11. **Gallery/Media Library** - Access photo library
+12. **Camera** - Photo/video capture
+13. **Contacts** - Contact management
+
+### Phase 5: Device Hardware (Modules 14-15)
+14. **Sensors & Motion** - Accelerometer, gyroscope, proximity
+15. **Bluetooth & Wi-Fi** - BLE scanning, Wi-Fi management
+
+### Phase 6: System Services (Modules 16-19)
+16. **Background Tasks** - Long-running operations
+17. **Clipboard & Battery** - System utilities
+18. **App Lifecycle & System Tray** - Window management
+19. **Haptics & Vibrations** - Tactile feedback
+
+### Phase 7: Intelligence & Sharing (Modules 20-21)
+20. **Speech (TTS & STT)** - Voice interaction
+21. **File Sharing & Share Sheet** - Cross-app sharing
+
+### Phase 8: Advanced Features (Modules 22-26)
+22. **System Info & Device Profile** - Hardware/OS details
+23. **Biometrics & Secure Storage** - Authentication
+24. **Maps & Geolocation** - Location services
+25. **Printing & PDF** - Document generation
+26. **Local Web Server** - Embedded HTTP server
+
+**Recommended**: Start with Phase 1-3, then choose modules based on your app's requirements.
 
 ---
 
@@ -592,22 +1311,47 @@ bun add tauri-plugin-in-app-purchase
 
 Track your implementation progress:
 
-### Core Modules
-- [ ] Filesystem Module
-- [ ] Notifications + Scheduling Module
-- [ ] Deep Linking Module
-- [ ] Media Module (Audio + Video)
-- [ ] Drag & Drop Module
-- [ ] Alarms (Future Notifications) Module
-- [ ] Calendar Module (Internal + ICS Export)
-- [ ] In-App Purchases Module
-- [ ] SQL + Storage Module
-- [ ] Network & Realtime Module
+### Phase 1: Foundation (Modules 1-5)
+- [ ] 1. Filesystem Module
+- [ ] 2. Notifications + Scheduling Module
+- [ ] 3. Deep Linking Module
+- [ ] 4. Media Module (Audio + Video)
+- [ ] 5. Drag & Drop Module
 
-### Mobile-Specific Modules
-- [ ] Contacts Module (custom plugin)
-- [ ] Gallery / Media Library Module (custom plugin)
-- [ ] Camera Module (WebView or custom plugin)
+### Phase 2: Media & Content (Modules 6-8)
+- [ ] 6. Alarms (Future Notifications) Module
+- [ ] 7. Calendar Module (Internal + ICS Export)
+- [ ] 8. In-App Purchases Module
+
+### Phase 3: Monetization & Networking (Modules 9-10)
+- [ ] 9. SQL + Storage Module
+- [ ] 10. Network & Realtime Module
+
+### Phase 4: Mobile Integration (Modules 11-13)
+- [ ] 11. Contacts Module (custom plugin)
+- [ ] 12. Gallery / Media Library Module (custom plugin)
+- [ ] 13. Camera Module (WebView or custom plugin)
+
+### Phase 5: Device Hardware (Modules 14-15)
+- [ ] 14. Sensors & Motion Module (custom plugin)
+- [ ] 15. Bluetooth & Wi-Fi Module (custom plugin)
+
+### Phase 6: System Services (Modules 16-19)
+- [ ] 16. Background Tasks Module (custom plugin)
+- [ ] 17. Clipboard & Battery Module
+- [ ] 18. App Lifecycle & System Tray Module
+- [ ] 19. Haptics & Vibrations Module (custom plugin)
+
+### Phase 7: Intelligence & Sharing (Modules 20-21)
+- [ ] 20. Speech (TTS & STT) Module
+- [ ] 21. File Sharing & Share Sheet Module (custom plugin)
+
+### Phase 8: Advanced Features (Modules 22-26)
+- [ ] 22. System Info & Device Profile Module
+- [ ] 23. Biometrics & Secure Storage Module (custom plugin)
+- [ ] 24. Maps & Geolocation Module
+- [ ] 25. Printing & PDF Module (custom plugin)
+- [ ] 26. Local Web Server Module
 
 ---
 
