@@ -38,7 +38,7 @@ function Filesystem() {
     try {
       setLoading(true)
       const appDir = await appDataDir()
-      const folderPath = `${appDir}${folderName}`
+      const folderPath = `${appDir}/${folderName}`
       await mkdir(folderPath, { recursive: true })
       addOutput(`✓ Created folder: ${folderPath}`)
     } catch (error) {
@@ -52,7 +52,7 @@ function Filesystem() {
     try {
       setLoading(true)
       const appDir = await appDataDir()
-      const filePath = `${appDir}${fileName}`
+      const filePath = `${appDir}/${fileName}`
       await writeTextFile(filePath, fileContent)
       addOutput(`✓ Written file: ${filePath}`)
     } catch (error) {
@@ -66,7 +66,7 @@ function Filesystem() {
     try {
       setLoading(true)
       const appDir = await appDataDir()
-      const filePath = `${appDir}${fileName}`
+      const filePath = `${appDir}/${fileName}`
       const content = await readTextFile(filePath)
       addOutput(`✓ Read file: ${filePath}`)
       addOutput(`Content: ${content}`)
@@ -100,7 +100,7 @@ function Filesystem() {
     try {
       setLoading(true)
       const appDir = await appDataDir()
-      const filePath = `${appDir}${fileName}`
+      const filePath = `${appDir}/${fileName}`
       await remove(filePath)
       addOutput(`✓ Deleted file: ${filePath}`)
     } catch (error) {
@@ -114,7 +114,7 @@ function Filesystem() {
     try {
       setLoading(true)
       const appDir = await appDataDir()
-      const filePath = `${appDir}${fileName}`
+      const filePath = `${appDir}/${fileName}`
       const fileExists = await exists(filePath)
       addOutput(`File ${filePath} ${fileExists ? 'EXISTS' : 'DOES NOT EXIST'}`)
     } catch (error) {
