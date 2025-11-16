@@ -1,4 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { Link as LinkIcon } from 'lucide-react'
+import { ModulePageLayout } from '@/components/module-page-layout'
 
 export const Route = createFileRoute('/deep-linking')({
   component: DeepLinking,
@@ -6,19 +8,10 @@ export const Route = createFileRoute('/deep-linking')({
 
 function DeepLinking() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold">Deep Linking Module</h1>
-        <p className="text-muted-foreground mt-2">
-          Test opening the app via custom URL schemes like myapp://route.
-        </p>
-      </div>
-
-      <div className="border border-border rounded-lg p-6 bg-card">
-        <p className="text-muted-foreground">
-          This module will demonstrate deep linking functionality to open specific routes in the app.
-        </p>
-      </div>
-    </div>
+    <ModulePageLayout
+      title="Deep Linking Module"
+      description="Test opening the app via custom URL schemes like myapp://route."
+      icon={LinkIcon}
+    />
   )
 }
