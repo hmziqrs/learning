@@ -36,7 +36,11 @@ A modern cross-platform application built with Tauri 2.0, supporting **Desktop (
 
 1. **Rust**: Install via [rustup](https://rustup.rs/)
 2. **Node.js**: v18+ ([nodejs.org](https://nodejs.org/))
-3. **pnpm**: `npm install -g pnpm` or `corepack enable`
+3. **Package Manager**: Choose one:
+   - **pnpm**: `npm install -g pnpm` or `corepack enable`
+   - **bun**: [Install from bun.sh](https://bun.sh/)
+
+   > **Note**: This project is configured for `bun` by default. To use `pnpm`, update `beforeDevCommand` and `beforeBuildCommand` in `src-tauri/tauri.conf.json`
 
 #### Desktop Prerequisites
 
@@ -93,6 +97,10 @@ sudo pacman -S webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-modu
 ### Installation
 
 ```bash
+# Using bun (default)
+bun install
+
+# Or using pnpm
 pnpm install
 ```
 
@@ -100,42 +108,46 @@ pnpm install
 
 #### Desktop
 ```bash
+# Using bun (default)
+bun run tauri:dev
+
+# Or using pnpm
 pnpm tauri:dev
 ```
 
 #### Android
 ```bash
 # First time only
-pnpm tauri:android:init
+bun run tauri:android:init  # or: pnpm tauri:android:init
 
 # Development
-pnpm tauri:android:dev
+bun run tauri:android:dev   # or: pnpm tauri:android:dev
 ```
 
 #### iOS (macOS only)
 ```bash
 # First time only
-pnpm tauri:ios:init
+bun run tauri:ios:init      # or: pnpm tauri:ios:init
 
 # Development
-pnpm tauri:ios:dev
+bun run tauri:ios:dev       # or: pnpm tauri:ios:dev
 ```
 
 ### Build
 
 #### Desktop
 ```bash
-pnpm tauri:build
+bun run tauri:build         # or: pnpm tauri:build
 ```
 
 #### Android
 ```bash
-pnpm tauri:android:build
+bun run tauri:android:build # or: pnpm tauri:android:build
 ```
 
 #### iOS
 ```bash
-pnpm tauri:ios:build
+bun run tauri:ios:build     # or: pnpm tauri:ios:build
 ```
 
 ## Project Structure
@@ -178,6 +190,10 @@ The project includes platform-specific configuration files that Tauri automatica
 Add new shadcn/ui components:
 
 ```bash
+# Using bun
+bunx shadcn@latest add [component-name]
+
+# Or using pnpm
 pnpm dlx shadcn@latest add [component-name]
 ```
 
@@ -185,16 +201,16 @@ pnpm dlx shadcn@latest add [component-name]
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start Vite dev server |
-| `pnpm build` | Build web assets |
-| `pnpm tauri:dev` | Start desktop app in dev mode |
-| `pnpm tauri:build` | Build desktop app for production |
-| `pnpm tauri:android:init` | Initialize Android project |
-| `pnpm tauri:android:dev` | Run Android app in dev mode |
-| `pnpm tauri:android:build` | Build Android APK |
-| `pnpm tauri:ios:init` | Initialize iOS project (macOS only) |
-| `pnpm tauri:ios:dev` | Run iOS app in dev mode (macOS only) |
-| `pnpm tauri:ios:build` | Build iOS app (macOS only) |
+| `bun dev` / `pnpm dev` | Start Vite dev server |
+| `bun run build` / `pnpm build` | Build web assets |
+| `bun run tauri:dev` / `pnpm tauri:dev` | Start desktop app in dev mode |
+| `bun run tauri:build` / `pnpm tauri:build` | Build desktop app for production |
+| `bun run tauri:android:init` / `pnpm tauri:android:init` | Initialize Android project |
+| `bun run tauri:android:dev` / `pnpm tauri:android:dev` | Run Android app in dev mode |
+| `bun run tauri:android:build` / `pnpm tauri:android:build` | Build Android APK |
+| `bun run tauri:ios:init` / `pnpm tauri:ios:init` | Initialize iOS project (macOS only) |
+| `bun run tauri:ios:dev` / `pnpm tauri:ios:dev` | Run iOS app in dev mode (macOS only) |
+| `bun run tauri:ios:build` / `pnpm tauri:ios:build` | Build iOS app (macOS only) |
 
 ## Recommended IDE Setup
 
