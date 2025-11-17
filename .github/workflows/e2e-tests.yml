@@ -1,0 +1,413 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - master
+      - 'claude/**'
+    paths:
+      - 'tauri-app/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'tauri-app/**'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ===== LINUX E2E TESTS =====
+  e2e-linux:
+    name: E2E Tests (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            webkit2gtk-driver \
+            xvfb \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri-app/src-tauri
+
+      - name: Cache Tauri debug build
+        id: cache-tauri-build
+        uses: actions/cache@v4
+        with:
+          path: tauri-app/src-tauri/target/debug
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src/**', 'tauri-app/src-tauri/**', 'tauri-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            tauri-debug-${{ runner.os }}-
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Node dependencies
+        working-directory: tauri-app
+        run: bun install
+
+      - name: Install cargo-binstall
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+      - name: Install tauri-driver
+        run: cargo binstall tauri-driver --no-confirm
+
+      - name: Verify tauri-driver installation
+        run: |
+          which tauri-driver
+          tauri-driver -h || echo "✅ tauri-driver is installed"
+
+      - name: Generate TanStack Router routes
+        working-directory: tauri-app
+        timeout-minutes: 2
+        run: |
+          # Start Vite dev server to trigger TanStack Router plugin (generates routeTree.gen)
+          bun run dev &
+          DEV_PID=$!
+
+          # Wait for route tree generation (max 30 seconds)
+          for i in {1..30}; do
+            if [ -f "src/routeTree.gen.ts" ]; then
+              echo "✅ Route tree generated!"
+              break
+            fi
+            sleep 1
+          done
+
+          # Kill dev server
+          kill $DEV_PID 2>/dev/null || true
+
+          # Verify file exists
+          if [ ! -f "src/routeTree.gen.ts" ]; then
+            echo "❌ Failed to generate route tree"
+            exit 1
+          fi
+
+      - name: Build Tauri app (debug mode)
+        if: steps.cache-tauri-build.outputs.cache-hit != 'true'
+        working-directory: tauri-app
+        run: bun run tauri:build:debug
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check cached build
+        if: steps.cache-tauri-build.outputs.cache-hit == 'true'
+        run: echo "✅ Using cached Tauri debug build"
+
+      - name: Verify binary exists
+        working-directory: tauri-app
+        run: |
+          ls -la src-tauri/target/debug/
+          test -f src-tauri/target/debug/tauri-app || exit 1
+          chmod +x src-tauri/target/debug/tauri-app
+          echo "✅ Binary found and made executable!"
+
+      - name: Run E2E tests (with Xvfb)
+        working-directory: tauri-app
+        run: |
+          echo "=========================================="
+          echo "🚀 Starting E2E Tests"
+          echo "=========================================="
+          echo ""
+
+          # Run tests and capture output
+          set +e
+          OUTPUT=$(xvfb-run bun run test:e2e 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          # Display full output
+          echo "$OUTPUT"
+
+          echo ""
+          echo "=========================================="
+          echo "📊 Test Results"
+          echo "=========================================="
+
+          # Extract and display summary
+          echo "$OUTPUT" | grep -E "Spec Files:|passed|failed|total" || true
+
+          echo ""
+
+          # If tests failed, show detailed error context
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "=========================================="
+            echo "❌ FAILURE DETAILS"
+            echo "=========================================="
+            echo ""
+
+            # Show our debug logs (📝, 🖱️, etc.)
+            echo "--- Debug Logs ---"
+            echo "$OUTPUT" | grep -E "📝|🖱️|⏳|📖|📋|✅|❌|⚠️" || echo "No debug logs found"
+            echo ""
+
+            # Show errors and warnings
+            echo "--- Errors & Warnings ---"
+            echo "$OUTPUT" | grep -iE "error|warn|failed|timeout" | head -20 || echo "No errors found in output"
+            echo ""
+
+            # Show stack traces if present
+            echo "--- Stack Traces ---"
+            echo "$OUTPUT" | grep -A 10 "Error:" | head -30 || echo "No stack traces found"
+            echo ""
+
+            echo "=========================================="
+            exit $EXIT_CODE
+          else
+            echo "✅ All tests passed!"
+            exit 0
+          fi
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-linux
+          path: tauri-app/e2e/screenshots/
+          retention-days: 7
+
+  # ===== WINDOWS E2E TESTS =====
+  e2e-windows:
+    name: E2E Tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri-app/src-tauri
+
+      - name: Cache Tauri debug build
+        id: cache-tauri-build
+        uses: actions/cache@v4
+        with:
+          path: tauri-app/src-tauri/target/debug
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src/**', 'tauri-app/src-tauri/**', 'tauri-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            tauri-debug-${{ runner.os }}-
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Node dependencies
+        working-directory: tauri-app
+        run: bun install
+
+      - name: Install cargo-binstall
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-pc-windows-msvc.zip" -OutFile cargo-binstall.zip
+          Expand-Archive cargo-binstall.zip -DestinationPath . -Force
+          Move-Item -Path cargo-binstall.exe -Destination "$env:USERPROFILE\.cargo\bin\" -Force
+
+      - name: Install tauri-driver
+        run: cargo binstall tauri-driver --no-confirm
+
+      - name: Verify tauri-driver installation
+        shell: pwsh
+        run: |
+          where.exe tauri-driver
+          tauri-driver -h
+          Write-Host "✅ tauri-driver is installed"
+
+      - name: Generate TanStack Router routes
+        working-directory: tauri-app
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          # Start Vite dev server to trigger TanStack Router plugin (generates routeTree.gen)
+          $process = Start-Process -FilePath "bun" -ArgumentList "run", "dev" -PassThru -NoNewWindow
+
+          # Wait for route tree generation (max 30 seconds)
+          $maxAttempts = 30
+          for ($i = 1; $i -le $maxAttempts; $i++) {
+            if (Test-Path "src/routeTree.gen.ts") {
+              Write-Host "✅ Route tree generated!"
+              break
+            }
+            Start-Sleep -Seconds 1
+          }
+
+          # Kill dev server
+          Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+
+          # Verify file exists
+          if (-not (Test-Path "src/routeTree.gen.ts")) {
+            Write-Host "❌ Failed to generate route tree"
+            exit 1
+          }
+
+      - name: Build Tauri app (debug mode)
+        if: steps.cache-tauri-build.outputs.cache-hit != 'true'
+        working-directory: tauri-app
+        run: bun run tauri:build:debug
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check cached build
+        if: steps.cache-tauri-build.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: Write-Host "✅ Using cached Tauri debug build"
+
+      - name: Verify binary exists
+        working-directory: tauri-app
+        shell: pwsh
+        run: |
+          Get-ChildItem src-tauri/target/debug/
+          if (!(Test-Path src-tauri/target/debug/tauri-app.exe)) { exit 1 }
+          Write-Host "✅ Binary found!"
+
+      - name: Run E2E tests
+        working-directory: tauri-app
+        shell: pwsh
+        run: |
+          Write-Host "=========================================="
+          Write-Host "🚀 Starting E2E Tests"
+          Write-Host "=========================================="
+          Write-Host ""
+
+          # Run tests and capture output
+          $ErrorActionPreference = 'Continue'
+          $output = & bun run test:e2e 2>&1 | Out-String
+          $exitCode = $LASTEXITCODE
+
+          # Display full output
+          Write-Host $output
+
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "📊 Test Results"
+          Write-Host "=========================================="
+
+          # Extract and display summary
+          $output -split "`n" | Select-String -Pattern "Spec Files:|passed|failed|total" | ForEach-Object { Write-Host $_ }
+
+          Write-Host ""
+
+          # If tests failed, show detailed error context
+          if ($exitCode -ne 0) {
+            Write-Host "=========================================="
+            Write-Host "❌ FAILURE DETAILS"
+            Write-Host "=========================================="
+            Write-Host ""
+
+            # Show our debug logs (📝, 🖱️, etc.)
+            Write-Host "--- Debug Logs ---"
+            $debugLogs = $output -split "`n" | Select-String -Pattern "📝|🖱️|⏳|📖|📋|✅|❌|⚠️"
+            if ($debugLogs) {
+              $debugLogs | ForEach-Object { Write-Host $_ }
+            } else {
+              Write-Host "No debug logs found"
+            }
+            Write-Host ""
+
+            # Show errors and warnings
+            Write-Host "--- Errors & Warnings ---"
+            $errors = $output -split "`n" | Select-String -Pattern "error|warn|failed|timeout" -CaseSensitive:$false | Select-Object -First 20
+            if ($errors) {
+              $errors | ForEach-Object { Write-Host $_ }
+            } else {
+              Write-Host "No errors found in output"
+            }
+            Write-Host ""
+
+            # Show stack traces if present
+            Write-Host "--- Stack Traces ---"
+            $lines = $output -split "`n"
+            $inStackTrace = $false
+            $stackLines = 0
+            foreach ($line in $lines) {
+              if ($line -match "Error:") {
+                $inStackTrace = $true
+              }
+              if ($inStackTrace) {
+                Write-Host $line
+                $stackLines++
+                if ($stackLines -ge 30) { break }
+              }
+            }
+            if ($stackLines -eq 0) {
+              Write-Host "No stack traces found"
+            }
+            Write-Host ""
+
+            Write-Host "=========================================="
+            exit $exitCode
+          } else {
+            Write-Host "✅ All tests passed!"
+            exit 0
+          }
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-windows
+          path: tauri-app/e2e/screenshots/
+          retention-days: 7
+
+  # ===== SUMMARY JOB =====
+  test-summary:
+    name: Test Summary
+    needs: [e2e-linux, e2e-windows]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check overall status
+        run: |
+          LINUX_STATUS="${{ needs.e2e-linux.result }}"
+          WINDOWS_STATUS="${{ needs.e2e-windows.result }}"
+
+          echo "Linux tests: $LINUX_STATUS"
+          echo "Windows tests: $WINDOWS_STATUS"
+          echo ""
+
+          if [ "$LINUX_STATUS" == "success" ] && [ "$WINDOWS_STATUS" == "success" ]; then
+            echo "✅ All E2E tests passed across all platforms!"
+            exit 0
+          else
+            echo "❌ Some E2E tests failed. Check individual job logs."
+            exit 1
+          fi
