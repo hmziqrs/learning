@@ -20,23 +20,17 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  e2e-tests:
-    name: E2E Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  # ===== LINUX E2E TESTS =====
+  e2e-linux:
+    name: E2E Tests (Linux)
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    strategy:
-      fail-fast: false # Run all tests even if one fails
-      matrix:
-        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ===== LINUX SETUP =====
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -51,11 +45,6 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      # ===== WINDOWS SETUP =====
-      # Note: Windows doesn't need additional setup for tauri-driver
-      # tauri-driver handles WebDriver protocol directly
-
-      # ===== RUST SETUP =====
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -66,40 +55,26 @@ jobs:
         with:
           workspaces: tauri-app/src-tauri
 
-      # ===== NODE/BUN SETUP =====
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      # ===== INSTALL DEPENDENCIES =====
       - name: Install Node dependencies
         working-directory: tauri-app
-        run: bun install --frozen-lockfile
+        run: bun install
 
-      # ===== INSTALL TAURI-DRIVER =====
       - name: Install tauri-driver
         run: cargo install tauri-driver
         env:
           CARGO_INCREMENTAL: 0
 
-      - name: Verify tauri-driver installation (Linux)
-        if: runner.os == 'Linux'
+      - name: Verify tauri-driver installation
         run: |
           which tauri-driver
           tauri-driver -h || echo "✅ tauri-driver is installed"
 
-      - name: Verify tauri-driver installation (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          where.exe tauri-driver
-          tauri-driver -h
-          Write-Host "✅ tauri-driver is installed"
-
-      # ===== GENERATE TANSTACK ROUTER ROUTES =====
-      - name: Generate TanStack Router routes (Linux)
-        if: runner.os == 'Linux'
+      - name: Generate TanStack Router routes
         working-directory: tauri-app
         timeout-minutes: 2
         run: |
@@ -125,8 +100,114 @@ jobs:
             exit 1
           fi
 
-      - name: Generate TanStack Router routes (Windows)
-        if: runner.os == 'Windows'
+      - name: Build Tauri app (debug mode)
+        working-directory: tauri-app
+        run: bun run tauri:build:debug
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Verify binary exists
+        working-directory: tauri-app
+        run: |
+          ls -la src-tauri/target/debug/
+          test -f src-tauri/target/debug/tauri-app || exit 1
+          chmod +x src-tauri/target/debug/tauri-app
+          echo "✅ Binary found and made executable!"
+
+      - name: Run E2E tests (with Xvfb)
+        working-directory: tauri-app
+        run: |
+          # Start Xvfb (fake display for headless testing)
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1280x720x24 &
+          sleep 2
+
+          # Run tests with detailed logging
+          bun run test:e2e 2>&1 | tee ../e2e-test-output.log
+        continue-on-error: true
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-logs-linux
+          path: |
+            e2e-test-output.log
+            tauri-app/e2e/screenshots/
+          retention-days: 30
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-linux-failure
+          path: tauri-app/e2e/screenshots/
+          retention-days: 30
+
+      - name: Check test results
+        if: always()
+        run: |
+          if [ -f e2e-test-output.log ]; then
+            echo "📊 Test Results Summary:"
+            echo "===================="
+            cat e2e-test-output.log | grep -E "(passed|failed|total)" || echo "No summary found"
+            echo ""
+
+            # Check if tests passed
+            if grep -q "failed" e2e-test-output.log; then
+              echo "❌ Some tests failed. Check logs for details."
+              exit 1
+            else
+              echo "✅ All tests passed!"
+            fi
+          else
+            echo "⚠️ No test output log found"
+            exit 1
+          fi
+
+  # ===== WINDOWS E2E TESTS =====
+  e2e-windows:
+    name: E2E Tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri-app/src-tauri
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Node dependencies
+        working-directory: tauri-app
+        run: bun install
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: Verify tauri-driver installation
+        shell: pwsh
+        run: |
+          where.exe tauri-driver
+          tauri-driver -h
+          Write-Host "✅ tauri-driver is installed"
+
+      - name: Generate TanStack Router routes
         working-directory: tauri-app
         timeout-minutes: 2
         shell: pwsh
@@ -153,7 +234,6 @@ jobs:
             exit 1
           }
 
-      # ===== BUILD TAURI APP =====
       - name: Build Tauri app (debug mode)
         working-directory: tauri-app
         run: bun run tauri:build:debug
@@ -161,18 +241,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      # ===== VERIFY BUILD =====
-      - name: Verify binary exists (Linux)
-        if: runner.os == 'Linux'
-        working-directory: tauri-app
-        run: |
-          ls -la src-tauri/target/debug/
-          test -f src-tauri/target/debug/tauri-app || exit 1
-          chmod +x src-tauri/target/debug/tauri-app
-          echo "✅ Binary found and made executable!"
-
-      - name: Verify binary exists (Windows)
-        if: runner.os == 'Windows'
+      - name: Verify binary exists
         working-directory: tauri-app
         shell: pwsh
         run: |
@@ -180,22 +249,7 @@ jobs:
           if (!(Test-Path src-tauri/target/debug/tauri-app.exe)) { exit 1 }
           Write-Host "✅ Binary found!"
 
-      # ===== RUN E2E TESTS =====
-      - name: Run E2E tests (Linux with Xvfb)
-        if: runner.os == 'Linux'
-        working-directory: tauri-app
-        run: |
-          # Start Xvfb (fake display for headless testing)
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
-
-          # Run tests with detailed logging
-          bun run test:e2e 2>&1 | tee ../e2e-test-output.log
-        continue-on-error: true
-
-      - name: Run E2E tests (Windows)
-        if: runner.os == 'Windows'
+      - name: Run E2E tests
         working-directory: tauri-app
         shell: pwsh
         run: |
@@ -203,12 +257,11 @@ jobs:
           bun run test:e2e 2>&1 | Tee-Object -FilePath ../e2e-test-output.log
         continue-on-error: true
 
-      # ===== SAVE ARTIFACTS =====
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-test-logs-${{ matrix.os }}
+          name: e2e-test-logs-windows
           path: |
             e2e-test-output.log
             tauri-app/e2e/screenshots/
@@ -218,44 +271,50 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-screenshots-${{ matrix.os }}-failure
+          name: e2e-screenshots-windows-failure
           path: tauri-app/e2e/screenshots/
           retention-days: 30
 
-      # ===== CHECK TEST RESULTS =====
       - name: Check test results
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          if [ -f e2e-test-output.log ]; then
-            echo "📊 Test Results Summary:"
-            echo "===================="
-            cat e2e-test-output.log | grep -E "(passed|failed|total)" || echo "No summary found"
-            echo ""
+          if (Test-Path e2e-test-output.log) {
+            Write-Host "📊 Test Results Summary:"
+            Write-Host "===================="
+            Get-Content e2e-test-output.log | Select-String -Pattern "(passed|failed|total)" | ForEach-Object { Write-Host $_ }
+            Write-Host ""
 
             # Check if tests passed
-            if grep -q "failed" e2e-test-output.log; then
-              echo "❌ Some tests failed. Check logs for details."
+            if (Select-String -Path e2e-test-output.log -Pattern "failed" -Quiet) {
+              Write-Host "❌ Some tests failed. Check logs for details."
               exit 1
-            else
-              echo "✅ All tests passed!"
-            fi
-          else
-            echo "⚠️ No test output log found"
+            } else {
+              Write-Host "✅ All tests passed!"
+            }
+          } else {
+            Write-Host "⚠️ No test output log found"
             exit 1
-          fi
+          }
 
   # ===== SUMMARY JOB =====
   test-summary:
     name: Test Summary
-    needs: e2e-tests
+    needs: [e2e-linux, e2e-windows]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - name: Check overall status
         run: |
-          if [ "${{ needs.e2e-tests.result }}" == "success" ]; then
+          LINUX_STATUS="${{ needs.e2e-linux.result }}"
+          WINDOWS_STATUS="${{ needs.e2e-windows.result }}"
+
+          echo "Linux tests: $LINUX_STATUS"
+          echo "Windows tests: $WINDOWS_STATUS"
+          echo ""
+
+          if [ "$LINUX_STATUS" == "success" ] && [ "$WINDOWS_STATUS" == "success" ]; then
             echo "✅ All E2E tests passed across all platforms!"
             exit 0
           else
