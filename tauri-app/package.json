@@ -15,7 +15,8 @@
     "tauri:android:build": "tauri android build",
     "tauri:ios:init": "tauri ios init",
     "tauri:ios:dev": "tauri ios dev",
-    "tauri:ios:build": "tauri ios build"
+    "tauri:ios:build": "tauri ios build",
+    "tauri:ios:build:sim": "tauri ios build --target aarch64-sim"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
