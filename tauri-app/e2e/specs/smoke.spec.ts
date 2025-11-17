@@ -70,18 +70,33 @@ describe('Tauri App Smoke Tests', () => {
     await browser.pause(500)
 
     // Check folder name input
-    const folderInput = await $('input[value="test-folder"]')
+    const folderInput = await $('[data-testid="folder-name-input"]')
+    await folderInput.waitForDisplayed()
     const folderExists = await folderInput.isExisting()
     expect(folderExists).toBe(true)
 
+    // Verify default value
+    const folderValue = await folderInput.getValue()
+    expect(folderValue).toBe('test-folder')
+
     // Check file name input
-    const fileInput = await $('input[value="sample.txt"]')
+    const fileInput = await $('[data-testid="file-name-input"]')
+    await fileInput.waitForDisplayed()
     const fileExists = await fileInput.isExisting()
     expect(fileExists).toBe(true)
 
+    // Verify default value
+    const fileValue = await fileInput.getValue()
+    expect(fileValue).toBe('sample.txt')
+
     // Check content textarea
-    const textarea = await $('textarea')
+    const textarea = await $('[data-testid="file-content-textarea"]')
+    await textarea.waitForDisplayed()
     const textareaExists = await textarea.isExisting()
     expect(textareaExists).toBe(true)
+
+    // Verify default value
+    const textareaValue = await textarea.getValue()
+    expect(textareaValue).toBe('Hello from Tauri!')
   })
 })
