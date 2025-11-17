@@ -147,19 +147,19 @@ import { appDataDir, documentDir } from '@tauri-apps/api/path';
 ## Testing Checklist
 
 ### Desktop Testing
-- [ ] Create directory on Windows
-- [ ] Create directory on macOS
-- [ ] Create directory on Linux
-- [ ] Write files on all platforms
-- [ ] Read files on all platforms
-- [ ] List directories on all platforms
-- [ ] Delete files on all platforms
+- [x] Create directory on Windows
+- [x] Create directory on macOS
+- [x] Create directory on Linux
+- [x] Write files on all platforms
+- [x] Read files on all platforms
+- [x] List directories on all platforms
+- [x] Delete files on all platforms
 
 ### Mobile Testing
-- [ ] Test on Android
-- [ ] Test on iOS
-- [ ] Verify permissions prompt
-- [ ] Test app data directory access
+- [x] Test on Android
+- [x] Test on iOS
+- [x] Verify permissions prompt
+- [x] Test app data directory access
 
 ### Edge Cases
 - [ ] Handle permission denied errors
@@ -209,7 +209,7 @@ import { appDataDir, documentDir } from '@tauri-apps/api/path';
 
 ### Testing Phase
 - [x] Test on desktop platforms
-- [ ] Test on mobile platforms
+- [x] Test on mobile platforms
 - [x] Test edge cases
 - [x] Fix bugs
 
@@ -268,7 +268,39 @@ All core features have been implemented and tested in `src/routes/filesystem.tsx
 - Check exists: Working
 - Delete file: Working
 
-**Mobile**: Pending testing on iOS/Android
+**Desktop (Windows)**: ✅ All operations working correctly
+- Create folder: Working
+- Write file: Working
+- Read file: Working
+- List directory: Working
+- Check exists: Working
+- Delete file: Working
+
+**Desktop (Linux)**: ✅ All operations working correctly
+- Create folder: Working
+- Write file: Working
+- Read file: Working
+- List directory: Working
+- Check exists: Working
+- Delete file: Working
+
+**Mobile (Android)**: ✅ All operations working correctly
+- Create folder: Working
+- Write file: Working
+- Read file: Working
+- List directory: Working
+- Check exists: Working
+- Delete file: Working
+- Permissions: Properly configured and working
+
+**Mobile (iOS)**: ✅ All operations working correctly
+- Create folder: Working
+- Write file: Working
+- Read file: Working
+- List directory: Working
+- Check exists: Working
+- Delete file: Working
+- Permissions: Properly configured and working
 
 ### System Requirements
 
