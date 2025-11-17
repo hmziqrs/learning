@@ -134,15 +134,10 @@ jobs:
       - name: Run E2E tests (with Xvfb)
         working-directory: tauri-app
         run: |
-          # Start Xvfb (fake display for headless testing)
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1280x720x24 &
-          sleep 2
-
-          # Run tests with detailed logging
+          # Run tests with xvfb-run (official Tauri recommendation)
           echo "Starting E2E tests..."
           set +e  # Don't exit on error
-          bun run test:e2e 2>&1 | tee ../e2e-test-output.log
+          xvfb-run bun run test:e2e 2>&1 | tee ../e2e-test-output.log
           TEST_EXIT_CODE=$?
           set -e
 
@@ -245,6 +240,10 @@ jobs:
 
       - name: Install tauri-driver
         run: cargo binstall tauri-driver --no-confirm
+
+      - name: Install Edge WebDriver
+        working-directory: tauri-app
+        run: bun x @wdio/cli@9.20.0 install msedgedriver
 
       - name: Verify tauri-driver installation
         shell: pwsh
