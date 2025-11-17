@@ -1,0 +1,13 @@
+# Screenshots from tests
+screenshots/
+
+# Test reports
+reports/
+*.log
+
+# Allure reports
+allure-results/
+allure-report/
+
+# Video recordings (if enabled)
+videos/
