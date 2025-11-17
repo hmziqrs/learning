@@ -37,6 +37,8 @@ export const config: Options.Testrunner = {
       // Platform-specific capabilities (automatically detected)
       browserName: 'wry', // Tauri's webview name
       platformName: process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux',
+      // Explicitly disable BiDi capabilities that tauri-driver doesn't support
+      'wdio:enforceWebDriverClassic': true,
     } as any,
   ],
 
@@ -59,6 +61,25 @@ export const config: Options.Testrunner = {
 
   // Services - we'll manually start tauri-driver in onPrepare
   services: [],
+
+  // Transform requests to remove BiDi capabilities that tauri-driver doesn't support
+  transformRequest: (requestOptions) => {
+    // Remove webSocketUrl and unhandledPromptBehavior from capabilities
+    if (requestOptions.body && typeof requestOptions.body === 'string') {
+      try {
+        const body = JSON.parse(requestOptions.body)
+        if (body.capabilities?.alwaysMatch) {
+          delete body.capabilities.alwaysMatch.webSocketUrl
+          delete body.capabilities.alwaysMatch.unhandledPromptBehavior
+          delete body.capabilities.alwaysMatch['wdio:enforceWebDriverClassic']
+          requestOptions.body = JSON.stringify(body)
+        }
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    }
+    return requestOptions
+  },
 
   // Hooks
   onPrepare: async function () {
