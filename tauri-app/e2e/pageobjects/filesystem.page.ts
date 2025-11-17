@@ -64,6 +64,8 @@ class FilesystemPage {
   async setFolderName(name: string) {
     const input = await this.folderNameInput
     await input.waitForDisplayed()
+    await input.scrollIntoView()
+    await browser.pause(200) // Small pause after scroll
     await input.clearValue()
     await input.setValue(name)
   }
@@ -85,6 +87,8 @@ class FilesystemPage {
   async clickCreateFolder() {
     const button = await this.createFolderButton
     await button.waitForClickable()
+    await button.scrollIntoView()
+    await browser.pause(200) // Small pause after scroll
     await button.click()
   }
 

@@ -41,10 +41,7 @@ describe('Tauri App Smoke Tests', () => {
   })
 
   it('should display all filesystem action buttons', async () => {
-    // Navigate to filesystem page
-    const filesystemLink = await $('a[href="/filesystem"]')
-    await filesystemLink.click()
-    await browser.pause(500)
+    // We're already on filesystem page from previous test, no need to navigate again
 
     // Check for all buttons
     const buttons = [
@@ -58,20 +55,18 @@ describe('Tauri App Smoke Tests', () => {
 
     for (const buttonText of buttons) {
       const button = await $(`button*=${buttonText}`)
+      await button.waitForDisplayed({ timeout: 5000 })
       const exists = await button.isExisting()
       expect(exists).toBe(true)
     }
   })
 
   it('should have input fields with default values', async () => {
-    // Navigate to filesystem page
-    const filesystemLink = await $('a[href="/filesystem"]')
-    await filesystemLink.click()
-    await browser.pause(500)
+    // We're already on filesystem page from previous tests, no need to navigate again
 
     // Check folder name input
     const folderInput = await $('[data-testid="folder-name-input"]')
-    await folderInput.waitForDisplayed()
+    await folderInput.waitForDisplayed({ timeout: 5000 })
     const folderExists = await folderInput.isExisting()
     expect(folderExists).toBe(true)
 
@@ -81,7 +76,7 @@ describe('Tauri App Smoke Tests', () => {
 
     // Check file name input
     const fileInput = await $('[data-testid="file-name-input"]')
-    await fileInput.waitForDisplayed()
+    await fileInput.waitForDisplayed({ timeout: 5000 })
     const fileExists = await fileInput.isExisting()
     expect(fileExists).toBe(true)
 
@@ -91,7 +86,7 @@ describe('Tauri App Smoke Tests', () => {
 
     // Check content textarea
     const textarea = await $('[data-testid="file-content-textarea"]')
-    await textarea.waitForDisplayed()
+    await textarea.waitForDisplayed({ timeout: 5000 })
     const textareaExists = await textarea.isExisting()
     expect(textareaExists).toBe(true)
 
