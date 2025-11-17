@@ -88,13 +88,8 @@ export const config: Options.Testrunner = {
     console.log('🚀 Starting tauri-driver...')
     console.log(`📦 Testing binary: ${binaryPath}`)
 
-    // Ensure DISPLAY is set for Linux (Xvfb)
-    if (process.platform === 'linux' && !process.env.DISPLAY) {
-      process.env.DISPLAY = ':99'
-      console.log('📺 Set DISPLAY=:99 for Xvfb')
-    }
-
     // Start tauri-driver as a background process
+    // Note: xvfb-run handles DISPLAY environment variable automatically on Linux
     tauriDriver = spawn('tauri-driver', ['--port', '4444'], {
       stdio: 'inherit',
       env: process.env,
