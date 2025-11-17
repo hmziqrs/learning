@@ -32,20 +32,35 @@ describe('Filesystem Module E2E Tests', () => {
     it('should create a folder successfully', async () => {
       const folderName = `test-folder-${Date.now()}`
 
+      console.log(`📝 Setting folder name: ${folderName}`)
       // Set folder name
       await FilesystemPage.setFolderName(folderName)
 
+      console.log('🖱️  Clicking create folder button')
       // Click create folder button
       await FilesystemPage.clickCreateFolder()
 
-      // Verify success message appears
-      await FilesystemPage.waitForSuccessMessage()
+      // Wait a moment for the operation to complete
+      console.log('⏳ Waiting 2 seconds for filesystem operation')
+      await browser.pause(2000)
 
-      // Verify output contains success message
+      // Get the output immediately to see what happened
+      console.log('📖 Reading output panel')
       const output = await FilesystemPage.getOutputText()
-      expect(output).toContain('✓')
-      expect(output).toContain('Created folder')
-      expect(output).toContain(folderName)
+      console.log('📋 Output content:', output)
+
+      // Check if operation succeeded or failed
+      if (output.includes('✓')) {
+        console.log('✅ Success message found')
+        expect(output).toContain('Created folder')
+        expect(output).toContain(folderName)
+      } else if (output.includes('✗')) {
+        console.log('❌ Error message found in output')
+        throw new Error(`Filesystem operation failed: ${output}`)
+      } else {
+        console.log('⚠️  No success or error marker found')
+        throw new Error(`No response from filesystem operation. Output: ${output}`)
+      }
     })
 
     it('should handle invalid folder names gracefully', async () => {
