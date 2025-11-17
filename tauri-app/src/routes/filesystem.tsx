@@ -141,6 +141,7 @@ function Filesystem() {
           <div>
             <label className="block text-sm font-medium mb-2">Folder Name</label>
             <input
+              data-testid="folder-name-input"
               type="text"
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
@@ -151,6 +152,7 @@ function Filesystem() {
           <div>
             <label className="block text-sm font-medium mb-2">File Name</label>
             <input
+              data-testid="file-name-input"
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
@@ -161,6 +163,7 @@ function Filesystem() {
           <div>
             <label className="block text-sm font-medium mb-2">File Content</label>
             <textarea
+              data-testid="file-content-textarea"
               value={fileContent}
               onChange={(e) => setFileContent(e.target.value)}
               className="w-full px-3 py-2 bg-background border border-border rounded-md h-24"

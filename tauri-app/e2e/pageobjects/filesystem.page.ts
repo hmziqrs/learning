@@ -7,15 +7,15 @@ import { waitAndClick, waitAndSetValue, waitForText } from '../helpers/test-help
 class FilesystemPage {
   // Selectors
   get folderNameInput() {
-    return $('input[value="test-folder"]')
+    return $('[data-testid="folder-name-input"]')
   }
 
   get fileNameInput() {
-    return $('input[value="sample.txt"]')
+    return $('[data-testid="file-name-input"]')
   }
 
   get fileContentTextarea() {
-    return $('textarea')
+    return $('[data-testid="file-content-textarea"]')
   }
 
   get createFolderButton() {
