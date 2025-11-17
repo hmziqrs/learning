@@ -55,6 +55,15 @@ jobs:
         with:
           workspaces: tauri-app/src-tauri
 
+      - name: Cache Tauri debug build
+        id: cache-tauri-build
+        uses: actions/cache@v4
+        with:
+          path: tauri-app/src-tauri/target/debug
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'tauri-app/src-tauri/src/**/*.rs', 'tauri-app/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            tauri-debug-${{ runner.os }}-
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -101,11 +110,16 @@ jobs:
           fi
 
       - name: Build Tauri app (debug mode)
+        if: steps.cache-tauri-build.outputs.cache-hit != 'true'
         working-directory: tauri-app
         run: bun run tauri:build:debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check cached build
+        if: steps.cache-tauri-build.outputs.cache-hit == 'true'
+        run: echo "✅ Using cached Tauri debug build"
 
       - name: Verify binary exists
         working-directory: tauri-app
@@ -124,7 +138,23 @@ jobs:
           sleep 2
 
           # Run tests with detailed logging
+          echo "Starting E2E tests..."
+          set +e  # Don't exit on error
           bun run test:e2e 2>&1 | tee ../e2e-test-output.log
+          TEST_EXIT_CODE=$?
+          set -e
+
+          echo ""
+          echo "=========================================="
+          echo "Test execution completed with exit code: $TEST_EXIT_CODE"
+          echo "=========================================="
+
+          # Show last 100 lines of output for quick diagnosis
+          echo ""
+          echo "Last 100 lines of test output:"
+          tail -n 100 ../e2e-test-output.log || true
+
+          exit $TEST_EXIT_CODE
         continue-on-error: true
 
       - name: Upload test logs
@@ -186,6 +216,15 @@ jobs:
         with:
           workspaces: tauri-app/src-tauri
 
+      - name: Cache Tauri debug build
+        id: cache-tauri-build
+        uses: actions/cache@v4
+        with:
+          path: tauri-app/src-tauri/target/debug
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'tauri-app/src-tauri/src/**/*.rs', 'tauri-app/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            tauri-debug-${{ runner.os }}-
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -235,11 +274,17 @@ jobs:
           }
 
       - name: Build Tauri app (debug mode)
+        if: steps.cache-tauri-build.outputs.cache-hit != 'true'
         working-directory: tauri-app
         run: bun run tauri:build:debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check cached build
+        if: steps.cache-tauri-build.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: Write-Host "✅ Using cached Tauri debug build"
 
       - name: Verify binary exists
         working-directory: tauri-app
@@ -254,7 +299,24 @@ jobs:
         shell: pwsh
         run: |
           # Run tests with detailed logging
+          Write-Host "Starting E2E tests..."
+          $ErrorActionPreference = 'Continue'
           bun run test:e2e 2>&1 | Tee-Object -FilePath ../e2e-test-output.log
+          $TEST_EXIT_CODE = $LASTEXITCODE
+
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "Test execution completed with exit code: $TEST_EXIT_CODE"
+          Write-Host "=========================================="
+
+          # Show last 100 lines of output for quick diagnosis
+          Write-Host ""
+          Write-Host "Last 100 lines of test output:"
+          if (Test-Path ../e2e-test-output.log) {
+            Get-Content ../e2e-test-output.log -Tail 100
+          }
+
+          exit $TEST_EXIT_CODE
         continue-on-error: true
 
       - name: Upload test logs
