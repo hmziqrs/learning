@@ -9,9 +9,16 @@ describe('Filesystem Module E2E Tests', () => {
   })
 
   beforeEach(async () => {
-    // Navigate to filesystem page before each test
-    await FilesystemPage.navigate()
-    await browser.pause(500) // Let page settle
+    // Navigate to filesystem page before each test (only if not already there)
+    // Check if we're already on the page by looking for a unique element
+    const createFolderButton = await FilesystemPage.createFolderButton
+    const isOnPage = await createFolderButton.isDisplayed().catch(() => false)
+
+    if (!isOnPage) {
+      // We're not on the filesystem page, navigate to it
+      await FilesystemPage.navigate()
+      await browser.pause(500) // Let page settle
+    }
   })
 
   afterEach(async function () {
