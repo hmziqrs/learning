@@ -241,10 +241,6 @@ jobs:
       - name: Install tauri-driver
         run: cargo binstall tauri-driver --no-confirm
 
-      - name: Install Edge WebDriver
-        working-directory: tauri-app
-        run: bun x @wdio/cli@9.20.0 install msedgedriver
-
       - name: Verify tauri-driver installation
         shell: pwsh
         run: |
