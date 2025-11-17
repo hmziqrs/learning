@@ -60,7 +60,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tauri-app/src-tauri/target/debug
-          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'tauri-app/src-tauri/src/**/*.rs', 'tauri-app/src-tauri/Cargo.toml') }}
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src/**', 'tauri-app/src-tauri/**', 'tauri-app/pnpm-lock.yaml') }}
           restore-keys: |
             tauri-debug-${{ runner.os }}-
 
@@ -73,10 +73,12 @@ jobs:
         working-directory: tauri-app
         run: bun install
 
+      - name: Install cargo-binstall
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
       - name: Install tauri-driver
-        run: cargo install tauri-driver
-        env:
-          CARGO_INCREMENTAL: 0
+        run: cargo binstall tauri-driver --no-confirm
 
       - name: Verify tauri-driver installation
         run: |
@@ -221,7 +223,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tauri-app/src-tauri/target/debug
-          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src-tauri/Cargo.lock', 'tauri-app/src-tauri/src/**/*.rs', 'tauri-app/src-tauri/Cargo.toml') }}
+          key: tauri-debug-${{ runner.os }}-${{ hashFiles('tauri-app/src/**', 'tauri-app/src-tauri/**', 'tauri-app/pnpm-lock.yaml') }}
           restore-keys: |
             tauri-debug-${{ runner.os }}-
 
@@ -234,10 +236,15 @@ jobs:
         working-directory: tauri-app
         run: bun install
 
+      - name: Install cargo-binstall
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-pc-windows-msvc.zip" -OutFile cargo-binstall.zip
+          Expand-Archive cargo-binstall.zip -DestinationPath . -Force
+          Move-Item -Path cargo-binstall.exe -Destination "$env:USERPROFILE\.cargo\bin\" -Force
+
       - name: Install tauri-driver
-        run: cargo install tauri-driver
-        env:
-          CARGO_INCREMENTAL: 0
+        run: cargo binstall tauri-driver --no-confirm
 
       - name: Verify tauri-driver installation
         shell: pwsh
