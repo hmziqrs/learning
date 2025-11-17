@@ -1,6 +1,7 @@
 import type { Options } from '@wdio/types'
 import { join } from 'path'
 import { spawn, ChildProcess } from 'child_process'
+import { mkdirSync } from 'fs'
 
 let tauriDriver: ChildProcess | null = null
 
@@ -130,8 +131,12 @@ export const config: Options.Testrunner = {
 
       // Take screenshot on failure
       try {
+        // Ensure screenshots directory exists
+        const screenshotDir = 'e2e/screenshots'
+        mkdirSync(screenshotDir, { recursive: true })
+
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const filename = `e2e/screenshots/failed-${test.title.replace(/\s+/g, '-')}-${timestamp}.png`
+        const filename = `${screenshotDir}/failed-${test.title.replace(/\s+/g, '-')}-${timestamp}.png`
         await browser.saveScreenshot(filename)
         console.log(`📸 Screenshot saved: ${filename}`)
       } catch (screenshotError) {
