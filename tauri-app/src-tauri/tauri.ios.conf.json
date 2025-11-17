@@ -1,6 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "com.root.tauriapp",
+  "bundle": {
+    "iOS": {
+      "developmentTeam": "4H4RFUBJJN"
+    }
+  },
   "app": {
     "windows": [
       {
@@ -10,8 +15,5 @@
         "fullscreen": false
       }
     ]
-  },
-  "ios": {
-    "minimumSystemVersion": "14.0"
   }
 }
