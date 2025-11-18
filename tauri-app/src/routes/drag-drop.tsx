@@ -33,8 +33,9 @@ function DragDrop() {
   // Use ref to track current mode for the native listener
   const modeRef = useRef<DropMode>('native')
 
-  // Track last drop to prevent duplicates from React StrictMode
-  const lastDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+  // Track last drop to prevent duplicates from React StrictMode - separate refs for each mode
+  const lastNativeDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+  const lastHtml5DropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
 
   // Update ref when mode changes
   useEffect(() => {
@@ -75,18 +76,18 @@ function DragDrop() {
             if (paths.length > 0) {
               // Prevent duplicate processing (React StrictMode causes double-invocation)
               const now = Date.now()
-              const lastDrop = lastDropRef.current
+              const lastDrop = lastNativeDropRef.current
 
               // Check if this is the same drop event within 100ms
               if (lastDrop &&
                   now - lastDrop.timestamp < 100 &&
                   JSON.stringify(lastDrop.paths) === JSON.stringify(paths)) {
-                console.log('SKIPPING DUPLICATE DROP EVENT')
+                console.log('SKIPPING DUPLICATE NATIVE DROP EVENT')
                 return
               }
 
               // Record this drop event
-              lastDropRef.current = { paths, timestamp: now }
+              lastNativeDropRef.current = { paths, timestamp: now }
 
               console.log('NATIVE DROP:', paths)
               setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
@@ -168,7 +169,7 @@ function DragDrop() {
     if (files.length > 0) {
       const now = Date.now()
       const fileNames = files.map(f => f.name)
-      const lastDrop = lastDropRef.current
+      const lastDrop = lastHtml5DropRef.current
 
       // Check if this is the same drop event within 100ms
       if (lastDrop &&
@@ -179,7 +180,7 @@ function DragDrop() {
       }
 
       // Record this drop event
-      lastDropRef.current = { paths: fileNames, timestamp: now }
+      lastHtml5DropRef.current = { paths: fileNames, timestamp: now }
     }
 
     const timestamp = new Date().toLocaleTimeString()

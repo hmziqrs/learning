@@ -329,26 +329,30 @@ const path: string = event.payload.paths[0]
 
 React StrictMode (enabled in development) intentionally double-invokes effects to help detect side effects. This can cause drop events to be processed twice, resulting in duplicate file entries.
 
-**Solution**: Use a ref to track the last processed drop event and skip duplicates within a 100ms window:
+**Solution**: Use separate refs to track the last processed drop event for each mode (native and HTML5) and skip duplicates within a 100ms window:
 
 ```typescript
-const lastDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+const lastNativeDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+const lastHtml5DropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
 
-// In drop handler:
+// In native drop handler:
 const now = Date.now()
-const lastDrop = lastDropRef.current
+const lastDrop = lastNativeDropRef.current
 
 if (lastDrop &&
     now - lastDrop.timestamp < 100 &&
     JSON.stringify(lastDrop.paths) === JSON.stringify(paths)) {
-  console.log('SKIPPING DUPLICATE DROP EVENT')
+  console.log('SKIPPING DUPLICATE NATIVE DROP EVENT')
   return
 }
 
-lastDropRef.current = { paths, timestamp: now }
+lastNativeDropRef.current = { paths, timestamp: now }
+
+// In HTML5 drop handler:
+// Similar logic using lastHtml5DropRef
 ```
 
-This ensures each unique drop event is processed only once, even if React StrictMode causes the effect to run multiple times.
+This ensures each unique drop event is processed only once, even if React StrictMode causes the effect to run multiple times. Separate refs prevent interference between native and HTML5 modes.
 
 ## Differences: Native vs HTML5
 
