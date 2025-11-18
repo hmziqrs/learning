@@ -64,6 +64,10 @@
     "notification:allow-request-permission",
     "notification:allow-notify",
     "notification:allow-register-listener",
-    "notification:allow-register-action-types"
+    "notification:allow-register-action-types",
+    "deep-link:default",
+    "deep-link:allow-is-registered",
+    "deep-link:allow-register",
+    "deep-link:allow-unregister"
   ]
 }
