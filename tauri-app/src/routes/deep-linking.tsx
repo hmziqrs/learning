@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Link as LinkIcon, Copy, History, ExternalLink } from 'lucide-react'
+import { Link as LinkIcon, Copy, History, ExternalLink, TestTube } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
@@ -113,6 +113,42 @@ function DeepLinking() {
               <div className="font-mono text-sm break-all">{lastUrl}</div>
             </div>
           )}
+        </div>
+
+        {/* Manual Test Section */}
+        <div className="space-y-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <TestTube className="h-5 w-5" />
+            Manual Testing (Dev Mode)
+          </h3>
+          <div className="p-4 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md space-y-3">
+            <p className="text-sm text-muted-foreground">
+              In dev mode, deep links won't work from the terminal. Use these buttons to simulate receiving deep links:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeepLink('myapp://home')}
+              >
+                Test: myapp://home
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeepLink('myapp://profile/user123')}
+              >
+                Test: with path
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeepLink('myapp://search?q=tauri&filter=latest')}
+              >
+                Test: with params
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Example URLs Section */}
