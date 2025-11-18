@@ -4,6 +4,8 @@
 
 Test Tauri's native file-drop and HTML5 drag & drop functionality. This module demonstrates both native Tauri file drop events and HTML5 drag and drop API for maximum flexibility across platforms.
 
+**Note:** This implementation uses the **Tauri v2 API** (`onDragDropEvent`). The old v1 event names (`tauri://file-drop`, etc.) are deprecated.
+
 ## Plugin Setup
 
 ### Install Dependencies
@@ -71,29 +73,36 @@ Enable drag & drop in `src-tauri/tauri.conf.json`:
 
 ### Native Tauri File Drop
 
+**Tauri v2 API** - Use `onDragDropEvent`:
+
 ```typescript
-import { listen } from '@tauri-apps/api/event'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
-// Listen for file drop events
-const unlisten = await listen('tauri://file-drop', (event) => {
-  const paths = event.payload.paths as string[]
-  console.log('Files dropped:', paths)
-})
+const webview = getCurrentWebviewWindow()
 
-// Listen for drag-over events
-await listen('tauri://file-drop-hover', (event) => {
-  const paths = event.payload.paths as string[]
-  console.log('Files hovering:', paths)
-})
+// Listen for all drag & drop events with one handler
+const unlisten = await webview.onDragDropEvent((event) => {
+  const { paths, position, type } = event.payload
 
-// Listen for drag-leave events
-await listen('tauri://file-drop-cancelled', () => {
-  console.log('Drag cancelled')
+  if (type === 'drop') {
+    console.log('Files dropped:', paths)
+  } else if (type === 'over') {
+    console.log('Drag over at:', position.x, position.y)
+  } else if (type === 'leave') {
+    console.log('Drag cancelled')
+  } else if (type === 'enter') {
+    console.log('Drag entered')
+  }
 })
 
 // Clean up
 unlisten()
 ```
+
+**Payload Structure:**
+- `paths`: `string[]` - Array of file paths
+- `position`: `{ x: number, y: number }` - Cursor position
+- `type`: `'enter' | 'over' | 'drop' | 'leave'` - Event type
 
 ### HTML5 Drag & Drop
 
@@ -339,7 +348,9 @@ const path: string = event.payload.paths[0]
 
 ## Resources
 
-- [Tauri Events API](https://tauri.app/develop/calling-frontend/#events)
+- [Tauri v2 onDragDropEvent API](https://v2.tauri.app/reference/javascript/api/namespacewebviewwindow/#ondragdropevent)
+- [Tauri v2 WebviewWindow API](https://v2.tauri.app/reference/javascript/api/namespacewebviewwindow/)
+- [Tauri Events API](https://v2.tauri.app/reference/javascript/api/namespaceevent/)
 - [HTML5 Drag and Drop API - MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API)
 - [File API - MDN](https://developer.mozilla.org/en-US/docs/Web/API/File)
-- [Tauri Window Configuration](https://tauri.app/reference/config/#windowconfig)
+- [Tauri Window Configuration](https://v2.tauri.app/reference/config/#windowconfig)
