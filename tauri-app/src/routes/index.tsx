@@ -90,7 +90,7 @@ const modules = [
   },
   {
     name: 'Contacts',
-    description: 'Access device contacts with read capabilities (mobile-only)',
+    description: 'Access device contacts with read capabilities (iOS, Android, macOS)',
     icon: Users,
     path: '/contacts',
     color: 'text-cyan-500',

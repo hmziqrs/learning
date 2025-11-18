@@ -2,7 +2,7 @@
 
 ## Overview
 
-Access device contacts with read capabilities, allowing users to view and search through their contact list. This module demonstrates native mobile integration for accessing contact data from Android and iOS devices.
+Access device contacts with read capabilities, allowing users to view and search through their contact list. This module demonstrates native integration for accessing contact data from Android, iOS, and macOS devices using platform-specific APIs.
 
 ## Current Implementation Status
 
@@ -29,14 +29,16 @@ Add to `src-tauri/gen/android/app/src/main/AndroidManifest.xml`:
 <uses-permission android:name="android.permission.WRITE_CONTACTS" /> <!-- Optional -->
 ```
 
-### iOS Permissions
+### iOS/macOS Permissions
 
-Add to `src-tauri/gen/apple/Info.plist`:
+Add to `src-tauri/gen/apple/Info.plist` (iOS) or app's `Info.plist` (macOS):
 
 ```xml
 <key>NSContactsUsageDescription</key>
 <string>This app needs access to your contacts to display and manage them.</string>
 ```
+
+**Note**: Both iOS and macOS use the same Contacts framework (`CNContactStore`), so the permission handling is identical.
 
 ### Tauri Capabilities
 
@@ -259,9 +261,9 @@ class ContactsPlugin(private val activity: Activity) : Plugin(activity) {
 }
 ```
 
-### iOS Implementation (Swift)
+### iOS/macOS Implementation (Swift)
 
-Create custom plugin in `src-tauri/gen/apple/`:
+Create custom plugin in `src-tauri/gen/apple/` (works for both iOS and macOS):
 
 ```swift
 import Contacts
@@ -645,10 +647,11 @@ const ContactsPage = () => {
 
 ### Platform Support
 
-**Mobile Only Feature**
+**Mobile + macOS**
 - Android: Full support via ContactsContract API
-- iOS: Full support via Contacts framework
-- Desktop: Not supported (show informative message)
+- iOS: Full support via Contacts framework (CNContactStore)
+- macOS: Full support via Contacts framework (CNContactStore) - same as iOS
+- Windows/Linux: Not supported (show informative message)
 
 ### Privacy Considerations
 - Always explain why contacts access is needed
@@ -725,12 +728,15 @@ const ContactsPage = () => {
 
 | Feature | Windows | macOS | Linux | iOS | Android |
 |---------|---------|-------|-------|-----|---------|
-| Read Contacts | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Search Contacts | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Permission Check | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Permission Request | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Read Contacts | ❌ | ✅* | ❌ | ✅ | ✅ |
+| Search Contacts | ❌ | ✅* | ❌ | ✅ | ✅ |
+| Permission Check | ❌ | ✅* | ❌ | ✅ | ✅ |
+| Permission Request | ❌ | ✅* | ❌ | ✅ | ✅ |
+
+\* macOS uses the same Contacts framework as iOS (`CNContactStore`)
 
 ---
 
-**Module Type**: Mobile-Only (Custom Plugin Required)
+**Module Type**: Mobile + macOS (Custom Plugin Required)
 **Status**: Planning Phase
+**Supported Platforms**: iOS, Android, macOS

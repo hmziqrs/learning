@@ -127,7 +127,7 @@ function Contacts() {
   return (
     <ModulePageLayout
       title="Contacts Module"
-      description="Access device contacts with read capabilities (mobile-only)."
+      description="Access device contacts with read capabilities (iOS, Android, macOS)."
       icon={Users}
     >
       <div className="space-y-6">

@@ -361,59 +361,63 @@ struct Contact {
 }
 
 // Contacts Module Commands
-// These are mock implementations for desktop/development
-// In production mobile apps, these would integrate with platform-specific contact APIs
+// These are mock implementations for development
+// In production, these would integrate with platform-specific contact APIs:
+// - iOS/macOS: Contacts framework (CNContactStore)
+// - Android: ContactsContract API
 
 #[tauri::command]
 async fn check_contacts_permission() -> Result<bool, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // On mobile, this would call the mobile plugin to check permission
+        // On mobile/macOS, this would call the platform plugin to check permission
         // For now, return false to trigger permission request flow
-        // TODO: Implement actual mobile permission check via plugin
+        // TODO: Implement actual permission check via platform APIs
         Ok(false)
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
-        Err("Contacts API is only available on mobile platforms (Android, iOS)".to_string())
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
     }
 }
 
 #[tauri::command]
 async fn request_contacts_permission() -> Result<bool, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // On mobile, this would call the mobile plugin to request permission
+        // On mobile/macOS, this would call the platform plugin to request permission
         // Simulate permission request delay
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        // TODO: Implement actual mobile permission request via plugin
+        // TODO: Implement actual permission request via platform APIs
         // For now, return true to simulate granted permission
         Ok(true)
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
-        Err("Contacts API is only available on mobile platforms (Android, iOS)".to_string())
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
     }
 }
 
 #[tauri::command]
 async fn get_contacts() -> Result<Vec<Contact>, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
         // Simulate loading delay
         tokio::time::sleep(Duration::from_millis(800)).await;
 
-        // TODO: Implement actual mobile contact fetching via plugin
+        // TODO: Implement actual contact fetching via platform APIs
+        // iOS/macOS: Use Contacts framework (CNContactStore)
+        // Android: Use ContactsContract
         // For now, return mock contacts for testing UI
         Ok(generate_mock_contacts())
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
-        Err("Contacts API is only available on mobile platforms (Android, iOS)".to_string())
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
     }
 }
 
