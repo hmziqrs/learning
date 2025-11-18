@@ -323,6 +323,33 @@ const path: string = event.payload.paths[0]
 - Drag & drop from certain applications may be restricted by OS security
 - File path access differs between native and HTML5 modes
 
+## Development Notes
+
+### React StrictMode and Duplicate Events
+
+React StrictMode (enabled in development) intentionally double-invokes effects to help detect side effects. This can cause drop events to be processed twice, resulting in duplicate file entries.
+
+**Solution**: Use a ref to track the last processed drop event and skip duplicates within a 100ms window:
+
+```typescript
+const lastDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+
+// In drop handler:
+const now = Date.now()
+const lastDrop = lastDropRef.current
+
+if (lastDrop &&
+    now - lastDrop.timestamp < 100 &&
+    JSON.stringify(lastDrop.paths) === JSON.stringify(paths)) {
+  console.log('SKIPPING DUPLICATE DROP EVENT')
+  return
+}
+
+lastDropRef.current = { paths, timestamp: now }
+```
+
+This ensures each unique drop event is processed only once, even if React StrictMode causes the effect to run multiple times.
+
 ## Differences: Native vs HTML5
 
 ### Native Tauri File Drop

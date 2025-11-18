@@ -33,6 +33,9 @@ function DragDrop() {
   // Use ref to track current mode for the native listener
   const modeRef = useRef<DropMode>('native')
 
+  // Track last drop to prevent duplicates from React StrictMode
+  const lastDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+
   // Update ref when mode changes
   useEffect(() => {
     modeRef.current = mode
@@ -63,37 +66,49 @@ function DragDrop() {
 
           // Handle different drag event types
           if (type === 'over') {
-            // Drag over event
+            // Drag over event - only update visual state, don't log spam
             setIsDragging(true)
-            if (paths.length > 0) {
-              setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag over: ${paths.length} file(s) at (${position.x}, ${position.y})`])
-            }
           } else if (type === 'drop') {
             // Drop event
             setIsDragging(false)
 
             if (paths.length > 0) {
+              // Prevent duplicate processing (React StrictMode causes double-invocation)
+              const now = Date.now()
+              const lastDrop = lastDropRef.current
+
+              // Check if this is the same drop event within 100ms
+              if (lastDrop &&
+                  now - lastDrop.timestamp < 100 &&
+                  JSON.stringify(lastDrop.paths) === JSON.stringify(paths)) {
+                console.log('SKIPPING DUPLICATE DROP EVENT')
+                return
+              }
+
+              // Record this drop event
+              lastDropRef.current = { paths, timestamp: now }
+
+              console.log('NATIVE DROP:', paths)
               setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
 
               const newFiles: DroppedFile[] = paths.map((path: string, index: number) => ({
-                id: `native-${Date.now()}-${index}`,
+                id: `native-${Date.now()}-${Math.random()}-${index}`,
                 path,
                 name: path.split('/').pop() || path.split('\\').pop() || path,
                 source: 'native',
                 droppedAt: new Date(),
               }))
 
-              setDroppedFiles((prev) => [...prev, ...newFiles])
+              setDroppedFiles((prev) => {
+                console.log('Adding native files, current count:', prev.length, 'adding:', newFiles.length)
+                return [...prev, ...newFiles]
+              })
             }
           } else if (type === 'leave') {
             // Drag leave event
             setIsDragging(false)
-            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag cancelled`])
           } else if (type === 'enter') {
-            // Drag enter event
-            if (paths.length > 0) {
-              setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag enter: ${paths.length} file(s)`])
-            }
+            // Drag enter event - don't spam logs
           }
         })
 
@@ -148,11 +163,30 @@ function DragDrop() {
     setIsDragging(false)
 
     const files = Array.from(e.dataTransfer.files)
+
+    // Prevent duplicate processing
+    if (files.length > 0) {
+      const now = Date.now()
+      const fileNames = files.map(f => f.name)
+      const lastDrop = lastDropRef.current
+
+      // Check if this is the same drop event within 100ms
+      if (lastDrop &&
+          now - lastDrop.timestamp < 100 &&
+          JSON.stringify(lastDrop.paths) === JSON.stringify(fileNames)) {
+        console.log('SKIPPING DUPLICATE HTML5 DROP EVENT')
+        return
+      }
+
+      // Record this drop event
+      lastDropRef.current = { paths: fileNames, timestamp: now }
+    }
+
     const timestamp = new Date().toLocaleTimeString()
     setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (HTML5): ${files.length} file(s)`])
 
     const newFiles: DroppedFile[] = files.map((file, index) => ({
-      id: `html5-${Date.now()}-${index}`,
+      id: `html5-${Date.now()}-${Math.random()}-${index}`,
       name: file.name,
       size: file.size,
       type: file.type,
