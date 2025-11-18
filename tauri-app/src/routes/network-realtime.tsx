@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 
 export const Route = createFileRoute('/network-realtime')({
   component: NetworkRealtimeModule,
@@ -12,6 +13,7 @@ export const Route = createFileRoute('/network-realtime')({
 
 interface HttpResponse {
   status: number
+  headers: Record<string, string>
   body: string
 }
 
@@ -41,22 +43,12 @@ function NetworkRealtimeModule() {
     addOutput(`Making GET request to: ${httpUrl}`)
 
     try {
-      // TODO: Implement with real backend command
-      // const response = await invoke<HttpResponse>('http_get', { url: httpUrl })
+      const response = await invoke<HttpResponse>('http_get', { url: httpUrl })
 
-      // Mock implementation for now
-      const mockResponse = {
-        userId: 1,
-        id: 1,
-        title: 'sunt aut facere repellat provident occaecati excepturi optio reprehenderit',
-        body: 'quia et suscipit\nsuscipit recusandae consequuntur expedita et cum',
-      }
-
-      const responseText = JSON.stringify(mockResponse, null, 2)
-      setHttpResponse(responseText)
-      addOutput('✓ GET request successful')
-      addOutput(`Response length: ${responseText.length} bytes`)
-      addOutput('Note: Using mock response. Implement backend for real requests.')
+      setHttpResponse(response.body)
+      addOutput(`✓ GET request successful (Status: ${response.status})`)
+      addOutput(`Response length: ${response.body.length} bytes`)
+      addOutput(`Headers: ${Object.keys(response.headers).length} headers received`)
     } catch (error) {
       addOutput(`✗ GET request failed: ${error}`, false)
       setHttpResponse('')
@@ -72,25 +64,23 @@ function NetworkRealtimeModule() {
     addOutput(`Making POST request to: ${postUrl}`)
 
     try {
-      // TODO: Implement with real backend command
-      // const response = await invoke<HttpResponse>('http_post', {
-      //   url: postUrl,
-      //   data: { title: 'Test Post', body: 'This is a test', userId: 1 }
-      // })
+      const response = await invoke<HttpResponse>('http_post', {
+        url: postUrl,
+        data: { title: 'Test Post', body: 'This is a test', userId: 1 }
+      })
 
-      // Mock implementation
-      const mockResponse = {
-        id: 101,
-        title: 'Test Post',
-        body: 'This is a test',
-        userId: 1,
+      setHttpResponse(response.body)
+      addOutput(`✓ POST request successful (Status: ${response.status})`)
+
+      // Try to parse the response to get the ID
+      try {
+        const parsed = JSON.parse(response.body)
+        if (parsed.id) {
+          addOutput(`Created resource with ID: ${parsed.id}`)
+        }
+      } catch (e) {
+        // Ignore parse errors
       }
-
-      const responseText = JSON.stringify(mockResponse, null, 2)
-      setHttpResponse(responseText)
-      addOutput('✓ POST request successful')
-      addOutput(`Created resource with ID: ${mockResponse.id}`)
-      addOutput('Note: Using mock response. Implement backend for real requests.')
     } catch (error) {
       addOutput(`✗ POST request failed: ${error}`, false)
     } finally {
@@ -171,19 +161,41 @@ function NetworkRealtimeModule() {
     addOutput('Opening file picker...')
 
     try {
-      // TODO: Implement file picker and upload
-      // const filePath = await open({ multiple: false })
-      // await invoke('upload_file', {
-      //   url: 'https://httpbin.org/post',
-      //   filePath
-      // })
+      // Open file picker
+      const filePath = await open({
+        multiple: false,
+        directory: false,
+      })
 
-      // Mock implementation
-      addOutput('✓ File selected: example.txt (2.5 KB)')
+      if (!filePath) {
+        addOutput('File selection cancelled')
+        setLoading(null)
+        return
+      }
+
+      // Get file name from path
+      const fileName = filePath.split(/[\\/]/).pop() || 'file'
+      addOutput(`✓ File selected: ${fileName}`)
       addOutput('Uploading to https://httpbin.org/post...')
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      addOutput('✓ Upload successful')
-      addOutput('Note: Using mock upload. Implement backend for real file upload.')
+
+      // Upload file
+      const response = await invoke<HttpResponse>('upload_file', {
+        url: 'https://httpbin.org/post',
+        filePath
+      })
+
+      addOutput(`✓ Upload successful (Status: ${response.status})`)
+      addOutput(`Response length: ${response.body.length} bytes`)
+
+      // Try to show some response details
+      try {
+        const parsed = JSON.parse(response.body)
+        if (parsed.files) {
+          addOutput(`Files uploaded: ${Object.keys(parsed.files).join(', ')}`)
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
     } catch (error) {
       addOutput(`✗ Upload failed: ${error}`, false)
     } finally {
@@ -198,25 +210,26 @@ function NetworkRealtimeModule() {
       icon={Wifi}
     >
       <div className="space-y-6">
-        {/* Setup Notice */}
-        <section className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-6">
+        {/* Status Notice */}
+        <section className="rounded-lg border border-green-500/50 bg-green-500/10 p-6">
           <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <span className="text-yellow-500">⚠️</span>
-            Backend Implementation Required
+            <span className="text-green-500">✅</span>
+            Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
-            <p className="font-medium">This module requires Rust backend commands:</p>
+            <p className="font-medium">Currently implemented features:</p>
+            <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
+              <li><strong className="text-green-600">✓ HTTP GET/POST</strong> - Fully functional with reqwest</li>
+              <li><strong className="text-green-600">✓ File Upload</strong> - Multipart form upload working</li>
+              <li><strong className="text-yellow-600">⚠ WebSocket</strong> - Mock implementation (requires plugin)</li>
+            </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Add required dependencies to Cargo.toml</div>
-              <div>reqwest = &#123; version = "0.11", features = ["json", "multipart"] &#125;</div>
-              <div>tokio = &#123; version = "1", features = ["full"] &#125;</div>
-              <div className="mt-2"># Or install Tauri plugins</div>
-              <div>bun add @tauri-apps/plugin-http</div>
+              <div># To add WebSocket support:</div>
               <div>bun add @tauri-apps/plugin-websocket</div>
+              <div className="mt-1"># Then implement websocket commands in lib.rs</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Currently showing mock responses. Implement backend commands in{' '}
-              <code>src-tauri/src/lib.rs</code> for real functionality.
+              HTTP and file upload are production-ready. WebSocket requires additional plugin installation.
             </p>
           </div>
         </section>

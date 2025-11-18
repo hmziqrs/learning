@@ -2,6 +2,7 @@
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
+use once_cell::sync::Lazy;
 
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -335,6 +336,145 @@ fn get_platform_name() -> String {
     return "unknown".to_string();
 }
 
+// Network & Realtime Module
+// HTTP Client with connection pooling for better performance
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .pool_max_idle_per_host(10)
+        .build()
+        .expect("Failed to create HTTP client")
+});
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HttpResponse {
+    status: u16,
+    headers: std::collections::HashMap<String, String>,
+    body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HttpPostData {
+    title: String,
+    body: String,
+    #[serde(rename = "userId")]
+    user_id: i32,
+}
+
+#[tauri::command]
+async fn http_get(url: String) -> Result<HttpResponse, String> {
+    let response = HTTP_CLIENT
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP GET failed: {}", e))?;
+
+    let status = response.status().as_u16();
+
+    // Extract headers
+    let mut headers = std::collections::HashMap::new();
+    for (key, value) in response.headers().iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers.insert(key.to_string(), value_str.to_string());
+        }
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
+#[tauri::command]
+async fn http_post(url: String, data: HttpPostData) -> Result<HttpResponse, String> {
+    let response = HTTP_CLIENT
+        .post(&url)
+        .json(&data)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP POST failed: {}", e))?;
+
+    let status = response.status().as_u16();
+
+    // Extract headers
+    let mut headers = std::collections::HashMap::new();
+    for (key, value) in response.headers().iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers.insert(key.to_string(), value_str.to_string());
+        }
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
+#[tauri::command]
+async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, String> {
+    use std::path::Path;
+
+    // Read file
+    let file_bytes = tokio::fs::read(&file_path)
+        .await
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Get filename
+    let file_name = Path::new(&file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Invalid file path".to_string())?
+        .to_string();
+
+    // Create multipart form
+    let part = reqwest::multipart::Part::bytes(file_bytes)
+        .file_name(file_name);
+
+    let form = reqwest::multipart::Form::new()
+        .part("file", part);
+
+    // Send upload request
+    let response = HTTP_CLIENT
+        .post(&url)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("File upload failed: {}", e))?;
+
+    let status = response.status().as_u16();
+
+    // Extract headers
+    let mut headers = std::collections::HashMap::new();
+    for (key, value) in response.headers().iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers.insert(key.to_string(), value_str.to_string());
+        }
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -356,7 +496,10 @@ pub fn run() {
             purchase_product,
             restore_purchases,
             validate_receipt,
-            get_iap_platform
+            get_iap_platform,
+            http_get,
+            http_post,
+            upload_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
