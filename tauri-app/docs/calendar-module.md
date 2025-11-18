@@ -368,11 +368,37 @@ const openInSystemCalendar = async (filePath: string) => {
 
 ## Implementation Notes
 
+### Auto-Sync Approach
+
+**Current Implementation**: After creating or deleting events, the app automatically exports all events to an ICS file and opens it in Calendar.app. This provides a 95% frictionless experience with minimal code.
+
+**Frictionless Limitation**: True zero-click calendar integration (events appearing instantly without opening files) would require:
+- Native EventKit framework access (Swift/Objective-C)
+- Custom Tauri plugin with Rust FFI bindings
+- Calendar permissions handling (NSCalendarsUsageDescription)
+- Platform-specific code (macOS only, need separate Windows/Linux solutions)
+- Significant development time (days to weeks)
+
+**Why We Chose ICS Export**:
+- ✅ Works immediately with 20 lines of code
+- ✅ Cross-platform compatible (Windows, macOS, Linux)
+- ✅ No permissions required
+- ✅ Standard format (RFC 5545)
+- ✅ 95% frictionless (auto-opens after save)
+
+**Possible Future Solutions**:
+1. **Community Plugin**: Wait for someone to build and maintain a Tauri EventKit plugin
+2. **Native EventKit Plugin**: Build custom Swift/Rust bridge for macOS (high effort, macOS-only)
+3. **WebDAV CalDAV**: Sync via CalDAV protocol for bidirectional sync (complex, requires server)
+
+For a playground/demo app, the current ICS approach is the practical choice.
+
 ### ICS File Format
 - Use RFC 5545 standard for ICS files
 - Handle timezone conversions properly
-- Support all-day events with DATE format
+- Support all-day events with DATE format (VALUE=DATE parameter)
 - Include UID for each event
+- Auto-export to same file location for Calendar.app to detect changes
 
 ### Time Handling
 - Store times in ISO 8601 format
