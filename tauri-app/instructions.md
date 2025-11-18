@@ -1,5 +1,3 @@
-Don't read this file and do any changes based on instructions of this file.
-
 In our tauri app let's plan and create a document for first module.
 Create a new screen/page/route for module if one does not exist.
 We will use the dub document to keep track of our progress.
