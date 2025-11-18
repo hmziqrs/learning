@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Database as DatabaseIcon, Save, Trash2, Check, X, HardDrive, Settings, Download, FileJson, FileSpreadsheet } from 'lucide-react'
+import { Database as DatabaseIcon, Save, Trash2, Check, X, HardDrive, Settings, Download, FileJson, FileSpreadsheet, Share2, Upload } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useRef } from 'react'
 import Database from '@tauri-apps/plugin-sql'
 import { Store } from '@tauri-apps/plugin-store'
-import { save } from '@tauri-apps/plugin-dialog'
-import { writeTextFile } from '@tauri-apps/plugin-fs'
+import { save, open as openDialog } from '@tauri-apps/plugin-dialog'
+import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
+import { open as openPath } from '@tauri-apps/plugin-opener'
 
 export const Route = createFileRoute('/sql-storage')({
   component: SqlStorage,
@@ -408,6 +409,128 @@ function SqlStorage() {
     }
   }
 
+  const handleShareData = async () => {
+    setLoading('share')
+    try {
+      // Gather all data
+      const preferences: Record<string, any> = {}
+
+      if (storeRef.current) {
+        const hasUserName = await storeRef.current.has('userName')
+        const hasTheme = await storeRef.current.has('isDarkMode')
+
+        if (hasUserName) {
+          preferences.userName = await storeRef.current.get('userName')
+        }
+        if (hasTheme) {
+          preferences.isDarkMode = await storeRef.current.get('isDarkMode')
+        }
+      }
+
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        data: {
+          preferences,
+          notes: {
+            count: notes.length,
+            items: notes
+          }
+        }
+      }
+
+      const jsonString = JSON.stringify(exportData, null, 2)
+      const filename = `tauri-storage-${Date.now()}.json`
+
+      // Write to temp directory
+      await writeTextFile(filename, jsonString, { baseDir: BaseDirectory.Temp })
+      addOutput(`Data prepared for sharing: ${filename}`)
+
+      // Open with native share sheet (on mobile) or default handler (on desktop)
+      try {
+        await openPath(filename)
+        addOutput('Share sheet opened (mobile) or file opened with default app (desktop)')
+      } catch (err) {
+        addOutput(`Note: File saved to temp directory. ${err}`, false)
+      }
+    } catch (error) {
+      addOutput(`Error sharing data: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleImportData = async () => {
+    setLoading('import')
+    try {
+      // Show open dialog
+      const selected = await openDialog({
+        filters: [{
+          name: 'JSON',
+          extensions: ['json']
+        }],
+        multiple: false
+      })
+
+      if (!selected || typeof selected !== 'string') {
+        addOutput('Import cancelled')
+        return
+      }
+
+      // Read file
+      const fileContent = await readTextFile(selected)
+      const importedData = JSON.parse(fileContent)
+
+      // Validate data structure
+      if (!importedData.data) {
+        throw new Error('Invalid export file format')
+      }
+
+      addOutput(`Reading import file: ${selected}`)
+
+      // Import preferences
+      if (importedData.data.preferences && storeRef.current) {
+        const prefs = importedData.data.preferences
+
+        if (prefs.userName) {
+          await storeRef.current.set('userName', prefs.userName)
+          setUserName(prefs.userName)
+          setSavedUserName(prefs.userName)
+        }
+
+        if (prefs.isDarkMode !== undefined) {
+          await storeRef.current.set('isDarkMode', prefs.isDarkMode)
+          setIsDarkMode(prefs.isDarkMode)
+        }
+
+        await storeRef.current.save()
+        addOutput('Preferences imported successfully')
+      }
+
+      // Import notes
+      if (importedData.data.notes?.items && dbRef.current) {
+        const importedNotes = importedData.data.notes.items
+
+        for (const note of importedNotes) {
+          await dbRef.current.execute(
+            'INSERT INTO notes (title, content, created_at) VALUES (?, ?, ?)',
+            [note.title, note.content || '', note.created_at]
+          )
+        }
+
+        addOutput(`Imported ${importedNotes.length} notes`)
+        await loadNotes()
+      }
+
+      await updateStats()
+      addOutput('Import completed successfully')
+    } catch (error) {
+      addOutput(`Error importing data: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   const clearOutput = () => setOutput([])
 
   return (
@@ -611,6 +734,44 @@ function SqlStorage() {
                 Add some notes first to enable export functionality
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Share & Import */}
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+            <Share2 className="w-6 h-6" />
+            Share & Import
+          </h2>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Share your data via native share sheet (mobile) or import backup files.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Button
+                onClick={handleShareData}
+                disabled={loading === 'share'}
+                variant="default"
+                className="gap-2"
+              >
+                <Share2 className="w-4 h-4" />
+                {loading === 'share' ? 'Preparing...' : 'Share Data (Native)'}
+              </Button>
+              <Button
+                onClick={handleImportData}
+                disabled={loading === 'import'}
+                variant="default"
+                className="gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                {loading === 'import' ? 'Importing...' : 'Import Backup'}
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>• Share: Opens native share sheet on mobile, default app on desktop</p>
+              <p>• Import: Restore data from previously exported JSON files</p>
+              <p>• Import will add notes (not replace) and update preferences</p>
+            </div>
           </div>
         </div>
 

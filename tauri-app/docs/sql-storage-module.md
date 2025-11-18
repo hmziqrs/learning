@@ -76,7 +76,8 @@ Add to `src-tauri/capabilities/default.json`:
 - [ ] Settings synchronization
 - [x] Data export (JSON, CSV)
 - [x] Complete data backup
-- [ ] Data import
+- [x] Data import from JSON
+- [x] Native share functionality
 - [x] Clear all data functionality
 
 ## Database Schema
@@ -400,6 +401,14 @@ All core features have been implemented in `src/routes/sql-storage.tsx`:
 - ✅ Timestamp-based default filenames
 - ✅ Disabled state when no data to export
 
+#### Share & Import Features
+- ✅ Native share functionality (share sheet on mobile)
+- ✅ Import data from JSON backup files
+- ✅ Restore preferences from backup
+- ✅ Restore notes from backup (additive, not destructive)
+- ✅ Validation of imported data structure
+- ✅ Detailed import/share logging
+
 ### Testing Status
 - [ ] Desktop (Windows) - Pending
 - [ ] Desktop (macOS) - Pending
@@ -440,6 +449,22 @@ The module includes comprehensive data export functionality:
 - File saved via native dialog with `.json` filter
 - Default filename: `complete-export-{timestamp}.json`
 
+**4. Native Share (Mobile/Desktop)**
+- Writes data to temporary directory
+- Opens with system default handler
+- On mobile: Triggers native share sheet (Share to apps)
+- On desktop: Opens file with default JSON viewer/handler
+- File automatically created in temp: `tauri-storage-{timestamp}.json`
+- Platform-agnostic sharing mechanism
+
+**5. Import from Backup**
+- Opens native file picker dialog with `.json` filter
+- Validates imported data structure
+- Imports preferences (userName, isDarkMode)
+- Imports notes (additive - adds to existing notes)
+- Updates UI with imported data in real-time
+- Comprehensive error handling for invalid files
+
 **Example Export Format (Complete Data)**:
 ```json
 {
@@ -464,6 +489,12 @@ The module includes comprehensive data export functionality:
   }
 }
 ```
+
+**Import Behavior**:
+- Preferences: Updates/overwrites existing preferences
+- Notes: Adds imported notes (does not delete existing ones)
+- If import file is invalid, operation is cancelled with error message
+- All imported data is immediately visible in the UI
 
 ## Implementation Notes
 
