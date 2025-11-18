@@ -246,6 +246,25 @@ function Alarms() {
     return now.toTimeString().slice(0, 5)
   }
 
+  // Quick preset functions
+  const setQuickAlarm = (seconds: number, label: string) => {
+    const now = new Date()
+    const scheduledTime = new Date(now.getTime() + seconds * 1000)
+
+    setAlarmDate(scheduledTime.toISOString().split('T')[0])
+    setAlarmTime(scheduledTime.toTimeString().slice(0, 5))
+    setAlarmTitle(label)
+
+    addOutput(`Quick alarm set: ${label}`)
+  }
+
+  const setQuickDate = (daysAhead: number) => {
+    const date = new Date()
+    date.setDate(date.getDate() + daysAhead)
+    setAlarmDate(date.toISOString().split('T')[0])
+    addOutput(`Date set to: ${daysAhead === 0 ? 'Today' : daysAhead === 1 ? 'Tomorrow' : `${daysAhead} days ahead`}`)
+  }
+
   const activeAlarms = alarms.filter((a) => a.isActive && !a.firedAt)
   const firedAlarms = alarms.filter((a) => a.firedAt)
 
@@ -297,20 +316,96 @@ function Alarms() {
             <Plus className="w-5 h-5" />
             Add New Alarm
           </h3>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Alarm Title</label>
-              <input
-                type="text"
-                className="w-full p-2 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                value={alarmTitle}
-                onChange={(e) => setAlarmTitle(e.target.value)}
-                placeholder="Enter alarm title..."
-              />
+          <div className="space-y-4">
+            {/* Quick Presets */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">Quick Alarms</h4>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(30, 'Alarm in 30s')}
+                  className="text-xs"
+                >
+                  30 secs
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(60, 'Alarm in 1 min')}
+                  className="text-xs"
+                >
+                  1 min
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(120, 'Alarm in 2 mins')}
+                  className="text-xs"
+                >
+                  2 mins
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(300, 'Alarm in 5 mins')}
+                  className="text-xs"
+                >
+                  5 mins
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(600, 'Alarm in 10 mins')}
+                  className="text-xs"
+                >
+                  10 mins
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuickAlarm(1800, 'Alarm in 30 mins')}
+                  className="text-xs"
+                >
+                  30 mins
+                </Button>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div className="border-t border-border pt-4 space-y-3">
+              <h4 className="text-sm font-medium text-muted-foreground">Custom Alarm</h4>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Date</label>
+                <label className="block text-sm font-medium mb-1">Alarm Title</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={alarmTitle}
+                  onChange={(e) => setAlarmTitle(e.target.value)}
+                  placeholder="Enter alarm title..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Date</label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuickDate(0)}
+                    className="text-xs"
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuickDate(1)}
+                    className="text-xs"
+                  >
+                    Tomorrow
+                  </Button>
+                </div>
                 <input
                   type="date"
                   className="w-full p-2 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
@@ -319,6 +414,7 @@ function Alarms() {
                   min={getDefaultDate()}
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1">Time</label>
                 <input
@@ -329,6 +425,7 @@ function Alarms() {
                 />
               </div>
             </div>
+
             <Button
               onClick={handleAddAlarm}
               disabled={loading === 'add' || !permissionGranted}
