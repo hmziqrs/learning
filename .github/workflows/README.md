@@ -1,16 +1,21 @@
 # GitHub Actions Workflows
 
-## E2E Testing Workflow
+> **⚠️ ARCHIVED:** The E2E testing workflow has been archived and is not currently running in CI. The configuration is available at `e2e-tests.yml.archive` for future reference and will be fixed later.
 
-The `e2e-tests.yml` workflow runs comprehensive end-to-end tests for the Tauri app on **Linux** and **Windows** (since macOS is not supported by tauri-driver).
+## E2E Testing Workflow (ARCHIVED)
+
+The `e2e-tests.yml.archive` workflow previously ran comprehensive end-to-end tests for the Tauri app on **Linux** and **Windows** (since macOS is not supported by tauri-driver).
 
 ### When It Runs
 
-- ✅ **Every push** to `master` or `claude/**` branches (only if `tauri-app/**` files change)
-- ✅ **Pull requests** to `master` (only if `tauri-app/**` files change)
-- ✅ **Manual trigger** via GitHub Actions UI (workflow_dispatch)
+> **⚠️ Currently DISABLED** - The workflow has been archived and will not run automatically.
 
-**Note:** Tests only run when changes are made in the `tauri-app/` directory. Changes to other parts of the repo won't trigger E2E tests.
+Previously ran on:
+- **Every push** to `master` or `claude/**` branches (only if `tauri-app/**` files change)
+- **Pull requests** to `master` (only if `tauri-app/**` files change)
+- **Manual trigger** via GitHub Actions UI (workflow_dispatch)
+
+**Note:** Tests only ran when changes were made in the `tauri-app/` directory. Changes to other parts of the repo wouldn't trigger E2E tests.
 
 ### What It Does
 
