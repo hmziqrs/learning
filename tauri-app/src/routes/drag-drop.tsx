@@ -3,7 +3,8 @@ import { Upload, FileIcon, X, Trash2 } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 
 export const Route = createFileRoute('/drag-drop')({
   component: DragDrop,
@@ -30,59 +31,60 @@ function DragDrop() {
   const [nativeListenerActive, setNativeListenerActive] = useState(false)
 
   useEffect(() => {
-    let unlistenDrop: UnlistenFn | null = null
-    let unlistenHover: UnlistenFn | null = null
-    let unlistenCancel: UnlistenFn | null = null
+    let unlisten: UnlistenFn | null = null
 
     const setupNativeListeners = async () => {
       try {
-        // Listen for file drop - always active for native mode
-        unlistenDrop = await listen<{ paths: string[] }>('tauri://file-drop', (event) => {
-          const paths = event.payload.paths
+        const webview = getCurrentWebviewWindow()
+
+        // Use the Tauri v2 onDragDropEvent API
+        unlisten = await webview.onDragDropEvent((event) => {
           const timestamp = new Date().toLocaleTimeString()
-          setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
+          const { paths, position, type } = event.payload as { paths: string[], position: { x: number, y: number }, type: string }
 
-          const newFiles: DroppedFile[] = paths.map((path, index) => ({
-            id: `native-${Date.now()}-${index}`,
-            path,
-            name: path.split('/').pop() || path.split('\\').pop() || path,
-            source: 'native',
-            droppedAt: new Date(),
-          }))
+          // Handle different drag event types
+          if (type === 'over') {
+            // Drag over event
+            setIsDragging(true)
+            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag over: ${paths.length} file(s) at (${position.x}, ${position.y})`])
+          } else if (type === 'drop') {
+            // Drop event
+            setIsDragging(false)
+            setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
 
-          setDroppedFiles((prev) => [...prev, ...newFiles])
-          setIsDragging(false)
-        })
+            const newFiles: DroppedFile[] = paths.map((path, index) => ({
+              id: `native-${Date.now()}-${index}`,
+              path,
+              name: path.split('/').pop() || path.split('\\').pop() || path,
+              source: 'native',
+              droppedAt: new Date(),
+            }))
 
-        // Listen for drag-over
-        unlistenHover = await listen<{ paths: string[] }>('tauri://file-drop-hover', (event) => {
-          setIsDragging(true)
-          const timestamp = new Date().toLocaleTimeString()
-          setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag hover detected: ${event.payload.paths.length} file(s)`])
-        })
-
-        // Listen for drag-cancel
-        unlistenCancel = await listen('tauri://file-drop-cancelled', () => {
-          setIsDragging(false)
-          const timestamp = new Date().toLocaleTimeString()
-          setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag cancelled`])
+            setDroppedFiles((prev) => [...prev, ...newFiles])
+          } else if (type === 'leave') {
+            // Drag leave event
+            setIsDragging(false)
+            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag cancelled`])
+          } else if (type === 'enter') {
+            // Drag enter event
+            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag enter: ${paths.length} file(s)`])
+          }
         })
 
         setNativeListenerActive(true)
         const timestamp = new Date().toLocaleTimeString()
-        setOutput((prev) => [...prev, `[${timestamp}] ✓ Native Tauri file drop listeners initialized`])
+        setOutput((prev) => [...prev, `[${timestamp}] ✓ Native Tauri drag & drop listener initialized`])
       } catch (error) {
         const timestamp = new Date().toLocaleTimeString()
         setOutput((prev) => [...prev, `[${timestamp}] ✗ Error setting up listeners: ${error}`])
+        setNativeListenerActive(false)
       }
     }
 
     setupNativeListeners()
 
     return () => {
-      unlistenDrop?.()
-      unlistenHover?.()
-      unlistenCancel?.()
+      unlisten?.()
     }
   }, [])
 
