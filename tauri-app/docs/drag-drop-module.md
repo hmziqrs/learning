@@ -354,6 +354,45 @@ lastNativeDropRef.current = { paths, timestamp: now }
 
 This ensures each unique drop event is processed only once, even if React StrictMode causes the effect to run multiple times. Separate refs prevent interference between native and HTML5 modes.
 
+### Native Listener Interference with HTML5 Mode
+
+The native Tauri drag drop listener operates at the OS level and intercepts ALL drag/drop events, preventing them from reaching HTML5 handlers. To support dual-mode operation, the native listener must be completely removed when switching to HTML5 mode.
+
+**Solution**: Conditionally set up the native listener based on current mode and add proper cleanup:
+
+```typescript
+useEffect(() => {
+  let unlisten: UnlistenFn | null = null
+
+  const setupNativeListeners = async () => {
+    // Only set up native listener when in native mode
+    if (mode !== 'native') {
+      setNativeListenerActive(false)
+      return
+    }
+
+    const webview = getCurrentWebviewWindow()
+    unlisten = await webview.onDragDropEvent((event) => {
+      // Handle events...
+    })
+    setNativeListenerActive(true)
+  }
+
+  setupNativeListeners()
+
+  return () => {
+    if (unlisten) {
+      unlisten() // Clean up listener when mode changes
+    }
+  }
+}, [mode]) // Re-run when mode changes
+```
+
+This ensures:
+- Native listener only active in native mode
+- Listener is properly cleaned up when switching to HTML5 mode
+- HTML5 handlers can receive drop events when native listener is disabled
+
 ## Differences: Native vs HTML5
 
 ### Native Tauri File Drop
