@@ -7,7 +7,8 @@ import Database from '@tauri-apps/plugin-sql'
 import { Store } from '@tauri-apps/plugin-store'
 import { save, open as openDialog } from '@tauri-apps/plugin-dialog'
 import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
-import { open as openPath } from '@tauri-apps/plugin-opener'
+import { openPath } from '@tauri-apps/plugin-opener'
+import { tempDir } from '@tauri-apps/api/path'
 
 export const Route = createFileRoute('/sql-storage')({
   component: SqlStorage,
@@ -448,7 +449,9 @@ function SqlStorage() {
 
       // Open with native share sheet (on mobile) or default handler (on desktop)
       try {
-        await openPath(filename)
+        const tempDirPath = await tempDir()
+        const fullPath = `${tempDirPath}${filename}`
+        await openPath(fullPath)
         addOutput('Share sheet opened (mobile) or file opened with default app (desktop)')
       } catch (err) {
         addOutput(`Note: File saved to temp directory. ${err}`, false)
