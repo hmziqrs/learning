@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar } from 'lucide-react'
+import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar, DollarSign } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -54,6 +54,13 @@ const modules = [
     icon: Calendar,
     path: '/calendar',
     color: 'text-teal-500',
+  },
+  {
+    name: 'In-App Purchases',
+    description: 'Test platform billing: iOS IAP, Android Billing, desktop Stripe',
+    icon: DollarSign,
+    path: '/in-app-purchases',
+    color: 'text-emerald-500',
   },
 ]
 
