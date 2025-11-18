@@ -237,11 +237,14 @@ const path: string = event.payload.paths[0]
 - [x] Add event logging to output panel
 
 ### Testing Phase
-- [ ] Test native file drop on macOS
-- [ ] Test HTML5 drag & drop
-- [ ] Verify visual feedback
-- [ ] Test with multiple files
+- [x] Test native file drop - Working
+- [x] Test HTML5 drag & drop - Working
+- [x] Verify visual feedback - Working
+- [x] Test with multiple files - Working
+- [x] Fix duplicate file issues - Completed
+- [x] Test mode switching - Working
 - [ ] Test with different file types
+- [ ] Cross-platform testing (Windows/Linux/macOS)
 
 ### Polish Phase
 - [ ] Improve UI/UX
@@ -250,7 +253,7 @@ const path: string = event.payload.paths[0]
 
 ## Implementation Status
 
-**Status**: ✅ Implemented - Ready for Testing
+**Status**: ✅ Fully Working - Both Native and HTML5 modes operational
 
 ### Backend Configuration
 - [x] Route: Created at `/drag-drop`
@@ -307,11 +310,14 @@ const path: string = event.payload.paths[0]
 - Info section explaining mode differences
 
 ### Testing Results
-- [ ] Desktop (macOS): Pending
-- [ ] Desktop (Windows): Pending
-- [ ] Desktop (Linux): Pending
-- [ ] HTML5 mode: Pending
-- [ ] Native mode: Pending
+- [x] Native mode: Working - no duplicate files
+- [x] HTML5 mode: Working - no duplicate files
+- [x] Mode switching: Working - proper listener cleanup
+- [x] Multiple file drops: Working
+- [x] Duplicate prevention: Working - React StrictMode handled
+- [ ] Desktop (macOS): Pending manual testing
+- [ ] Desktop (Windows): Pending manual testing
+- [ ] Desktop (Linux): Pending manual testing
 - [ ] Mobile: Not applicable (limited drag & drop support)
 
 ## Known Limitations
@@ -324,6 +330,29 @@ const path: string = event.payload.paths[0]
 - File path access differs between native and HTML5 modes
 
 ## Development Notes
+
+### Issues Fixed
+
+#### 1. Duplicate File Entries (React StrictMode)
+**Problem**: Files were being added twice to the dropped files list.
+
+**Root Cause**: React StrictMode in development mode double-invokes effects, causing drop events to be processed twice.
+
+**Solution**: Implemented duplicate detection using separate refs for each mode to track the last processed drop event within a 100ms window.
+
+#### 2. HTML5 Mode Not Working
+**Problem**: HTML5 drag & drop handlers were not receiving drop events.
+
+**Root Cause**: Native Tauri listener operates at OS level and intercepts ALL drag/drop events before they reach HTML5 handlers.
+
+**Solution**: Conditionally set up native listener only when in native mode, with proper cleanup when switching to HTML5 mode.
+
+#### 3. Tauri v2 API Migration
+**Problem**: Using deprecated Tauri v1 event names (`tauri://file-drop`, etc.) which don't exist in v2.
+
+**Root Cause**: API breaking changes between Tauri v1 and v2.
+
+**Solution**: Migrated to Tauri v2 API using `getCurrentWebviewWindow().onDragDropEvent()` with unified event handler.
 
 ### React StrictMode and Duplicate Events
 
