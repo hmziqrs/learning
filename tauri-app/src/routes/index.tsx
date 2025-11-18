@@ -10,6 +10,7 @@ import {
   Database,
   DollarSign,
   Wifi,
+  Images,
   Users,
 } from 'lucide-react';
 
@@ -94,6 +95,13 @@ const modules = [
     icon: Users,
     path: '/contacts',
     color: 'text-cyan-500',
+  },
+  {
+    name: 'Gallery / Media Library',
+    description: 'Pick photos and videos from device storage with preview capabilities',
+    icon: Images,
+    path: '/gallery',
+    color: 'text-rose-500',
   },
 ]
 
