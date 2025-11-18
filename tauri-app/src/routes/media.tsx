@@ -12,6 +12,7 @@ import {
   VolumeX,
   Trash2,
   Clock,
+  Globe,
 } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
@@ -49,6 +50,8 @@ function Media() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [loading, setLoading] = useState(false)
   const [muted, setMuted] = useState(false)
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [mediaType, setMediaType] = useState<'audio' | 'video'>('audio')
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -139,6 +142,45 @@ function Media() {
       addOutput(`✗ Error selecting video: ${error}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleLoadFromUrl = () => {
+    try {
+      if (!mediaUrl.trim()) {
+        addOutput('✗ Please enter a valid URL')
+        return
+      }
+
+      // Basic URL validation
+      try {
+        new URL(mediaUrl)
+      } catch {
+        addOutput('✗ Invalid URL format')
+        return
+      }
+
+      const fileName = mediaUrl.split('/').pop() || 'remote-media'
+
+      const mediaFile: MediaFile = {
+        path: mediaUrl,
+        name: fileName,
+        type: mediaType,
+        url: mediaUrl,
+      }
+
+      setSelectedFile(mediaFile)
+      setPlaylist((prev) => {
+        const exists = prev.some((f) => f.path === mediaUrl)
+        if (!exists) {
+          return [...prev, mediaFile]
+        }
+        return prev
+      })
+      addOutput(`✓ Loaded ${mediaType} from URL: ${fileName}`)
+      setMediaUrl('')
+    } catch (error) {
+      addOutput(`✗ Error loading from URL: ${error}`)
     }
   }
 
@@ -277,6 +319,56 @@ function Media() {
             <Video className="w-4 h-4" />
             Select Video File
           </Button>
+        </div>
+
+        {/* Remote URL Input */}
+        <div className="p-4 bg-card border border-border rounded-lg space-y-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Globe className="w-4 h-4" />
+            Load from URL (Remote Media)
+          </h3>
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-2">
+              <input
+                type="text"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLoadFromUrl()}
+                placeholder="https://example.com/audio.mp3 or video.mp4"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+              />
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="mediaType"
+                    value="audio"
+                    checked={mediaType === 'audio'}
+                    onChange={(e) => setMediaType(e.target.value as 'audio' | 'video')}
+                    className="cursor-pointer"
+                  />
+                  <Music className="w-4 h-4" />
+                  Audio
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="mediaType"
+                    value="video"
+                    checked={mediaType === 'video'}
+                    onChange={(e) => setMediaType(e.target.value as 'audio' | 'video')}
+                    className="cursor-pointer"
+                  />
+                  <Video className="w-4 h-4" />
+                  Video
+                </label>
+              </div>
+            </div>
+            <Button onClick={handleLoadFromUrl} className="gap-2 self-start">
+              <Upload className="w-4 h-4" />
+              Load URL
+            </Button>
+          </div>
         </div>
 
         {/* Media Player */}

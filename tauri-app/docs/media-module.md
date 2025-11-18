@@ -60,6 +60,7 @@ Configure file access in `src-tauri/tauri.conf.json`:
 ## Core Features
 
 - [x] File picker for audio/video selection
+- [x] Remote URL media playback (HTTP/HTTPS)
 - [x] Audio playback with controls (play/pause/seek)
 - [x] Video playback with controls
 - [x] Metadata display (duration/current time)
@@ -93,6 +94,27 @@ const mediaUrl = convertFileSrc(filePath)
 <audio src={mediaUrl} controls />
 <video src={mediaUrl} controls />
 ```
+
+### Remote Media Playback
+
+```typescript
+// Direct URL loading (no conversion needed)
+const remoteUrl = 'https://example.com/audio.mp3'
+
+// Use directly with HTML5 media elements
+<audio src={remoteUrl} controls />
+<video src={remoteUrl} controls />
+```
+
+**Supported Protocols:**
+- HTTP/HTTPS URLs
+- Direct media file URLs
+- Streaming URLs (HLS, DASH if supported by browser)
+
+**CORS Considerations:**
+- Remote servers must allow CORS for cross-origin playback
+- Some streaming services may require authentication or API keys
+- Local files require `convertFileSrc()`, remote URLs do not
 
 ### Media Metadata Access
 
@@ -136,6 +158,13 @@ if ('mediaSession' in navigator) {
 - Button: "Select Audio File"
 - Button: "Select Video File"
 - Display: Selected file name and path
+
+### Remote URL Section
+- Input: URL text field with validation
+- Radio: Media type selection (Audio/Video)
+- Button: "Load URL"
+- Support: Enter key to load
+- Validation: URL format checking
 
 ### Audio Player Section
 - HTML5 audio element with controls
@@ -255,6 +284,9 @@ if ('mediaSession' in navigator) {
 ### Features Implemented
 - ✅ Audio file selection (MP3, WAV, OGG, FLAC, M4A, AAC)
 - ✅ Video file selection (MP4, WebM, OGG, MOV, AVI, MKV)
+- ✅ Remote URL playback (HTTP/HTTPS)
+- ✅ URL validation and error handling
+- ✅ Media type selection for remote URLs (Audio/Video)
 - ✅ File path to WebView URL conversion via `convertFileSrc()`
 - ✅ Playback controls (Play, Pause, Stop)
 - ✅ Volume control with slider and mute toggle
@@ -264,6 +296,7 @@ if ('mediaSession' in navigator) {
 - ✅ Playlist/history with click-to-play
 - ✅ Event logging with timestamps
 - ✅ Format detection from file extension
+- ✅ Keyboard shortcuts (Enter to load URL)
 
 ### Testing Results
 - Desktop: ⏳ Ready for testing (build successful)
@@ -276,6 +309,9 @@ if ('mediaSession' in navigator) {
 - DRM-protected content not supported
 - Background audio playback requires additional platform-specific configuration
 - Media session API support varies by platform
+- Remote media requires CORS headers from the server
+- Some streaming protocols (HLS, DASH) may have limited support depending on platform
+- Network errors for remote media depend on server availability
 
 ## Resources
 
@@ -284,3 +320,17 @@ if ('mediaSession' in navigator) {
 - [Media Session API - MDN](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API)
 - [Tauri convertFileSrc](https://tauri.app/develop/calling-frontend/#accessing-files-from-the-frontend)
 - [Tauri Dialog Plugin](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/dialog)
+
+## Testing URLs
+
+Example public media URLs for testing remote playback:
+
+**Audio:**
+- `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3`
+- `https://file-examples.com/wp-content/storage/2017/11/file_example_MP3_700KB.mp3`
+
+**Video:**
+- `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4`
+- `https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4`
+
+**Note:** These are public test URLs and availability is not guaranteed. Use your own media URLs for production testing.
