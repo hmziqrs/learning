@@ -5,6 +5,10 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:path:default",
+    "core:event:default",
+    "core:window:default",
+    "core:webview:default",
     "opener:default",
     {
       "identifier": "fs:allow-read",
@@ -68,6 +72,9 @@
     "deep-link:default",
     "deep-link:allow-is-registered",
     "deep-link:allow-register",
-    "deep-link:allow-unregister"
+    "deep-link:allow-unregister",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save"
   ]
 }
