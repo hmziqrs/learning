@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Upload, FileIcon, X, Trash2 } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import type { UnlistenFn } from '@tauri-apps/api/event'
 
@@ -30,6 +30,14 @@ function DragDrop() {
   const [isDragging, setIsDragging] = useState(false)
   const [nativeListenerActive, setNativeListenerActive] = useState(false)
 
+  // Use ref to track current mode for the native listener
+  const modeRef = useRef<DropMode>('native')
+
+  // Update ref when mode changes
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+
   useEffect(() => {
     let unlisten: UnlistenFn | null = null
 
@@ -47,6 +55,11 @@ function DragDrop() {
           const paths = payload.paths || []
           const position = payload.position || { x: 0, y: 0 }
           const type = payload.type || ''
+
+          // Only process in native mode (check ref to get current value)
+          if (modeRef.current !== 'native') {
+            return
+          }
 
           // Handle different drag event types
           if (type === 'over') {
