@@ -336,6 +336,37 @@ fn get_platform_name() -> String {
     return "unknown".to_string();
 }
 
+// Camera Module Structs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CapturedPhoto {
+    id: String,
+    file_path: String,
+    width: u32,
+    height: u32,
+    size: u64,
+    format: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RecordedVideo {
+    id: String,
+    file_path: String,
+    duration: f64,
+    width: u32,
+    height: u32,
+    size: u64,
+    format: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CameraConfig {
+    camera_id: String,
+    facing_mode: String,
+    flash_mode: String,
+}
+
 // Contacts Module Structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PhoneNumber {
@@ -572,6 +603,132 @@ fn generate_mock_contacts() -> Vec<Contact> {
     ]
 }
 
+// Camera Module Commands
+// These are mock implementations for development
+// In production, these would integrate with platform-specific camera APIs:
+// - Windows: MediaFoundation API
+// - macOS: AVFoundation framework
+// - Linux: V4L2 (Video4Linux2)
+// - Android: CameraX API
+// - iOS: AVFoundation framework
+
+#[tauri::command]
+async fn initialize_camera(_config: CameraConfig) -> Result<String, String> {
+    // TODO: Implement platform-specific camera initialization
+    // For now, return error message indicating custom plugin required
+    Err("Camera functionality requires custom platform plugin development. See docs/camera-module.md for implementation details.".to_string())
+}
+
+#[tauri::command]
+async fn capture_photo() -> Result<CapturedPhoto, String> {
+    // TODO: Implement platform-specific photo capture
+    // This would:
+    // 1. Access camera device
+    // 2. Capture current frame
+    // 3. Save to temporary file
+    // 4. Return photo metadata
+    Err("Photo capture requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn start_video_recording() -> Result<String, String> {
+    // TODO: Implement platform-specific video recording
+    // This would:
+    // 1. Access camera and microphone
+    // 2. Start video encoder
+    // 3. Begin recording to file
+    Err("Video recording requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn stop_video_recording() -> Result<RecordedVideo, String> {
+    // TODO: Implement platform-specific video recording stop
+    // This would:
+    // 1. Stop video encoder
+    // 2. Finalize video file
+    // 3. Return video metadata
+    Err("Video recording requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn switch_camera() -> Result<String, String> {
+    // TODO: Implement camera switching (front/back)
+    // This would:
+    // 1. Release current camera
+    // 2. Initialize new camera
+    // 3. Update preview stream
+    Err("Camera switching requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn set_flash_mode(mode: String) -> Result<(), String> {
+    // Validate mode
+    if !["on", "off", "auto"].contains(&mode.as_str()) {
+        return Err("Invalid flash mode. Must be 'on', 'off', or 'auto'".to_string());
+    }
+
+    // TODO: Implement platform-specific flash control
+    // This would set the camera flash mode on the device
+    Err("Flash control requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn set_zoom(ratio: f32) -> Result<(), String> {
+    // Validate ratio
+    if !(0.0..=1.0).contains(&ratio) {
+        return Err("Zoom ratio must be between 0.0 and 1.0".to_string());
+    }
+
+    // TODO: Implement platform-specific zoom control
+    // This would set the camera zoom level
+    Err("Zoom control requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn get_cameras() -> Result<Vec<String>, String> {
+    // TODO: Implement platform-specific camera enumeration
+    // This would:
+    // 1. Query available camera devices
+    // 2. Return list of camera IDs/names
+    Err("Camera enumeration requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+fn check_camera_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // TODO: Implement actual permission check via platform APIs
+        // For now, return false to trigger permission request flow
+        Ok(false)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        // Desktop platforms don't typically have permission systems for camera
+        // But we still need the custom plugin
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+async fn request_camera_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // Simulate permission request delay
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // TODO: Implement actual permission request via platform APIs
+        // For now, return true to simulate granted permission
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        // Desktop platforms don't require permission requests for camera
+        Ok(true)
+    }
+}
+
 // Network & Realtime Module
 // HTTP Client with connection pooling for better performance
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
@@ -739,7 +896,17 @@ pub fn run() {
             upload_file,
             check_contacts_permission,
             request_contacts_permission,
-            get_contacts
+            get_contacts,
+            initialize_camera,
+            capture_photo,
+            start_video_recording,
+            stop_video_recording,
+            switch_camera,
+            set_flash_mode,
+            set_zoom,
+            get_cameras,
+            check_camera_permission,
+            request_camera_permission
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

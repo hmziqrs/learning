@@ -3,6 +3,7 @@ import { Camera, Video, SwitchCamera, Zap, ZapOff, Circle, Square, Trash2 } from
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export const Route = createFileRoute('/camera')({
   component: CameraModule,
@@ -46,17 +47,19 @@ function CameraModule() {
   // Capture Photo
   const handleCapturePhoto = async () => {
     setLoading('capture-photo')
-    addOutput('Capturing photo...')
+    addOutput('Attempting to capture photo...')
 
     try {
-      // This would invoke the Tauri command once implemented
-      // const result = await invoke<CapturedPhoto>('capture_photo')
+      const result = await invoke<CapturedMedia>('capture_photo')
 
-      addOutput('✗ Camera functionality requires custom plugin development', false)
-      addOutput('Desktop: Requires native camera API integration', false)
-      addOutput('Mobile: Requires CameraX (Android) / AVFoundation (iOS)', false)
+      setCapturedMedia(prev => [...prev, {
+        ...result,
+        type: 'photo'
+      }])
+      addOutput(`✓ Photo captured: ${result.filePath}`)
     } catch (error) {
-      addOutput(`✗ Failed to capture photo: ${error}`, false)
+      addOutput(`✗ ${error}`, false)
+      addOutput('Note: Camera requires custom platform plugin', false)
     } finally {
       setLoading(null)
     }
@@ -68,15 +71,12 @@ function CameraModule() {
     addOutput('Starting video recording...')
 
     try {
-      // This would invoke the Tauri command once implemented
-      // await invoke('start_video_recording')
-
+      await invoke('start_video_recording')
       setIsRecording(true)
-      addOutput('✗ Video recording requires custom plugin development', false)
-      addOutput('Desktop: Requires MediaFoundation/AVFoundation/V4L2', false)
-      addOutput('Mobile: Requires CameraX (Android) / AVFoundation (iOS)', false)
+      addOutput('✓ Video recording started')
     } catch (error) {
-      addOutput(`✗ Failed to start recording: ${error}`, false)
+      addOutput(`✗ ${error}`, false)
+      addOutput('Note: Video recording requires custom platform plugin', false)
     } finally {
       setLoading(null)
     }
@@ -88,13 +88,21 @@ function CameraModule() {
     addOutput('Stopping video recording...')
 
     try {
-      // This would invoke the Tauri command once implemented
-      // const result = await invoke<RecordedVideo>('stop_video_recording')
+      const result = await invoke<CapturedMedia>('stop_video_recording')
 
+      setCapturedMedia(prev => [...prev, {
+        ...result,
+        type: 'video'
+      }])
       setIsRecording(false)
-      addOutput('Recording stopped (plugin not implemented)', false)
+      addOutput(`✓ Video saved: ${result.filePath}`)
+      if (result.duration) {
+        addOutput(`Duration: ${formatDuration(result.duration)}`)
+      }
     } catch (error) {
-      addOutput(`✗ Failed to stop recording: ${error}`, false)
+      setIsRecording(false)
+      addOutput(`✗ ${error}`, false)
+      addOutput('Note: Video recording requires custom platform plugin', false)
     } finally {
       setLoading(null)
     }
@@ -107,13 +115,12 @@ function CameraModule() {
     addOutput(`Switching to ${newFacing} camera...`)
 
     try {
-      // This would invoke the Tauri command once implemented
-      // await invoke('switch_camera')
-
+      await invoke('switch_camera')
       setCameraFacing(newFacing)
-      addOutput(`✗ Camera switching requires plugin implementation`, false)
+      addOutput(`✓ Switched to ${newFacing} camera`)
     } catch (error) {
-      addOutput(`✗ Failed to switch camera: ${error}`, false)
+      addOutput(`✗ ${error}`, false)
+      addOutput('Note: Camera switching requires custom platform plugin', false)
     } finally {
       setLoading(null)
     }
@@ -129,13 +136,12 @@ function CameraModule() {
     addOutput(`Setting flash mode to: ${newMode}`)
 
     try {
-      // This would invoke the Tauri command once implemented
-      // await invoke('set_flash_mode', { mode: newMode })
-
+      await invoke('set_flash_mode', { mode: newMode })
       setFlashMode(newMode)
-      addOutput(`Flash mode set to: ${newMode}`)
+      addOutput(`✓ Flash mode set to: ${newMode}`)
     } catch (error) {
-      addOutput(`✗ Failed to set flash mode: ${error}`, false)
+      addOutput(`✗ ${error}`, false)
+      addOutput('Note: Flash control requires custom platform plugin', false)
     } finally {
       setLoading(null)
     }
