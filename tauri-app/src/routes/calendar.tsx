@@ -4,7 +4,7 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-opener'
+import * as opener from '@tauri-apps/plugin-opener'
 import Database from '@tauri-apps/plugin-sql'
 
 export const Route = createFileRoute('/calendar')({
@@ -166,7 +166,7 @@ function CalendarModule() {
       addOutput('Opening in system calendar...')
 
       // Open the ICS file with the system calendar app
-      await open(filePath)
+      await opener.open(filePath)
       addOutput('Calendar file opened successfully')
     } catch (error) {
       addOutput(`Error exporting events: ${error}`, false)
