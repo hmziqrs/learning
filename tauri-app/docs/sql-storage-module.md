@@ -70,12 +70,14 @@ Add to `src-tauri/capabilities/default.json`:
 - [ ] Persist to disk
 
 ### Data Management
-- [ ] User profile storage (name, settings)
-- [ ] Dark mode preference persistence
-- [ ] Application state management
+- [x] User profile storage (name, settings)
+- [x] Dark mode preference persistence
+- [x] Application state management
 - [ ] Settings synchronization
-- [ ] Data export/import
-- [ ] Clear all data functionality
+- [x] Data export (JSON, CSV)
+- [x] Complete data backup
+- [ ] Data import
+- [x] Clear all data functionality
 
 ## Database Schema
 
@@ -384,10 +386,19 @@ All core features have been implemented in `src/routes/sql-storage.tsx`:
 - ✅ User preferences section with input and save button
 - ✅ Dark mode toggle with persistent state
 - ✅ Notes CRUD interface (add, view, delete)
+- ✅ Data export functionality (JSON, CSV, complete backup)
 - ✅ Data management section with clear all functionality
 - ✅ Real-time output panel with operation logging
 - ✅ Loading states on all buttons
 - ✅ Error handling for all operations
+
+#### Advanced Export Features
+- ✅ Export notes to JSON format with metadata
+- ✅ Export notes to CSV format with proper escaping
+- ✅ Export complete data (notes + preferences) to JSON
+- ✅ File save dialog integration
+- ✅ Timestamp-based default filenames
+- ✅ Disabled state when no data to export
 
 ### Testing Status
 - [ ] Desktop (Windows) - Pending
@@ -404,6 +415,55 @@ All core features have been implemented in `src/routes/sql-storage.tsx`:
 - Both plugins persist data across app restarts
 - Database file: `storage.db` in app data directory
 - Store file: `settings.json` in app data directory
+
+### Export Features Detail
+
+The module includes comprehensive data export functionality:
+
+**1. Export Notes to JSON**
+- Exports all notes with metadata (export date, total count)
+- Pretty-printed JSON format (2-space indentation)
+- File saved via native dialog with `.json` filter
+- Default filename: `notes-export-{timestamp}.json`
+
+**2. Export Notes to CSV**
+- Exports notes in CSV format for spreadsheet applications
+- Includes headers: ID, Title, Content, Created At
+- Proper CSV escaping (quotes doubled)
+- File saved via native dialog with `.csv` filter
+- Default filename: `notes-export-{timestamp}.csv`
+
+**3. Export Complete Data**
+- Exports both notes and preferences in single JSON file
+- Includes version number for future compatibility
+- Structured format with separate sections for each data type
+- File saved via native dialog with `.json` filter
+- Default filename: `complete-export-{timestamp}.json`
+
+**Example Export Format (Complete Data)**:
+```json
+{
+  "exportDate": "2025-01-15T10:30:00.000Z",
+  "version": "1.0",
+  "data": {
+    "preferences": {
+      "userName": "John Doe",
+      "isDarkMode": true
+    },
+    "notes": {
+      "count": 3,
+      "items": [
+        {
+          "id": 1,
+          "title": "My Note",
+          "content": "Note content",
+          "created_at": "2025-01-15T10:00:00.000Z"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## Implementation Notes
 

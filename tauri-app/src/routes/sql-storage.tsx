@@ -1,10 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Database as DatabaseIcon, Save, Trash2, Check, X, HardDrive, Settings } from 'lucide-react'
+import { Database as DatabaseIcon, Save, Trash2, Check, X, HardDrive, Settings, Download, FileJson, FileSpreadsheet } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useRef } from 'react'
 import Database from '@tauri-apps/plugin-sql'
 import { Store } from '@tauri-apps/plugin-store'
+import { save } from '@tauri-apps/plugin-dialog'
+import { writeTextFile } from '@tauri-apps/plugin-fs'
 
 export const Route = createFileRoute('/sql-storage')({
   component: SqlStorage,
@@ -261,6 +263,151 @@ function SqlStorage() {
     }
   }
 
+  const handleExportNotesJSON = async () => {
+    setLoading('exportJSON')
+    try {
+      if (notes.length === 0) {
+        addOutput('No notes to export', false)
+        return
+      }
+
+      // Format data for export
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        totalNotes: notes.length,
+        notes: notes,
+      }
+
+      const jsonString = JSON.stringify(exportData, null, 2)
+
+      // Show save dialog
+      const filePath = await save({
+        filters: [{
+          name: 'JSON',
+          extensions: ['json']
+        }],
+        defaultPath: `notes-export-${Date.now()}.json`
+      })
+
+      if (!filePath) {
+        addOutput('Export cancelled')
+        return
+      }
+
+      // Write file
+      await writeTextFile(filePath, jsonString)
+      addOutput(`Notes exported to JSON: ${filePath}`)
+    } catch (error) {
+      addOutput(`Error exporting notes to JSON: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleExportNotesCSV = async () => {
+    setLoading('exportCSV')
+    try {
+      if (notes.length === 0) {
+        addOutput('No notes to export', false)
+        return
+      }
+
+      // Generate CSV content
+      const headers = ['ID', 'Title', 'Content', 'Created At']
+      const csvRows = [headers.join(',')]
+
+      notes.forEach(note => {
+        const row = [
+          note.id,
+          `"${note.title.replace(/"/g, '""')}"`, // Escape quotes
+          `"${note.content.replace(/"/g, '""')}"`,
+          `"${new Date(note.created_at).toLocaleString()}"`
+        ]
+        csvRows.push(row.join(','))
+      })
+
+      const csvString = csvRows.join('\n')
+
+      // Show save dialog
+      const filePath = await save({
+        filters: [{
+          name: 'CSV',
+          extensions: ['csv']
+        }],
+        defaultPath: `notes-export-${Date.now()}.csv`
+      })
+
+      if (!filePath) {
+        addOutput('Export cancelled')
+        return
+      }
+
+      // Write file
+      await writeTextFile(filePath, csvString)
+      addOutput(`Notes exported to CSV: ${filePath}`)
+    } catch (error) {
+      addOutput(`Error exporting notes to CSV: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleExportAll = async () => {
+    setLoading('exportAll')
+    try {
+      // Gather all data
+      const preferences: Record<string, any> = {}
+
+      if (storeRef.current) {
+        const hasUserName = await storeRef.current.has('userName')
+        const hasTheme = await storeRef.current.has('isDarkMode')
+
+        if (hasUserName) {
+          preferences.userName = await storeRef.current.get('userName')
+        }
+        if (hasTheme) {
+          preferences.isDarkMode = await storeRef.current.get('isDarkMode')
+        }
+      }
+
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        data: {
+          preferences,
+          notes: {
+            count: notes.length,
+            items: notes
+          }
+        }
+      }
+
+      const jsonString = JSON.stringify(exportData, null, 2)
+
+      // Show save dialog
+      const filePath = await save({
+        filters: [{
+          name: 'JSON',
+          extensions: ['json']
+        }],
+        defaultPath: `complete-export-${Date.now()}.json`
+      })
+
+      if (!filePath) {
+        addOutput('Export cancelled')
+        return
+      }
+
+      // Write file
+      await writeTextFile(filePath, jsonString)
+      addOutput(`Complete data exported to: ${filePath}`)
+    } catch (error) {
+      addOutput(`Error exporting all data: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   const clearOutput = () => setOutput([])
 
   return (
@@ -416,6 +563,53 @@ function SqlStorage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Export Data */}
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+            <Download className="w-6 h-6" />
+            Export Data
+          </h2>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Export your data to various formats for backup or analysis.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Button
+                onClick={handleExportNotesJSON}
+                disabled={loading === 'exportJSON' || notes.length === 0}
+                variant="outline"
+                className="gap-2"
+              >
+                <FileJson className="w-4 h-4" />
+                {loading === 'exportJSON' ? 'Exporting...' : 'Export Notes (JSON)'}
+              </Button>
+              <Button
+                onClick={handleExportNotesCSV}
+                disabled={loading === 'exportCSV' || notes.length === 0}
+                variant="outline"
+                className="gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                {loading === 'exportCSV' ? 'Exporting...' : 'Export Notes (CSV)'}
+              </Button>
+              <Button
+                onClick={handleExportAll}
+                disabled={loading === 'exportAll'}
+                variant="outline"
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                {loading === 'exportAll' ? 'Exporting...' : 'Export Everything'}
+              </Button>
+            </div>
+            {notes.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Add some notes first to enable export functionality
+              </p>
             )}
           </div>
         </div>
