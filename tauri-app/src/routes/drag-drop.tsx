@@ -40,34 +40,47 @@ function DragDrop() {
         // Use the Tauri v2 onDragDropEvent API
         unlisten = await webview.onDragDropEvent((event) => {
           const timestamp = new Date().toLocaleTimeString()
-          const { paths, position, type } = event.payload as { paths: string[], position: { x: number, y: number }, type: string }
+          const payload = event.payload as any
+
+          console.log('Drag event:', payload) // Debug log
+
+          const paths = payload.paths || []
+          const position = payload.position || { x: 0, y: 0 }
+          const type = payload.type || ''
 
           // Handle different drag event types
           if (type === 'over') {
             // Drag over event
             setIsDragging(true)
-            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag over: ${paths.length} file(s) at (${position.x}, ${position.y})`])
+            if (paths.length > 0) {
+              setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag over: ${paths.length} file(s) at (${position.x}, ${position.y})`])
+            }
           } else if (type === 'drop') {
             // Drop event
             setIsDragging(false)
-            setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
 
-            const newFiles: DroppedFile[] = paths.map((path, index) => ({
-              id: `native-${Date.now()}-${index}`,
-              path,
-              name: path.split('/').pop() || path.split('\\').pop() || path,
-              source: 'native',
-              droppedAt: new Date(),
-            }))
+            if (paths.length > 0) {
+              setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
 
-            setDroppedFiles((prev) => [...prev, ...newFiles])
+              const newFiles: DroppedFile[] = paths.map((path: string, index: number) => ({
+                id: `native-${Date.now()}-${index}`,
+                path,
+                name: path.split('/').pop() || path.split('\\').pop() || path,
+                source: 'native',
+                droppedAt: new Date(),
+              }))
+
+              setDroppedFiles((prev) => [...prev, ...newFiles])
+            }
           } else if (type === 'leave') {
             // Drag leave event
             setIsDragging(false)
             setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag cancelled`])
           } else if (type === 'enter') {
             // Drag enter event
-            setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag enter: ${paths.length} file(s)`])
+            if (paths.length > 0) {
+              setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag enter: ${paths.length} file(s)`])
+            }
           }
         })
 
