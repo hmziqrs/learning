@@ -9,6 +9,7 @@ import {
   Calendar,
   Database,
   DollarSign,
+  Wifi,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -66,18 +67,25 @@ const modules = [
     color: 'text-teal-500',
   },
   {
-    name: 'SQL + Storage',
-    description: 'Store user state, preferences, and data using SQLite and key-value store',
-    icon: Database,
-    path: '/sql-storage',
-    color: 'text-indigo-500',
-        },
-        {
     name: 'In-App Purchases',
     description: 'Test platform billing: iOS IAP, Android Billing, desktop Stripe',
     icon: DollarSign,
     path: '/in-app-purchases',
     color: 'text-emerald-500',
+  },
+  {
+    name: 'SQL + Storage',
+    description: 'Store user state, preferences, and data using SQLite and key-value store',
+    icon: Database,
+    path: '/sql-storage',
+    color: 'text-indigo-500',
+  },
+  {
+    name: 'Network & Realtime',
+    description: 'Test HTTP requests, WebSocket connections, and file uploads',
+    icon: Wifi,
+    path: '/network-realtime',
+    color: 'text-violet-500',
   },
 ]
 
