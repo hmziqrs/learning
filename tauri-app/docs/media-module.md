@@ -302,12 +302,12 @@ if ('mediaSession' in navigator) {
 - Desktop: ✅ Tested and working
   - macOS: ✅ Audio playback working
   - macOS: ✅ Video playback working
+  - macOS: ✅ Remote URL playback working
   - Windows: ⏳ Not yet tested
   - Linux: ⏳ Not yet tested
 - Mobile: ⏳ Not yet tested
   - Android: ⏳ Not yet tested
   - iOS: ⏳ Not yet tested
-- Remote URLs: ⏳ Not yet tested
 
 ## Known Limitations
 
