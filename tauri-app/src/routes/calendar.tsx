@@ -190,6 +190,83 @@ function CalendarModule() {
     return `${startStr} - ${endStr}`
   }
 
+  const handleQuickPreset = (presetType: string) => {
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+    switch (presetType) {
+      case 'today-meeting':
+        setEventTitle('Team Meeting')
+        setEventDescription('Quick sync with the team')
+        setStartDate(today)
+        setStartTime(now.toTimeString().slice(0, 5))
+        const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000)
+        setEndDate(today)
+        setEndTime(oneHourLater.toTimeString().slice(0, 5))
+        setIsAllDay(false)
+        addOutput('Pre-filled: Today Meeting (1 hour)')
+        break
+
+      case 'tomorrow-event':
+        setEventTitle('Important Event')
+        setEventDescription('Tomorrow scheduled event')
+        setStartDate(tomorrow)
+        setStartTime('09:00')
+        setEndDate(tomorrow)
+        setEndTime('11:00')
+        setIsAllDay(false)
+        addOutput('Pre-filled: Tomorrow Event (9 AM - 11 AM)')
+        break
+
+      case 'today-allday':
+        setEventTitle('Holiday / Day Off')
+        setEventDescription('All day event')
+        setStartDate(today)
+        setStartTime('')
+        setEndDate(today)
+        setEndTime('')
+        setIsAllDay(true)
+        addOutput('Pre-filled: All-day Today')
+        break
+
+      case 'tomorrow-allday':
+        setEventTitle('Conference')
+        setEventDescription('All day conference event')
+        setStartDate(tomorrow)
+        setStartTime('')
+        setEndDate(tomorrow)
+        setEndTime('')
+        setIsAllDay(true)
+        addOutput('Pre-filled: All-day Tomorrow')
+        break
+
+      case 'quick-test':
+        setEventTitle('Quick Test Event')
+        setEventDescription('Testing the calendar')
+        setStartDate(today)
+        setStartTime(now.toTimeString().slice(0, 5))
+        const thirtyMinLater = new Date(now.getTime() + 30 * 60 * 1000)
+        setEndDate(today)
+        setEndTime(thirtyMinLater.toTimeString().slice(0, 5))
+        setIsAllDay(false)
+        addOutput('Pre-filled: Quick Test (30 min)')
+        break
+
+      case 'multi-day':
+        setEventTitle('Vacation')
+        setEventDescription('Multi-day trip')
+        setStartDate(today)
+        setStartTime('')
+        const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        setEndDate(threeDaysLater)
+        setEndTime('')
+        setIsAllDay(true)
+        addOutput('Pre-filled: Multi-day Event (3 days)')
+        break
+    }
+  }
+
   return (
     <ModulePageLayout
       title="Calendar Module"
@@ -204,6 +281,55 @@ function CalendarModule() {
             <Plus className="w-5 h-5" />
             Add Event
           </h2>
+
+          {/* Quick Presets */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Quick Presets (for testing)</label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('today-meeting')}
+              >
+                Today Meeting (1h)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('tomorrow-event')}
+              >
+                Tomorrow Event (2h)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('today-allday')}
+              >
+                All-day Today
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('tomorrow-allday')}
+              >
+                All-day Tomorrow
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('quick-test')}
+              >
+                Quick Test (30m)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickPreset('multi-day')}
+              >
+                Multi-day (3d)
+              </Button>
+            </div>
+          </div>
 
           <div className="space-y-4">
             <div>
