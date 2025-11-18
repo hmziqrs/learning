@@ -1316,7 +1316,7 @@ Track your implementation progress:
 - [x] 2. Notifications + Scheduling Module (See: [notifications-module.md](notifications-module.md))
 - [x] 3. Deep Linking Module (See: [deep-linking-module.md](deep-linking-module.md))
 - [x] 4. Media Module (Audio + Video) (See: [media-module.md](media-module.md))
-- [ ] 5. Drag & Drop Module (See: [drag-drop-module.md](drag-drop-module.md))
+- [ ] 5. Drag & Drop Module (In Progress - See: [drag-drop-module.md](drag-drop-module.md))
 
 ### Phase 2: Media & Content (Modules 6-8)
 - [ ] 6. Alarms (Future Notifications) Module

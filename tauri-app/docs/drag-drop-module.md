@@ -212,59 +212,55 @@ const path: string = event.payload.paths[0]
 ## Progress Tracking
 
 ### Setup Phase
-- [ ] Enable drag & drop in tauri.conf.json
-- [ ] Configure window permissions
-- [ ] Test event listeners
+- [x] Verify dragDropEnabled in tauri.conf.json
+- [x] Configure window permissions in capabilities/default.json
+- [x] Add route to navigation (already in home page)
 
 ### Development Phase
-- [ ] Implement native Tauri file drop
-- [ ] Implement HTML5 drag & drop
-- [ ] Create drop zone UI
+- [ ] Implement native Tauri file drop listener
+- [ ] Implement HTML5 drag & drop handlers
+- [ ] Create drop zone UI component
 - [ ] Add visual drag-over feedback
 - [ ] Implement file list display
-- [ ] Add file metadata display
-- [ ] Create mode toggle
-- [ ] Add file type validation
+- [ ] Add file metadata display (name, size, type)
+- [ ] Create mode toggle (Native vs HTML5)
 - [ ] Implement clear functionality
-- [ ] Add event logging
+- [ ] Add event logging to output panel
 
 ### Testing Phase
-- [ ] Test native file drop
+- [ ] Test native file drop on macOS
 - [ ] Test HTML5 drag & drop
-- [ ] Test on desktop platforms
-- [ ] Test on mobile platforms
 - [ ] Verify visual feedback
-- [ ] Test file validation
-- [ ] Test edge cases
+- [ ] Test with multiple files
+- [ ] Test with different file types
 
 ### Polish Phase
 - [ ] Improve UI/UX
-- [ ] Add file previews
-- [ ] Add animations
-- [ ] Implement file reordering
-- [ ] Add accessibility features
-- [ ] Optimize performance
-- [ ] Document known limitations
+- [ ] Add file previews for images
+- [ ] Code cleanup and documentation
 
 ## Implementation Status
 
-**Status**: Pending
+**Status**: In Progress
 
 ### Backend Configuration
-- Route: Not created
-- Component: Not created
-- Permissions: Not configured
-- Window config: Not configured
+- [x] Route: Created at `/drag-drop`
+- [ ] Component: Placeholder exists, needs implementation
+- [x] Permissions: Configured in capabilities/default.json (core:event:default, core:window:default)
+- [x] Window config: dragDropEnabled is set to true
 
 ### Frontend Implementation
-- Native file drop: Not implemented
-- HTML5 drag & drop: Not implemented
-- Drop zone UI: Not implemented
-- File list: Not implemented
+- [ ] Native file drop: Not implemented
+- [ ] HTML5 drag & drop: Not implemented
+- [ ] Drop zone UI: Not implemented
+- [ ] File list: Not implemented
+- [ ] Mode toggle: Not implemented
+- [ ] File metadata display: Not implemented
+- [ ] Visual feedback: Not implemented
 
 ### Testing Results
-- Desktop: Not tested
-- Mobile: Not tested
+- [ ] Desktop: Not tested
+- [ ] Mobile: Not tested
 
 ## Known Limitations
 
