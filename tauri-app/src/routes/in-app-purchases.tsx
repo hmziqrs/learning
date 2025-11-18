@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { DollarSign, ShoppingCart, RefreshCw, Receipt } from 'lucide-react'
+import { DollarSign, ShoppingCart, RefreshCw, Receipt, Laptop } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export const Route = createFileRoute('/in-app-purchases')({
   component: InAppPurchasesModule,
@@ -13,14 +14,24 @@ interface Product {
   title: string
   description: string
   price: string
+  price_amount: number
+  currency: string
   type: 'consumable' | 'non-consumable' | 'subscription'
 }
 
 interface PurchaseReceipt {
-  productId: string
-  transactionId: string
-  purchaseDate: string
-  status: 'pending' | 'completed' | 'failed'
+  product_id: string
+  transaction_id: string
+  purchase_date: string
+  status: string
+  platform: string
+  price_paid: number
+  currency: string
+}
+
+interface RestoreResult {
+  restored_count: number
+  receipts: PurchaseReceipt[]
 }
 
 function InAppPurchasesModule() {
@@ -28,45 +39,23 @@ function InAppPurchasesModule() {
   const [loading, setLoading] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null)
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [platform, setPlatform] = useState<string>('unknown')
 
-  // Mock products for demonstration
-  const [products] = useState<Product[]>([
-    {
-      id: 'premium_monthly',
-      title: 'Premium Monthly',
-      description: 'Access to all premium features for 1 month',
-      price: '$9.99',
-      type: 'subscription',
-    },
-    {
-      id: 'premium_yearly',
-      title: 'Premium Yearly',
-      description: 'Access to all premium features for 1 year (save 20%)',
-      price: '$99.99',
-      type: 'subscription',
-    },
-    {
-      id: 'coins_100',
-      title: '100 Coins',
-      description: 'Purchase 100 in-app coins',
-      price: '$4.99',
-      type: 'consumable',
-    },
-    {
-      id: 'coins_500',
-      title: '500 Coins',
-      description: 'Purchase 500 in-app coins (best value)',
-      price: '$19.99',
-      type: 'consumable',
-    },
-    {
-      id: 'remove_ads',
-      title: 'Remove Ads',
-      description: 'Permanently remove all advertisements',
-      price: '$2.99',
-      type: 'non-consumable',
-    },
-  ])
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  const loadInitialData = async () => {
+    try {
+      const platformName = await invoke<string>('get_iap_platform')
+      setPlatform(platformName)
+      addOutput(`Running on platform: ${platformName}`)
+      addOutput('Click "Fetch Products" to load available products')
+    } catch (error) {
+      addOutput(`Error loading platform: ${error}`, false)
+    }
+  }
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -76,17 +65,15 @@ function InAppPurchasesModule() {
 
   const handleFetchProducts = async () => {
     setLoading('fetching')
-    addOutput('Fetching available products...')
+    addOutput('Fetching available products from backend...')
 
     try {
-      // In a real implementation, this would call:
-      // const products = await invoke('fetch_iap_products')
-
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      addOutput(`Fetched ${products.length} products successfully`)
-      addOutput('Note: In-app purchase plugins not yet installed. This is a UI demonstration.')
+      const fetchedProducts = await invoke<Product[]>('fetch_iap_products')
+      setProducts(fetchedProducts)
+      addOutput(`✓ Fetched ${fetchedProducts.length} products successfully`)
+      addOutput('Note: Using mock/sandbox implementation. Products are simulated.')
     } catch (error) {
-      addOutput(`Error fetching products: ${error}`, false)
+      addOutput(`✗ Error fetching products: ${error}`, false)
     } finally {
       setLoading(null)
     }
@@ -98,26 +85,20 @@ function InAppPurchasesModule() {
 
     setLoading(`purchase-${productId}`)
     setSelectedProduct(productId)
-    addOutput(`Initiating purchase for "${product.title}" (${product.price})...`)
+    addOutput(`💳 Initiating purchase for "${product.title}" (${product.price})...`)
+    addOutput('Processing payment (simulated)...')
 
     try {
-      // In a real implementation, this would call:
-      // const receipt = await invoke('purchase_product', { productId })
+      const receipt = await invoke<PurchaseReceipt>('purchase_product', { productId })
 
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const mockReceipt: PurchaseReceipt = {
-        productId,
-        transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        purchaseDate: new Date().toISOString(),
-        status: 'completed',
-      }
-
-      setReceipts((prev) => [mockReceipt, ...prev])
-      addOutput(`Purchase successful! Transaction ID: ${mockReceipt.transactionId}`)
-      addOutput('Note: This is a mock purchase. Real IAP requires platform-specific plugin configuration.')
+      setReceipts((prev) => [receipt, ...prev])
+      addOutput(`✓ Purchase successful!`)
+      addOutput(`  Transaction ID: ${receipt.transaction_id}`)
+      addOutput(`  Amount: ${receipt.currency} ${receipt.price_paid.toFixed(2)}`)
+      addOutput(`  Platform: ${receipt.platform}`)
+      addOutput('Note: This is a sandbox purchase. No real money was charged.')
     } catch (error) {
-      addOutput(`Purchase failed: ${error}`, false)
+      addOutput(`✗ Purchase failed: ${error}`, false)
     } finally {
       setLoading(null)
       setSelectedProduct(null)
@@ -126,35 +107,45 @@ function InAppPurchasesModule() {
 
   const handleRestorePurchases = async () => {
     setLoading('restoring')
-    addOutput('Restoring previous purchases...')
+    addOutput('🔄 Restoring previous purchases...')
+    addOutput('Querying platform store (simulated)...')
 
     try {
-      // In a real implementation, this would call:
-      // const restoredPurchases = await invoke('restore_purchases')
+      const result = await invoke<RestoreResult>('restore_purchases')
 
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const restoredCount = receipts.filter((r) => r.status === 'completed').length
-      addOutput(`Restored ${restoredCount} purchase(s)`)
-      addOutput('Note: Real restore would query the platform store (App Store, Play Store, etc.)')
+      // Add restored receipts to the list
+      if (result.receipts.length > 0) {
+        setReceipts((prev) => [...result.receipts, ...prev])
+        addOutput(`✓ Restored ${result.restored_count} purchase(s)`)
+        result.receipts.forEach((receipt) => {
+          addOutput(`  - ${receipt.product_id} (${receipt.transaction_id})`)
+        })
+      } else {
+        addOutput('No previous purchases found to restore')
+      }
+      addOutput('Note: Real restore would query App Store/Play Store purchase history')
     } catch (error) {
-      addOutput(`Restore failed: ${error}`, false)
+      addOutput(`✗ Restore failed: ${error}`, false)
     } finally {
       setLoading(null)
     }
   }
 
   const handleValidateReceipt = async (transactionId: string) => {
-    addOutput(`Validating receipt: ${transactionId}...`)
+    addOutput(`🔍 Validating receipt: ${transactionId}...`)
+    addOutput('Contacting verification server (simulated)...')
 
     try {
-      // In a real implementation, this would call:
-      // const isValid = await invoke('validate_receipt', { transactionId })
+      const isValid = await invoke<boolean>('validate_receipt', { transactionId })
 
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      addOutput(`Receipt ${transactionId} is valid ✓`)
+      if (isValid) {
+        addOutput(`✓ Receipt ${transactionId} is valid`)
+        addOutput('Receipt verified successfully')
+      } else {
+        addOutput(`✗ Receipt ${transactionId} is invalid`, false)
+      }
     } catch (error) {
-      addOutput(`Validation failed: ${error}`, false)
+      addOutput(`✗ Validation failed: ${error}`, false)
     }
   }
 
@@ -176,23 +167,41 @@ function InAppPurchasesModule() {
       icon={DollarSign}
     >
       <div className="space-y-6">
+        {/* Platform Info */}
+        <section className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-6">
+          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <Laptop className="w-5 h-5 text-blue-500" />
+            Platform Information
+          </h3>
+          <div className="space-y-2 text-sm">
+            <p>
+              <strong>Current Platform:</strong>{' '}
+              <span className="px-2 py-1 bg-muted rounded font-mono text-xs">{platform}</span>
+            </p>
+            <p className="text-muted-foreground">
+              This module uses a mock/sandbox implementation for demonstration.
+              Purchases are simulated and no real money is charged.
+            </p>
+          </div>
+        </section>
+
         {/* Setup Notice */}
         <section className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-6">
           <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
             <span className="text-yellow-500">⚠️</span>
-            Setup Required
+            Production Setup
           </h3>
           <div className="space-y-2 text-sm">
-            <p>This module demonstrates the In-App Purchase UI and workflow.</p>
-            <p className="font-medium">To enable real purchases, install the required plugins:</p>
+            <p className="font-medium">To enable real purchases in production:</p>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># iOS + Android + Windows</div>
+              <div># Install platform-specific IAP plugin</div>
               <div>bun add tauri-plugin-in-app-purchase</div>
-              <div className="mt-2"># Or iOS-specific</div>
+              <div className="mt-2"># Or for iOS-only</div>
               <div>bun add tauri-plugin-iap</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Platform-specific configuration is required in <code>src-tauri/capabilities/</code>
+              Additional setup required: App Store Connect (iOS), Google Play Console (Android),
+              and platform-specific configuration in <code>src-tauri/</code>
             </p>
           </div>
         </section>
@@ -279,24 +288,27 @@ function InAppPurchasesModule() {
 
           {receipts.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No purchases yet. Try buying a product above.
+              No purchases yet. Try buying a product above or restore previous purchases.
             </p>
           ) : (
             <div className="space-y-3">
               {receipts.map((receipt, index) => {
-                const product = products.find((p) => p.id === receipt.productId)
+                const product = products.find((p) => p.id === receipt.product_id)
                 return (
                   <div
                     key={index}
                     className="flex items-start justify-between p-4 border rounded-lg bg-muted/30"
                   >
                     <div className="flex-1 space-y-1">
-                      <h3 className="font-semibold">{product?.title || receipt.productId}</h3>
+                      <h3 className="font-semibold">{product?.title || receipt.product_id}</h3>
                       <p className="text-xs text-muted-foreground">
-                        Transaction ID: {receipt.transactionId}
+                        Transaction ID: {receipt.transaction_id}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Date: {new Date(receipt.purchaseDate).toLocaleString()}
+                        Date: {new Date(receipt.purchase_date).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Amount: {receipt.currency} {receipt.price_paid.toFixed(2)} • Platform: {receipt.platform}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span
@@ -315,7 +327,7 @@ function InAppPurchasesModule() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleValidateReceipt(receipt.transactionId)}
+                      onClick={() => handleValidateReceipt(receipt.transaction_id)}
                     >
                       Validate
                     </Button>
