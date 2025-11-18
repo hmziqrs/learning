@@ -68,8 +68,9 @@ Configure file access in `src-tauri/tauri.conf.json`:
 - [x] Playback speed control
 - [x] Playlist management
 - [x] Support for common formats (MP3, MP4, OGG, WebM, WAV)
-- [ ] Media session API integration (optional)
-- [ ] Native media controls integration (optional)
+- [x] Media Session API integration (OS-level controls)
+- [x] Playlist auto-advance
+- [x] Picture-in-Picture for video
 
 ## Frontend Implementation
 
@@ -297,6 +298,9 @@ if ('mediaSession' in navigator) {
 - ✅ Event logging with timestamps
 - ✅ Format detection from file extension
 - ✅ Keyboard shortcuts (Enter to load URL)
+- ✅ Media Session API (OS-level media controls in notification area/lock screen)
+- ✅ Playlist auto-advance (automatic next track playback)
+- ✅ Picture-in-Picture mode for video
 
 ### Testing Results
 - Desktop: ✅ Tested and working

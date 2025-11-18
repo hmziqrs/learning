@@ -52,6 +52,7 @@ function Media() {
   const [muted, setMuted] = useState(false)
   const [mediaUrl, setMediaUrl] = useState('')
   const [mediaType, setMediaType] = useState<'audio' | 'video'>('audio')
+  const [autoAdvance, setAutoAdvance] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -262,6 +263,71 @@ function Media() {
     addOutput(`📋 Loaded from playlist: ${file.name}`)
   }
 
+  const handlePictureInPicture = async () => {
+    const video = videoRef.current
+    if (!video) return
+
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+        addOutput('📺 Exited Picture-in-Picture')
+      } else {
+        await video.requestPictureInPicture()
+        addOutput('📺 Entered Picture-in-Picture')
+      }
+    } catch (error) {
+      addOutput(`✗ Picture-in-Picture error: ${error}`)
+    }
+  }
+
+  // Setup Media Session API
+  useEffect(() => {
+    if (!selectedFile || !('mediaSession' in navigator)) return
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: selectedFile.name,
+      artist: 'Tauri Media Player',
+      album: 'Media Module',
+    })
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      handlePlayPause()
+    })
+
+    navigator.mediaSession.setActionHandler('pause', () => {
+      handlePlayPause()
+    })
+
+    navigator.mediaSession.setActionHandler('stop', () => {
+      handleStop()
+    })
+
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      const media = selectedFile?.type === 'audio' ? audioRef.current : videoRef.current
+      if (media) {
+        media.currentTime = Math.max(media.currentTime - (details.seekOffset || 10), 0)
+      }
+    })
+
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      const media = selectedFile?.type === 'audio' ? audioRef.current : videoRef.current
+      if (media) {
+        media.currentTime = Math.min(
+          media.currentTime + (details.seekOffset || 10),
+          media.duration
+        )
+      }
+    })
+
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null)
+      navigator.mediaSession.setActionHandler('pause', null)
+      navigator.mediaSession.setActionHandler('stop', null)
+      navigator.mediaSession.setActionHandler('seekbackward', null)
+      navigator.mediaSession.setActionHandler('seekforward', null)
+    }
+  }, [selectedFile])
+
   // Update metadata on time change
   useEffect(() => {
     const media = selectedFile?.type === 'audio' ? audioRef.current : videoRef.current
@@ -274,6 +340,11 @@ function Media() {
         volume: media.volume,
         paused: media.paused,
       })
+
+      // Update Media Session playback state
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = media.paused ? 'paused' : 'playing'
+      }
     }
 
     const handleLoadedMetadata = () => {
@@ -287,6 +358,16 @@ function Media() {
 
     const handleEnded = () => {
       addOutput('✓ Playback finished')
+
+      // Auto-advance to next track in playlist
+      if (autoAdvance && playlist.length > 0) {
+        const currentIndex = playlist.findIndex((f) => f.path === selectedFile?.path)
+        const nextIndex = (currentIndex + 1) % playlist.length
+        if (nextIndex !== currentIndex) {
+          setSelectedFile(playlist[nextIndex])
+          addOutput(`⏭️ Auto-advancing to: ${playlist[nextIndex].name}`)
+        }
+      }
     }
 
     const handleError = (e: Event) => {
@@ -452,6 +533,17 @@ function Media() {
                   className="w-full rounded-lg bg-black"
                   controls
                 />
+                {document.pictureInPictureEnabled && (
+                  <Button
+                    onClick={handlePictureInPicture}
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Video className="w-4 h-4" />
+                    {document.pictureInPictureElement ? 'Exit' : 'Enter'} Picture-in-Picture
+                  </Button>
+                )}
               </div>
             )}
 
@@ -540,15 +632,26 @@ function Media() {
                 <Upload className="w-5 h-5" />
                 Playlist ({playlist.length})
               </h3>
-              <Button
-                onClick={handleClearPlaylist}
-                size="sm"
-                variant="destructive"
-                className="gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Clear
-              </Button>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoAdvance}
+                    onChange={(e) => setAutoAdvance(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  Auto-advance
+                </label>
+                <Button
+                  onClick={handleClearPlaylist}
+                  size="sm"
+                  variant="destructive"
+                  className="gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Clear
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               {playlist.map((file, index) => (
