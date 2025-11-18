@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Calendar as CalendarIcon, Plus, Trash2, Download, ExternalLink } from 'lucide-react'
+import { Calendar as CalendarIcon, Plus, Trash2, Download } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-opener'
+import Database from '@tauri-apps/plugin-sql'
 
 export const Route = createFileRoute('/calendar')({
   component: CalendarModule,
@@ -43,7 +44,21 @@ function CalendarModule() {
 
   const initDatabase = async () => {
     try {
-      await invoke('init_calendar_db')
+      const db = await Database.load('sqlite:calendar.db')
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          description TEXT,
+          start_time TEXT NOT NULL,
+          end_time TEXT NOT NULL,
+          is_all_day BOOLEAN DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+
       addOutput('Database initialized successfully')
       await loadEvents()
     } catch (error) {
@@ -60,7 +75,8 @@ function CalendarModule() {
   const loadEvents = async () => {
     setLoading('loading')
     try {
-      const loadedEvents = await invoke<Event[]>('get_events')
+      const db = await Database.load('sqlite:calendar.db')
+      const loadedEvents = await db.select<Event[]>('SELECT * FROM events ORDER BY start_time ASC')
       setEvents(loadedEvents)
       addOutput(`Loaded ${loadedEvents.length} events`)
     } catch (error) {
@@ -98,13 +114,12 @@ function CalendarModule() {
 
     setLoading('adding')
     try {
-      await invoke('create_event', {
-        title: eventTitle,
-        description: eventDescription || null,
-        startTime: startDateTime,
-        endTime: endDateTime,
-        isAllDay: isAllDay,
-      })
+      const db = await Database.load('sqlite:calendar.db')
+
+      await db.execute(
+        'INSERT INTO events (title, description, start_time, end_time, is_all_day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime("now"), datetime("now"))',
+        [eventTitle, eventDescription || null, startDateTime, endDateTime, isAllDay ? 1 : 0]
+      )
 
       addOutput(`Event "${eventTitle}" created successfully`)
 
@@ -129,7 +144,8 @@ function CalendarModule() {
   const handleDeleteEvent = async (eventId: number) => {
     const event = events.find((e) => e.id === eventId)
     try {
-      await invoke('delete_event', { id: eventId })
+      const db = await Database.load('sqlite:calendar.db')
+      await db.execute('DELETE FROM events WHERE id = ?', [eventId])
       addOutput(`Event "${event?.title}" deleted`)
       await loadEvents()
     } catch (error) {
@@ -145,7 +161,7 @@ function CalendarModule() {
 
     setLoading('exporting')
     try {
-      const filePath = await invoke<string>('export_events_to_ics')
+      const filePath = await invoke<string>('export_events_to_ics', { events })
       addOutput(`Exported ${events.length} events to ${filePath}`)
       addOutput('Opening in system calendar...')
 

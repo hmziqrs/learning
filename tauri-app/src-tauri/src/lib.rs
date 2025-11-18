@@ -2,7 +2,6 @@
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -42,131 +41,15 @@ struct Event {
     updated_at: String,
 }
 
-// Calendar Module Commands
+// Calendar Module - ICS Export
 #[tauri::command]
-async fn init_calendar_db(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_sql::Builder;
-
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
-            is_all_day BOOLEAN DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )",
-        vec![],
-    )
-    .await
-    .map_err(|e| format!("Failed to create events table: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn create_event(
-    app: tauri::AppHandle,
-    title: String,
-    description: Option<String>,
-    start_time: String,
-    end_time: String,
-    is_all_day: bool,
-) -> Result<i64, String> {
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    let result = db
-        .execute(
-            "INSERT INTO events (title, description, start_time, end_time, is_all_day, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
-            vec![
-                serde_json::Value::String(title),
-                description.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
-                serde_json::Value::String(start_time),
-                serde_json::Value::String(end_time),
-                serde_json::Value::Bool(is_all_day),
-            ],
-        )
-        .await
-        .map_err(|e| format!("Failed to create event: {}", e))?;
-
-    Ok(result.last_insert_id)
-}
-
-#[tauri::command]
-async fn get_events(app: tauri::AppHandle) -> Result<Vec<Event>, String> {
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    let events: Vec<Event> = db
-        .select("SELECT * FROM events ORDER BY start_time ASC")
-        .await
-        .map_err(|e| format!("Failed to get events: {}", e))?;
-
-    Ok(events)
-}
-
-#[tauri::command]
-async fn update_event(
-    app: tauri::AppHandle,
-    id: i64,
-    title: String,
-    description: Option<String>,
-    start_time: String,
-    end_time: String,
-    is_all_day: bool,
-) -> Result<(), String> {
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    db.execute(
-        "UPDATE events SET title = ?, description = ?, start_time = ?, end_time = ?, is_all_day = ?, updated_at = datetime('now')
-         WHERE id = ?",
-        vec![
-            serde_json::Value::String(title),
-            description.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
-            serde_json::Value::String(start_time),
-            serde_json::Value::String(end_time),
-            serde_json::Value::Bool(is_all_day),
-            serde_json::Value::Number(id.into()),
-        ],
-    )
-    .await
-    .map_err(|e| format!("Failed to update event: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn delete_event(app: tauri::AppHandle, id: i64) -> Result<(), String> {
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    db.execute(
-        "DELETE FROM events WHERE id = ?",
-        vec![serde_json::Value::Number(id.into())],
-    )
-    .await
-    .map_err(|e| format!("Failed to delete event: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn export_events_to_ics(app: tauri::AppHandle) -> Result<String, String> {
-    let db = app.state::<tauri_plugin_sql::Db>();
-
-    // Get all events
-    let events: Vec<Event> = db
-        .select("SELECT * FROM events ORDER BY start_time ASC")
-        .await
-        .map_err(|e| format!("Failed to get events: {}", e))?;
+async fn export_events_to_ics(app: tauri::AppHandle, events: Vec<Event>) -> Result<String, String> {
+    use tauri::Manager;
 
     // Generate ICS content
     let ics_content = generate_ics_content(events)?;
 
-    // Write to file using FS plugin
+    // Write to file
     let app_data_dir = app.path().app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
@@ -232,11 +115,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
-            init_calendar_db,
-            create_event,
-            get_events,
-            update_event,
-            delete_event,
             export_events_to_ics
         ])
         .run(tauri::generate_context!())
