@@ -88,6 +88,20 @@ function CalendarModule() {
     }
   }
 
+  const autoExportToCalendar = async () => {
+    if (events.length === 0) {
+      return // Nothing to export
+    }
+
+    try {
+      const filePath = await invoke<string>('export_events_to_ics', { events })
+      console.log('Auto-exported to:', filePath)
+      // Silently export without opening - Calendar.app will auto-refresh if subscribed
+    } catch (error) {
+      console.error('Auto-export error:', error)
+    }
+  }
+
   const handleAddEvent = async () => {
     if (!eventTitle.trim()) {
       addOutput('Event title is required', false)
@@ -137,12 +151,28 @@ function CalendarModule() {
 
       // Reload events
       await loadEvents()
+
+      // Auto-export and open in Calendar
+      setTimeout(async () => {
+        try {
+          const filePath = await invoke<string>('export_events_to_ics', { events: await getLatestEvents() })
+          await openPath(filePath)
+          addOutput('Auto-synced to macOS Calendar')
+        } catch (error) {
+          console.error('Auto-sync error:', error)
+        }
+      }, 500)
     } catch (error) {
       console.error('Error creating event:', error)
       addOutput(`Error creating event: ${error}`, false)
     } finally {
       setLoading(null)
     }
+  }
+
+  const getLatestEvents = async (): Promise<Event[]> => {
+    const db = await Database.load('sqlite:calendar.db')
+    return await db.select<Event[]>('SELECT * FROM events ORDER BY start_time ASC')
   }
 
   const handleDeleteEvent = async (eventId: number) => {
@@ -152,6 +182,20 @@ function CalendarModule() {
       await db.execute('DELETE FROM events WHERE id = ?', [eventId])
       addOutput(`Event "${event?.title}" deleted`)
       await loadEvents()
+
+      // Auto-sync to Calendar after deletion
+      setTimeout(async () => {
+        try {
+          const updatedEvents = await getLatestEvents()
+          if (updatedEvents.length > 0) {
+            const filePath = await invoke<string>('export_events_to_ics', { events: updatedEvents })
+            await openPath(filePath)
+            addOutput('Auto-synced to macOS Calendar')
+          }
+        } catch (error) {
+          console.error('Auto-sync error:', error)
+        }
+      }, 500)
     } catch (error) {
       addOutput(`Error deleting event: ${error}`, false)
     }
