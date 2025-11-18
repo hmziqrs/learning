@@ -86,18 +86,33 @@ bun add @types/leaflet -D
 
 ## Core Features
 
+### GPS & Location
 - [ ] Get current GPS location
 - [ ] Watch location (continuous tracking)
 - [ ] Display location on map
+- [ ] Calculate distance traveled
+- [ ] Geofencing (optional)
+
+### Motion Sensors
 - [ ] Read accelerometer data (X, Y, Z axes)
 - [ ] Read gyroscope data (rotation rate)
 - [ ] Read magnetometer data (compass heading)
 - [ ] Live 3-axis acceleration graph
 - [ ] Shake detection
-- [ ] Step counter (pedometer)
 - [ ] Device orientation tracking
-- [ ] Calculate distance traveled
+- [ ] Step counter (pedometer)
+
+### Environmental Sensors
+- [ ] Proximity sensor (detect nearby objects)
+- [ ] Ambient light sensor (measure light levels)
+- [ ] Barometer/pressure sensor (atmospheric pressure, altitude)
+- [ ] Temperature sensor (device/ambient temperature)
+- [ ] Humidity sensor (relative humidity)
+
+### System
 - [ ] Sensor availability detection
+- [ ] Battery-efficient sensor polling
+- [ ] Real-time data streaming
 
 ## Data Structures
 
@@ -157,6 +172,70 @@ interface MotionEvent {
 }
 ```
 
+### Proximity Sensor Schema
+```typescript
+interface ProximityData {
+  isNear: boolean // true if object detected nearby
+  distance: number | null // distance in cm (if available)
+  maxRange: number // maximum detection range
+  timestamp: number
+}
+```
+
+### Light Sensor Schema
+```typescript
+interface LightData {
+  illuminance: number // in lux (lx)
+  timestamp: number
+}
+```
+
+### Pressure Sensor Schema
+```typescript
+interface PressureData {
+  pressure: number // in hectopascals (hPa) or millibars (mbar)
+  altitude: number | null // calculated altitude in meters
+  timestamp: number
+}
+```
+
+### Temperature Sensor Schema
+```typescript
+interface TemperatureData {
+  celsius: number
+  fahrenheit: number
+  type: 'device' | 'ambient' // device temp or ambient temp
+  timestamp: number
+}
+```
+
+### Humidity Sensor Schema
+```typescript
+interface HumidityData {
+  relativeHumidity: number // percentage (0-100)
+  timestamp: number
+}
+```
+
+### Step Counter Schema
+```typescript
+interface StepCounterData {
+  steps: number // total steps since last reset
+  timestamp: number
+}
+```
+
+### Device Orientation Schema
+```typescript
+interface OrientationData {
+  alpha: number // rotation around Z-axis (0-360 degrees)
+  beta: number // rotation around X-axis (-180 to 180 degrees)
+  gamma: number // rotation around Y-axis (-90 to 90 degrees)
+  absolute: boolean // true if orientation is absolute, false if relative
+  timestamp: number
+}
+```
+
 ## Rust Backend
 
 ### Geolocation Commands (Web API Wrapper)
@@ -187,14 +266,32 @@ class SensorPlugin(private val activity: Activity) : SensorEventListener {
     private val sensorManager: SensorManager =
         activity.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
+    // Motion Sensors
     private var accelerometer: Sensor? = null
     private var gyroscope: Sensor? = null
     private var magnetometer: Sensor? = null
+    private var stepCounter: Sensor? = null
+
+    // Environmental Sensors
+    private var proximity: Sensor? = null
+    private var light: Sensor? = null
+    private var pressure: Sensor? = null
+    private var temperature: Sensor? = null
+    private var humidity: Sensor? = null
 
     init {
+        // Motion sensors
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
         magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+
+        // Environmental sensors
+        proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        light = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+        pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+        temperature = sensorManager.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE)
+        humidity = sensorManager.getDefaultSensor(Sensor.TYPE_RELATIVE_HUMIDITY)
     }
 
     @Command
@@ -234,6 +331,54 @@ class SensorPlugin(private val activity: Activity) : SensorEventListener {
     }
 
     @Command
+    fun startProximity(invoke: Invoke) {
+        proximity?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Proximity sensor not available")
+    }
+
+    @Command
+    fun startLight(invoke: Invoke) {
+        light?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Light sensor not available")
+    }
+
+    @Command
+    fun startPressure(invoke: Invoke) {
+        pressure?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Pressure sensor not available")
+    }
+
+    @Command
+    fun startTemperature(invoke: Invoke) {
+        temperature?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Temperature sensor not available")
+    }
+
+    @Command
+    fun startHumidity(invoke: Invoke) {
+        humidity?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Humidity sensor not available")
+    }
+
+    @Command
+    fun startStepCounter(invoke: Invoke) {
+        stepCounter?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            invoke.resolve(mapOf("success" to true))
+        } ?: invoke.reject("Step counter not available")
+    }
+
+    @Command
     fun stopAllSensors(invoke: Invoke) {
         sensorManager.unregisterListener(this)
         invoke.resolve(mapOf("success" to true))
@@ -242,32 +387,120 @@ class SensorPlugin(private val activity: Activity) : SensorEventListener {
     @Command
     fun getSensorAvailability(invoke: Invoke) {
         val availability = mapOf(
+            // Motion sensors
             "accelerometer" to (accelerometer != null),
             "gyroscope" to (gyroscope != null),
-            "magnetometer" to (magnetometer != null)
+            "magnetometer" to (magnetometer != null),
+            "stepCounter" to (stepCounter != null),
+            // Environmental sensors
+            "proximity" to (proximity != null),
+            "light" to (light != null),
+            "pressure" to (pressure != null),
+            "temperature" to (temperature != null),
+            "humidity" to (humidity != null)
         )
         invoke.resolve(availability)
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        val data = mapOf(
-            "x" to event.values[0],
-            "y" to event.values[1],
-            "z" to event.values[2],
-            "timestamp" to event.timestamp,
-            "accuracy" to event.accuracy
-        )
-
         when (event.sensor.type) {
+            // Motion sensors (3-axis data)
             Sensor.TYPE_ACCELEROMETER -> {
-                // Emit event to frontend
+                val data = mapOf(
+                    "x" to event.values[0],
+                    "y" to event.values[1],
+                    "z" to event.values[2],
+                    "timestamp" to event.timestamp,
+                    "accuracy" to event.accuracy
+                )
                 emitEvent("accelerometer-data", data)
             }
             Sensor.TYPE_GYROSCOPE -> {
+                val data = mapOf(
+                    "x" to event.values[0],
+                    "y" to event.values[1],
+                    "z" to event.values[2],
+                    "timestamp" to event.timestamp,
+                    "accuracy" to event.accuracy
+                )
                 emitEvent("gyroscope-data", data)
             }
             Sensor.TYPE_MAGNETIC_FIELD -> {
+                val data = mapOf(
+                    "x" to event.values[0],
+                    "y" to event.values[1],
+                    "z" to event.values[2],
+                    "timestamp" to event.timestamp,
+                    "accuracy" to event.accuracy
+                )
                 emitEvent("magnetometer-data", data)
+            }
+
+            // Proximity sensor
+            Sensor.TYPE_PROXIMITY -> {
+                val maxRange = event.sensor.maximumRange
+                val data = mapOf(
+                    "isNear" to (event.values[0] < maxRange),
+                    "distance" to event.values[0],
+                    "maxRange" to maxRange,
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("proximity-data", data)
+            }
+
+            // Light sensor
+            Sensor.TYPE_LIGHT -> {
+                val data = mapOf(
+                    "illuminance" to event.values[0], // in lux
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("light-data", data)
+            }
+
+            // Pressure sensor
+            Sensor.TYPE_PRESSURE -> {
+                val pressureHPa = event.values[0]
+                // Calculate altitude using barometric formula
+                val altitude = SensorManager.getAltitude(
+                    SensorManager.PRESSURE_STANDARD_ATMOSPHERE,
+                    pressureHPa
+                )
+                val data = mapOf(
+                    "pressure" to pressureHPa,
+                    "altitude" to altitude,
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("pressure-data", data)
+            }
+
+            // Temperature sensor
+            Sensor.TYPE_AMBIENT_TEMPERATURE -> {
+                val celsius = event.values[0]
+                val data = mapOf(
+                    "celsius" to celsius,
+                    "fahrenheit" to (celsius * 9/5 + 32),
+                    "type" to "ambient",
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("temperature-data", data)
+            }
+
+            // Humidity sensor
+            Sensor.TYPE_RELATIVE_HUMIDITY -> {
+                val data = mapOf(
+                    "relativeHumidity" to event.values[0], // percentage
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("humidity-data", data)
+            }
+
+            // Step counter
+            Sensor.TYPE_STEP_COUNTER -> {
+                val data = mapOf(
+                    "steps" to event.values[0].toInt(),
+                    "timestamp" to event.timestamp
+                )
+                emitEvent("step-counter-data", data)
             }
         }
     }
@@ -288,10 +521,13 @@ class SensorPlugin(private val activity: Activity) : SensorEventListener {
 // Custom Tauri plugin for iOS sensors
 import CoreMotion
 import CoreLocation
+import UIKit
 
 class SensorPlugin: NSObject {
     private let motionManager = CMMotionManager()
     private let locationManager = CLLocationManager()
+    private let altimeter = CMAltimeter()
+    private let pedometer = CMPedometer()
 
     override init() {
         super.init()
@@ -372,21 +608,125 @@ class SensorPlugin: NSObject {
         invoke.resolve(["success": true])
     }
 
+    @objc func startProximity(_ invoke: Invoke) {
+        UIDevice.current.isProximityMonitoringEnabled = true
+
+        if UIDevice.current.isProximityMonitoringEnabled {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(proximityChanged),
+                name: UIDevice.proximityStateDidChangeNotification,
+                object: nil
+            )
+            invoke.resolve(["success": true])
+        } else {
+            invoke.reject("Proximity sensor not available")
+        }
+    }
+
+    @objc private func proximityChanged() {
+        let isNear = UIDevice.current.proximityState
+        let payload: [String: Any] = [
+            "isNear": isNear,
+            "distance": isNear ? 0 : 5, // iOS doesn't provide exact distance
+            "maxRange": 5,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        emitEvent("proximity-data", data: payload)
+    }
+
+    @objc func startPressure(_ invoke: Invoke) {
+        guard CMAltimeter.isRelativeAltitudeAvailable() else {
+            invoke.reject("Pressure/altitude sensor not available")
+            return
+        }
+
+        altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] (data, error) in
+            guard let data = data else { return }
+
+            let payload: [String: Any] = [
+                "pressure": data.pressure.doubleValue, // in kPa
+                "altitude": data.relativeAltitude.doubleValue, // in meters
+                "timestamp": Date().timeIntervalSince1970
+            ]
+
+            self?.emitEvent("pressure-data", data: payload)
+        }
+
+        invoke.resolve(["success": true])
+    }
+
+    @objc func startStepCounter(_ invoke: Invoke) {
+        guard CMPedometer.isStepCountingAvailable() else {
+            invoke.reject("Step counter not available")
+            return
+        }
+
+        pedometer.startUpdates(from: Date()) { [weak self] (data, error) in
+            guard let data = data else { return }
+
+            let payload: [String: Any] = [
+                "steps": data.numberOfSteps.intValue,
+                "timestamp": Date().timeIntervalSince1970
+            ]
+
+            self?.emitEvent("step-counter-data", data: payload)
+        }
+
+        invoke.resolve(["success": true])
+    }
+
+    @objc func startDeviceMotion(_ invoke: Invoke) {
+        guard motionManager.isDeviceMotionAvailable else {
+            invoke.reject("Device motion not available")
+            return
+        }
+
+        motionManager.deviceMotionUpdateInterval = 0.1
+        motionManager.startDeviceMotionUpdates(to: .main) { [weak self] (motion, error) in
+            guard let motion = motion else { return }
+
+            let payload: [String: Any] = [
+                "alpha": motion.attitude.yaw,
+                "beta": motion.attitude.pitch,
+                "gamma": motion.attitude.roll,
+                "absolute": false,
+                "timestamp": Date().timeIntervalSince1970
+            ]
+
+            self?.emitEvent("orientation-data", data: payload)
+        }
+
+        invoke.resolve(["success": true])
+    }
+
     @objc func stopAllSensors(_ invoke: Invoke) {
         motionManager.stopAccelerometerUpdates()
         motionManager.stopGyroUpdates()
         motionManager.stopMagnetometerUpdates()
         motionManager.stopDeviceMotionUpdates()
+        altimeter.stopRelativeAltitudeUpdates()
+        pedometer.stopUpdates()
+        UIDevice.current.isProximityMonitoringEnabled = false
 
         invoke.resolve(["success": true])
     }
 
     @objc func getSensorAvailability(_ invoke: Invoke) {
         let availability: [String: Any] = [
+            // Motion sensors
             "accelerometer": motionManager.isAccelerometerAvailable,
             "gyroscope": motionManager.isGyroAvailable,
             "magnetometer": motionManager.isMagnetometerAvailable,
-            "deviceMotion": motionManager.isDeviceMotionAvailable
+            "deviceMotion": motionManager.isDeviceMotionAvailable,
+            "stepCounter": CMPedometer.isStepCountingAvailable(),
+            // Environmental sensors
+            "proximity": true, // Usually available on all iOS devices
+            "pressure": CMAltimeter.isRelativeAltitudeAvailable(),
+            // Note: iOS doesn't provide ambient light, temperature, or humidity sensors via public APIs
+            "light": false,
+            "temperature": false,
+            "humidity": false
         ]
 
         invoke.resolve(availability)
@@ -1018,14 +1358,27 @@ useEffect(() => {
 
 | Feature | Windows | macOS | Linux | iOS | Android |
 |---------|---------|-------|-------|-----|---------|
+| **GPS & Location** |
 | Geolocation (Web API) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Map Display | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Motion Sensors** |
 | Accelerometer | ❌* | ❌* | ❌ | ✅ | ✅ |
 | Gyroscope | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Magnetometer | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Compass | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Map Display | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Magnetometer/Compass | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Step Counter | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Device Orientation | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **Environmental Sensors** |
+| Proximity Sensor | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Ambient Light | ❌ | ❌ | ❌ | ❌** | ✅ |
+| Barometer/Pressure | ❌ | ❌ | ❌ | ✅*** | ✅ |
+| Temperature | ❌ | ❌ | ❌ | ❌** | ✅**** |
+| Humidity | ❌ | ❌ | ❌ | ❌** | ✅**** |
 
-\* Some laptops have accelerometers, but require platform-specific APIs
+**Notes:**
+- \* Some laptops have accelerometers, but require platform-specific APIs
+- \*\* iOS doesn't provide public APIs for ambient light, temperature, or humidity sensors
+- \*\*\* iOS provides relative altitude via CMAltimeter (available on iPhone 6 and later)
+- \*\*\*\* Not all Android devices have temperature and humidity sensors
 
 ---
 
