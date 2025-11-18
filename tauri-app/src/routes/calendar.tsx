@@ -4,6 +4,7 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-opener'
 
 export const Route = createFileRoute('/calendar')({
   component: CalendarModule,
@@ -37,8 +38,18 @@ function CalendarModule() {
   const [events, setEvents] = useState<Event[]>([])
 
   useEffect(() => {
-    loadEvents()
+    initDatabase()
   }, [])
+
+  const initDatabase = async () => {
+    try {
+      await invoke('init_calendar_db')
+      addOutput('Database initialized successfully')
+      await loadEvents()
+    } catch (error) {
+      addOutput(`Error initializing database: ${error}`, false)
+    }
+  }
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -49,28 +60,13 @@ function CalendarModule() {
   const loadEvents = async () => {
     setLoading('loading')
     try {
-      // For now, use localStorage until database is set up
-      const saved = localStorage.getItem('tauri-calendar-events')
-      if (saved) {
-        const loadedEvents = JSON.parse(saved)
-        setEvents(loadedEvents)
-        addOutput(`Loaded ${loadedEvents.length} events`)
-      } else {
-        addOutput('No events found')
-      }
+      const loadedEvents = await invoke<Event[]>('get_events')
+      setEvents(loadedEvents)
+      addOutput(`Loaded ${loadedEvents.length} events`)
     } catch (error) {
       addOutput(`Error loading events: ${error}`, false)
     } finally {
       setLoading(null)
-    }
-  }
-
-  const saveEvents = (updatedEvents: Event[]) => {
-    try {
-      localStorage.setItem('tauri-calendar-events', JSON.stringify(updatedEvents))
-      setEvents(updatedEvents)
-    } catch (error) {
-      addOutput(`Error saving events: ${error}`, false)
     }
   }
 
@@ -87,10 +83,10 @@ function CalendarModule() {
 
     const startDateTime = isAllDay
       ? `${startDate}T00:00:00`
-      : `${startDate}T${startTime || '00:00'}`
+      : `${startDate}T${startTime || '00:00'}:00`
     const endDateTime = isAllDay
       ? `${endDate}T23:59:59`
-      : `${endDate}T${endTime || '23:59'}`
+      : `${endDate}T${endTime || '23:59'}:00`
 
     const startDateObj = new Date(startDateTime)
     const endDateObj = new Date(endDateTime)
@@ -102,21 +98,14 @@ function CalendarModule() {
 
     setLoading('adding')
     try {
-      const newEvent: Event = {
-        id: Date.now(),
+      await invoke('create_event', {
         title: eventTitle,
-        description: eventDescription || undefined,
-        start_time: startDateTime,
-        end_time: endDateTime,
-        is_all_day: isAllDay,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
+        description: eventDescription || null,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        isAllDay: isAllDay,
+      })
 
-      const updatedEvents = [...events, newEvent].sort(
-        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )
-      saveEvents(updatedEvents)
       addOutput(`Event "${eventTitle}" created successfully`)
 
       // Reset form
@@ -127,6 +116,9 @@ function CalendarModule() {
       setEndDate('')
       setEndTime('')
       setIsAllDay(false)
+
+      // Reload events
+      await loadEvents()
     } catch (error) {
       addOutput(`Error creating event: ${error}`, false)
     } finally {
@@ -134,11 +126,15 @@ function CalendarModule() {
     }
   }
 
-  const handleDeleteEvent = (eventId: number) => {
+  const handleDeleteEvent = async (eventId: number) => {
     const event = events.find((e) => e.id === eventId)
-    const updatedEvents = events.filter((e) => e.id !== eventId)
-    saveEvents(updatedEvents)
-    addOutput(`Event "${event?.title}" deleted`)
+    try {
+      await invoke('delete_event', { id: eventId })
+      addOutput(`Event "${event?.title}" deleted`)
+      await loadEvents()
+    } catch (error) {
+      addOutput(`Error deleting event: ${error}`, false)
+    }
   }
 
   const handleExportToICS = async () => {
@@ -149,47 +145,18 @@ function CalendarModule() {
 
     setLoading('exporting')
     try {
-      // Generate ICS content
-      const icsContent = generateICSContent(events)
+      const filePath = await invoke<string>('export_events_to_ics')
+      addOutput(`Exported ${events.length} events to ${filePath}`)
+      addOutput('Opening in system calendar...')
 
-      // Copy to clipboard for now (until FS plugin is set up)
-      await navigator.clipboard.writeText(icsContent)
-      addOutput(`Exported ${events.length} events to clipboard as ICS format`)
-      addOutput('Paste into a .ics file to open in your calendar app')
+      // Open the ICS file with the system calendar app
+      await open(filePath)
+      addOutput('Calendar file opened successfully')
     } catch (error) {
       addOutput(`Error exporting events: ${error}`, false)
     } finally {
       setLoading(null)
     }
-  }
-
-  const generateICSContent = (events: Event[]): string => {
-    const formatICSDate = (dateString: string, isAllDay: boolean): string => {
-      const date = new Date(dateString)
-      if (isAllDay) {
-        return date.toISOString().split('T')[0].replace(/-/g, '')
-      }
-      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-    }
-
-    const icsEvents = events
-      .map(
-        (event) => `BEGIN:VEVENT
-UID:${event.id}@tauri-calendar
-DTSTART:${formatICSDate(event.start_time, event.is_all_day)}
-DTEND:${formatICSDate(event.end_time, event.is_all_day)}
-SUMMARY:${event.title}
-${event.description ? `DESCRIPTION:${event.description}` : ''}
-END:VEVENT`
-      )
-      .join('\n')
-
-    return `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Tauri Calendar//EN
-CALSCALE:GREGORIAN
-${icsEvents}
-END:VCALENDAR`
   }
 
   const formatEventTime = (event: Event): string => {
