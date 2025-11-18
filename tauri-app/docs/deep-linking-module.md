@@ -256,11 +256,25 @@ All core features have been implemented in `src/routes/deep-linking.tsx`:
 
 ### Testing Results
 
-**Desktop**: ✅ Compilation successful
-- App builds and runs without errors
-- Ready for deep link testing
+**Desktop (Dev Mode)**: ✅ All operations working correctly
+- Manual test buttons: Working
+- URL parsing: Working
+- Parameter extraction: Working
+- URL history: Working
+- Output logging: Working
+
+**OS-Level Deep Links (Terminal)**: ⏳ Requires built app
+- CLI commands like `open "myapp://home"` only work after building and installing the app bundle
+- URL scheme registration happens during app installation
+- Dev mode functionality fully tested and verified with manual test buttons
 
 **Testing Instructions:**
-- macOS/Linux: Run `open "myapp://home"` in terminal
-- Windows: Press Win+R and paste the URL
-- Mobile: Open URL from browser or another app
+
+**In Dev Mode:**
+- Use the "Manual Testing (Dev Mode)" buttons to test all functionality
+- All features work correctly including URL parsing and parameter extraction
+
+**For Real Deep Links:**
+- Build the app: `bun run tauri build --debug`
+- Install the built app from `src-tauri/target/debug/bundle/`
+- Then test with: `open "myapp://home"` (macOS/Linux) or Win+R (Windows)
