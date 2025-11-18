@@ -262,7 +262,7 @@ if ('mediaSession' in navigator) {
 
 ## Implementation Status
 
-**Status**: ✅ Implemented (Ready for Testing)
+**Status**: ✅ Implemented and Tested (macOS)
 
 ### Backend Configuration
 - Route: ✅ Active at `/media`
@@ -299,8 +299,15 @@ if ('mediaSession' in navigator) {
 - ✅ Keyboard shortcuts (Enter to load URL)
 
 ### Testing Results
-- Desktop: ⏳ Ready for testing (build successful)
+- Desktop: ✅ Tested and working
+  - macOS: ✅ Audio playback working
+  - macOS: ✅ Video playback working
+  - Windows: ⏳ Not yet tested
+  - Linux: ⏳ Not yet tested
 - Mobile: ⏳ Not yet tested
+  - Android: ⏳ Not yet tested
+  - iOS: ⏳ Not yet tested
+- Remote URLs: ⏳ Not yet tested
 
 ## Known Limitations
 
