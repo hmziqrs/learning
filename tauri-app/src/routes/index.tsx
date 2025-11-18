@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock } from 'lucide-react'
+import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -47,6 +47,13 @@ const modules = [
     icon: Clock,
     path: '/alarms',
     color: 'text-yellow-500',
+  },
+  {
+    name: 'Calendar',
+    description: 'Internal calendar with event management and ICS export',
+    icon: Calendar,
+    path: '/calendar',
+    color: 'text-teal-500',
   },
 ]
 
