@@ -95,6 +95,8 @@ function Media() {
           return prev
         })
         addOutput(`✓ Selected audio file: ${fileName}`)
+        addOutput(`File path: ${filePath}`)
+        addOutput(`WebView URL: ${webViewUrl}`)
       }
     } catch (error) {
       addOutput(`✗ Error selecting audio: ${error}`)
@@ -137,6 +139,8 @@ function Media() {
           return prev
         })
         addOutput(`✓ Selected video file: ${fileName}`)
+        addOutput(`File path: ${filePath}`)
+        addOutput(`WebView URL: ${webViewUrl}`)
       }
     } catch (error) {
       addOutput(`✗ Error selecting video: ${error}`)
@@ -285,8 +289,36 @@ function Media() {
       addOutput('✓ Playback finished')
     }
 
-    const handleError = () => {
-      addOutput('✗ Error playing media - check if format is supported')
+    const handleError = (e: Event) => {
+      const mediaElement = e.target as HTMLMediaElement
+      const error = mediaElement.error
+      let errorMessage = '✗ Error playing media'
+
+      if (error) {
+        switch (error.code) {
+          case error.MEDIA_ERR_ABORTED:
+            errorMessage += ' - Playback aborted'
+            break
+          case error.MEDIA_ERR_NETWORK:
+            errorMessage += ' - Network error while loading'
+            break
+          case error.MEDIA_ERR_DECODE:
+            errorMessage += ' - Decoding error (format may not be supported)'
+            break
+          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMessage += ' - Source not supported or file not found'
+            break
+          default:
+            errorMessage += ' - Unknown error'
+        }
+        if (error.message) {
+          errorMessage += `: ${error.message}`
+        }
+      }
+
+      addOutput(errorMessage)
+      addOutput(`Source URL: ${selectedFile?.url}`)
+      addOutput(`File path: ${selectedFile?.path}`)
     }
 
     media.addEventListener('loadedmetadata', handleLoadedMetadata)
