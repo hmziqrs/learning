@@ -13,7 +13,9 @@
     {
       "identifier": "opener:allow-open-path",
       "allow": [
-        { "path": "$TEMP/**" }
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
