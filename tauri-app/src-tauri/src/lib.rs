@@ -89,8 +89,16 @@ fn generate_ics_content(events: Vec<Event>) -> Result<String, String> {
 
         ics.push_str("BEGIN:VEVENT\r\n");
         ics.push_str(&format!("UID:{}@tauri-calendar\r\n", event.id));
-        ics.push_str(&format!("DTSTART:{}\r\n", start));
-        ics.push_str(&format!("DTEND:{}\r\n", end));
+
+        // For all-day events, use VALUE=DATE parameter
+        if event.is_all_day {
+            ics.push_str(&format!("DTSTART;VALUE=DATE:{}\r\n", start));
+            ics.push_str(&format!("DTEND;VALUE=DATE:{}\r\n", end));
+        } else {
+            ics.push_str(&format!("DTSTART:{}\r\n", start));
+            ics.push_str(&format!("DTEND:{}\r\n", end));
+        }
+
         ics.push_str(&format!("SUMMARY:{}\r\n", event.title));
 
         if let Some(desc) = event.description {
@@ -107,11 +115,18 @@ fn generate_ics_content(events: Vec<Event>) -> Result<String, String> {
 fn format_ics_date(date_str: &str, is_all_day: bool) -> Result<String, String> {
     if is_all_day {
         // For all-day events, use DATE format (YYYYMMDD)
+        // Split on 'T' to get just the date part
         let date = date_str.split('T').next().unwrap_or(date_str);
         Ok(date.replace("-", ""))
     } else {
-        // For timed events, use DATE-TIME format (YYYYMMDDTHHMMSSZ)
-        Ok(date_str.replace(&['-', ':'][..], "").replace(".000Z", "Z"))
+        // For timed events, use DATE-TIME format (YYYYMMDDTHHMMSS)
+        // Remove hyphens and colons, keep the T separator
+        // Input format: "2024-11-18T14:30:00"
+        // Output format: "20241118T143000"
+        let formatted = date_str
+            .replace("-", "")
+            .replace(":", "");
+        Ok(formatted)
     }
 }
 
