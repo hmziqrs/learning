@@ -488,6 +488,7 @@ pub fn run() {
                 .add_migrations("sqlite:calendar.db", vec![])
                 .build()
         )
+        .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
