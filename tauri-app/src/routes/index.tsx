@@ -11,6 +11,7 @@ import {
   DollarSign,
   Wifi,
   Images,
+  Users,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -87,6 +88,13 @@ const modules = [
     icon: Wifi,
     path: '/network-realtime',
     color: 'text-violet-500',
+  },
+  {
+    name: 'Contacts',
+    description: 'Access device contacts with read capabilities (iOS, Android, macOS)',
+    icon: Users,
+    path: '/contacts',
+    color: 'text-cyan-500',
   },
   {
     name: 'Gallery / Media Library',
