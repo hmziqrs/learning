@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Clipboard } from 'lucide-react'
+import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -47,13 +47,6 @@ const modules = [
     icon: Clock,
     path: '/alarms',
     color: 'text-yellow-500',
-  },
-  {
-    name: 'Clipboard',
-    description: 'Read and write to the system clipboard with history tracking',
-    icon: Clipboard,
-    path: '/clipboard',
-    color: 'text-cyan-500',
   },
 ]
 

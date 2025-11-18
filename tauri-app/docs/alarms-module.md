@@ -1,6 +1,7 @@
 # Alarms (Future Notifications) Module Implementation
 
 ## Overview
+
 Lightweight alarm simulation using scheduled notifications with persistence.
 
 ## Plugin Setup
