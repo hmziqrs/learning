@@ -80,6 +80,14 @@
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "sql:allow-close"
+    "sql:allow-close",
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-delete",
+    "store:allow-clear",
+    "store:allow-has",
+    "store:allow-save",
+    "store:allow-load"
   ]
 }
