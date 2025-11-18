@@ -36,12 +36,11 @@ function DragDrop() {
 
     const setupNativeListeners = async () => {
       try {
-        // Listen for file drop
+        // Listen for file drop - always active for native mode
         unlistenDrop = await listen<{ paths: string[] }>('tauri://file-drop', (event) => {
-          if (mode !== 'native') return
-
           const paths = event.payload.paths
-          addOutput(`Files dropped (Native): ${paths.length} file(s)`)
+          const timestamp = new Date().toLocaleTimeString()
+          setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (Native): ${paths.length} file(s)`])
 
           const newFiles: DroppedFile[] = paths.map((path, index) => ({
             id: `native-${Date.now()}-${index}`,
@@ -57,22 +56,24 @@ function DragDrop() {
 
         // Listen for drag-over
         unlistenHover = await listen<{ paths: string[] }>('tauri://file-drop-hover', (event) => {
-          if (mode !== 'native') return
           setIsDragging(true)
-          addOutput(`Drag hover detected: ${event.payload.paths.length} file(s)`)
+          const timestamp = new Date().toLocaleTimeString()
+          setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag hover detected: ${event.payload.paths.length} file(s)`])
         })
 
         // Listen for drag-cancel
         unlistenCancel = await listen('tauri://file-drop-cancelled', () => {
-          if (mode !== 'native') return
           setIsDragging(false)
-          addOutput('Drag cancelled')
+          const timestamp = new Date().toLocaleTimeString()
+          setOutput((prev) => [...prev, `[${timestamp}] ✓ Drag cancelled`])
         })
 
         setNativeListenerActive(true)
-        addOutput('Native Tauri file drop listeners initialized')
+        const timestamp = new Date().toLocaleTimeString()
+        setOutput((prev) => [...prev, `[${timestamp}] ✓ Native Tauri file drop listeners initialized`])
       } catch (error) {
-        addOutput(`Error setting up listeners: ${error}`, false)
+        const timestamp = new Date().toLocaleTimeString()
+        setOutput((prev) => [...prev, `[${timestamp}] ✗ Error setting up listeners: ${error}`])
       }
     }
 
@@ -83,7 +84,7 @@ function DragDrop() {
       unlistenHover?.()
       unlistenCancel?.()
     }
-  }, [mode])
+  }, [])
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -92,27 +93,35 @@ function DragDrop() {
   }
 
   const handleHtml5DragOver = (e: React.DragEvent) => {
-    if (mode !== 'html5') return
+    // Must always prevent default for drop to work
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(true)
+
+    if (mode === 'html5') {
+      setIsDragging(true)
+    }
   }
 
   const handleHtml5DragLeave = (e: React.DragEvent) => {
-    if (mode !== 'html5') return
     e.preventDefault()
     e.stopPropagation()
-    setIsDragging(false)
+
+    if (mode === 'html5') {
+      setIsDragging(false)
+    }
   }
 
   const handleHtml5Drop = (e: React.DragEvent) => {
-    if (mode !== 'html5') return
     e.preventDefault()
     e.stopPropagation()
+
+    if (mode !== 'html5') return
+
     setIsDragging(false)
 
     const files = Array.from(e.dataTransfer.files)
-    addOutput(`Files dropped (HTML5): ${files.length} file(s)`)
+    const timestamp = new Date().toLocaleTimeString()
+    setOutput((prev) => [...prev, `[${timestamp}] ✓ Files dropped (HTML5): ${files.length} file(s)`])
 
     const newFiles: DroppedFile[] = files.map((file, index) => ({
       id: `html5-${Date.now()}-${index}`,
