@@ -1,6 +1,7 @@
 # Alarms (Future Notifications) Module Implementation
 
 ## Overview
+
 Lightweight alarm simulation using scheduled notifications with persistence.
 
 ## Plugin Setup
@@ -46,17 +47,21 @@ Add to `src-tauri/capabilities/default.json`:
 
 ## Core Features
 
-- [ ] SQLite database for alarm persistence
-- [ ] Time picker for setting alarms
-- [ ] Alarm title/label input
-- [ ] Add new alarm
-- [ ] List of upcoming alarms
-- [ ] Delete individual alarms
-- [ ] Toggle alarm on/off
-- [ ] Alarm status (active/inactive/fired)
-- [ ] Scheduled notification delivery
-- [ ] Alarm history
-- [ ] Clear all alarms
+- [x] LocalStorage for alarm persistence
+- [x] Time picker for setting alarms
+- [x] Date picker for setting alarms
+- [x] Alarm title/label input
+- [x] Add new alarm
+- [x] Quick preset buttons (30s, 1min, 2min, 5min, 10min, 30min)
+- [x] Quick date buttons (Today, Tomorrow)
+- [x] List of upcoming alarms
+- [x] Delete individual alarms
+- [x] Toggle alarm on/off (pause/resume)
+- [x] Alarm status (active/inactive/fired)
+- [x] Scheduled notification delivery
+- [x] Real-time countdown display
+- [x] Alarm history
+- [x] Clear all alarms
 
 ## Database Schema
 
@@ -194,28 +199,40 @@ const fetchAlarms = async (): Promise<Alarm[]> => {
 ## UI Components
 
 ### Permission Section
-- [ ] Permission status display
-- [ ] "Request Permission" button
-- [ ] Visual indicator (granted/denied)
+- [x] Permission status display
+- [x] "Request Permission" button
+- [x] Visual indicator (granted/denied)
 
-### Add Alarm Section
-- [ ] Time picker input
-- [ ] Date picker input
-- [ ] Alarm title input field
-- [ ] "Add Alarm" button
+### Quick Alarms Section
+- [x] 6 preset buttons for common durations (30s, 1min, 2min, 5min, 10min, 30min)
+- [x] Auto-fills date, time, and title when clicked
 
-### Alarms List Section
-- [ ] Display upcoming alarms
-- [ ] Show alarm title and time
-- [ ] Time until alarm fires
-- [ ] Active/inactive toggle switch
-- [ ] Delete alarm button
-- [ ] Sort by scheduled time
+### Add Alarm Section (Custom)
+- [x] Alarm title input field
+- [x] Quick date buttons (Today, Tomorrow)
+- [x] Date picker input
+- [x] Time picker input
+- [x] "Add Alarm" button
+
+### Active Alarms List Section
+- [x] Display upcoming alarms
+- [x] Show alarm title and time
+- [x] Real-time countdown timer (updates every second)
+- [x] Pause/Resume toggle button
+- [x] Delete alarm button
+- [x] Auto-sorted by scheduled time
+
+### Alarm History Section
+- [x] Display fired alarms
+- [x] Show fire timestamp
+- [x] Delete individual history item
+- [x] Clear all history button
 
 ### Output Panel
-- [ ] Display operation results
-- [ ] Show success/error messages
-- [ ] Log alarm events
+- [x] Display operation results with timestamps
+- [x] Show success/error messages
+- [x] Log alarm events
+- [x] Clear output button
 
 ## Testing Checklist
 
@@ -245,81 +262,119 @@ const fetchAlarms = async (): Promise<Alarm[]> => {
 ## Progress Tracking
 
 ### Setup Phase
-- [ ] Install notification plugin dependencies
-- [ ] Install SQL plugin dependencies
-- [ ] Configure permissions in capabilities/default.json
-- [ ] Register plugins in Rust
-- [ ] Create database schema
+- [x] Install notification plugin dependencies
+- [x] Configure permissions in capabilities/default.json
+- [x] Register notification plugin in Rust
+- [x] Use localStorage for persistence (instead of SQLite)
 
 ### Development Phase
-- [ ] Implement database commands
-- [ ] Implement alarm scheduling logic
-- [ ] Create alarm form UI
-- [ ] Build alarms list component
-- [ ] Add time picker component
-- [ ] Implement permission check
-- [ ] Add error handling
-- [ ] Add loading states
+- [x] Implement alarm scheduling logic
+- [x] Create alarm form UI with quick presets
+- [x] Build alarms list component
+- [x] Add time picker component
+- [x] Add date picker component
+- [x] Implement permission check
+- [x] Add error handling
+- [x] Add loading states
+- [x] Implement real-time countdown timer
+- [x] Add pause/resume functionality
 
 ### Testing Phase
-- [ ] Test on desktop platforms
+- [x] Test basic alarm creation
+- [x] Test alarm persistence (localStorage)
+- [x] Test alarm firing
+- [x] Test quick preset buttons
+- [ ] Test on desktop platforms (macOS pending)
 - [ ] Test on mobile platforms
-- [ ] Test alarm persistence
 - [ ] Test edge cases
-- [ ] Fix bugs
 
 ### Polish Phase
-- [ ] Improve UI/UX
-- [ ] Add better error messages
-- [ ] Add success feedback
-- [ ] Code cleanup and documentation
+- [x] Improve UI/UX with quick presets
+- [x] Add better error messages
+- [x] Add success feedback with timestamps
+- [x] Add visual sections for organization
 
 ## Implementation Status
 
-**Status**: Not Started
+**Status**: ✅ Implemented and Working
 
 ### Backend Configuration
-- [ ] Route: Not created
-- [ ] Component: Not created
-- [ ] Permissions: Not configured
-- [ ] Plugins: Not installed
-- [ ] Database: Not created
+- [x] Route: Active at `/alarms`
+- [x] Component: Fully implemented in `src/routes/alarms.tsx`
+- [x] Permissions: Configured in `src-tauri/capabilities/default.json`
+- [x] Notification Plugin: Registered in `src-tauri/src/lib.rs`
+- [x] Persistence: Using localStorage (no SQLite needed)
 
 ### Frontend Implementation
-- [ ] Alarm creation: Not implemented
-- [ ] Alarms list: Not implemented
-- [ ] Time picker: Not implemented
-- [ ] Database integration: Not implemented
+- [x] Alarm creation: Fully implemented with validation
+- [x] Quick preset buttons: 6 time presets (30s - 30mins)
+- [x] Quick date buttons: Today and Tomorrow
+- [x] Alarms list: Active alarms with real-time countdown
+- [x] Time/Date pickers: HTML5 native inputs
+- [x] Persistence: localStorage save/load on mount
+- [x] Alarm firing: Automatic detection and notification
+- [x] Alarm history: Fired alarms tracking
+- [x] Toggle functionality: Pause/Resume alarms
+
+### Features Implemented
+- ✅ Permission check and request
+- ✅ Add alarm with date/time validation
+- ✅ Quick preset buttons for common durations
+- ✅ Quick date selection (Today/Tomorrow)
+- ✅ Real-time countdown timer (updates every second)
+- ✅ Active alarms list sorted by time
+- ✅ Pause/Resume individual alarms
+- ✅ Delete individual alarms
+- ✅ Automatic alarm firing at scheduled time
+- ✅ Alarm history with timestamps
+- ✅ Clear history functionality
+- ✅ Output panel with timestamped logs
+- ✅ LocalStorage persistence
+- ✅ Auto-load alarms on app startup
 
 ### Testing Results
-- [ ] Desktop: Not tested
-- [ ] Mobile: Not tested
+- [x] Basic functionality: Working
+- [x] Quick presets: Working
+- [x] Alarm firing: Working
+- [x] Persistence: Working
+- [ ] Desktop (macOS): Pending manual testing
+- [ ] Desktop (Windows): Pending testing
+- [ ] Desktop (Linux): Pending testing
+- [ ] Mobile: Pending testing
 
 ## Implementation Notes
 
 ### Time Handling
-- Use `chrono` crate for Rust time operations
-- Store times in UTC format
-- Display times in local timezone
-- Calculate duration until alarm fires
+- Uses JavaScript Date objects for time operations
+- Stores times in ISO format in localStorage
+- Displays times in local timezone
+- Real-time countdown updates every second
 
 ### Persistence Strategy
-- Store all alarms in SQLite database
-- Re-schedule alarms on app startup
+- Store all alarms in localStorage as JSON
+- Auto-load alarms on app startup
+- Auto-save on any alarm change
 - Mark alarms as "fired" after delivery
 - Keep alarm history for reference
 
+### Scheduling Approach
+- Uses Rust `schedule_notification` command with tokio
+- Frontend checks alarms every second
+- Marks alarms as fired when time arrives
+- Automatically moves fired alarms to history
+
 ### Scheduling Limitations
 - Alarms work only while app is running
-- For true background alarms, use Background Tasks module
-- Consider adding "snooze" functionality
-- Add alarm repeat patterns (daily, weekly, etc.)
+- Notifications scheduled via Rust backend
+- No true background alarms (app must be alive)
+- For persistent alarms, would need Background Tasks module
 
-### Best Practices
-- Always check notification permission
-- Validate alarm times (no past times)
-- Handle timezone changes
-- Provide clear feedback to user
+### Best Practices Implemented
+- ✅ Always check notification permission before operations
+- ✅ Validate alarm times (prevents past times)
+- ✅ Provide clear feedback with timestamps
+- ✅ Visual indicators for alarm state
+- ✅ Quick presets for better UX
 
 ## Known Limitations
 
