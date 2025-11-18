@@ -1316,10 +1316,10 @@ Track your implementation progress:
 - [x] 2. Notifications + Scheduling Module (See: [notifications-module.md](notifications-module.md))
 - [x] 3. Deep Linking Module (See: [deep-linking-module.md](deep-linking-module.md))
 - [x] 4. Media Module (Audio + Video) (See: [media-module.md](media-module.md))
-- [ ] 5. Drag & Drop Module (See: [drag-drop-module.md](drag-drop-module.md))
+- [x] 5. Drag & Drop Module (See: [drag-drop-module.md](drag-drop-module.md))
 
 ### Phase 2: Media & Content (Modules 6-8)
-- [ ] 6. Alarms (Future Notifications) Module
+- [ ] 6. Alarms (Future Notifications) Module (See: [alarms-module.md](alarms-module.md))
 - [ ] 7. Calendar Module (Internal + ICS Export)
 - [ ] 8. In-App Purchases Module
 

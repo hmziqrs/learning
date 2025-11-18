@@ -4,6 +4,8 @@
 
 Test Tauri's native file-drop and HTML5 drag & drop functionality. This module demonstrates both native Tauri file drop events and HTML5 drag and drop API for maximum flexibility across platforms.
 
+**Note:** This implementation uses the **Tauri v2 API** (`onDragDropEvent`). The old v1 event names (`tauri://file-drop`, etc.) are deprecated.
+
 ## Plugin Setup
 
 ### Install Dependencies
@@ -54,46 +56,53 @@ Enable drag & drop in `src-tauri/tauri.conf.json`:
 
 ## Core Features
 
-- [ ] Native Tauri file drop events
-- [ ] HTML5 drag and drop API
-- [ ] Large drop zone UI
-- [ ] File type validation
-- [ ] Multiple file drop support
-- [ ] Visual drag-over feedback
-- [ ] Dropped file list display
-- [ ] File metadata display (name, size, type)
-- [ ] Toggle between native and HTML5 modes
-- [ ] Clear dropped files
-- [ ] File preview (images)
-- [ ] Drag and drop reordering (HTML5)
+- [x] Native Tauri file drop events
+- [x] HTML5 drag and drop API
+- [x] Large drop zone UI
+- [ ] File type validation (optional enhancement)
+- [x] Multiple file drop support
+- [x] Visual drag-over feedback
+- [x] Dropped file list display
+- [x] File metadata display (name, size, type)
+- [x] Toggle between native and HTML5 modes
+- [x] Clear dropped files
+- [ ] File preview (images) (optional enhancement)
+- [ ] Drag and drop reordering (HTML5) (optional enhancement)
 
 ## Frontend Implementation
 
 ### Native Tauri File Drop
 
+**Tauri v2 API** - Use `onDragDropEvent`:
+
 ```typescript
-import { listen } from '@tauri-apps/api/event'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
-// Listen for file drop events
-const unlisten = await listen('tauri://file-drop', (event) => {
-  const paths = event.payload.paths as string[]
-  console.log('Files dropped:', paths)
-})
+const webview = getCurrentWebviewWindow()
 
-// Listen for drag-over events
-await listen('tauri://file-drop-hover', (event) => {
-  const paths = event.payload.paths as string[]
-  console.log('Files hovering:', paths)
-})
+// Listen for all drag & drop events with one handler
+const unlisten = await webview.onDragDropEvent((event) => {
+  const { paths, position, type } = event.payload
 
-// Listen for drag-leave events
-await listen('tauri://file-drop-cancelled', () => {
-  console.log('Drag cancelled')
+  if (type === 'drop') {
+    console.log('Files dropped:', paths)
+  } else if (type === 'over') {
+    console.log('Drag over at:', position.x, position.y)
+  } else if (type === 'leave') {
+    console.log('Drag cancelled')
+  } else if (type === 'enter') {
+    console.log('Drag entered')
+  }
 })
 
 // Clean up
 unlisten()
 ```
+
+**Payload Structure:**
+- `paths`: `string[]` - Array of file paths
+- `position`: `{ x: number, y: number }` - Cursor position
+- `type`: `'enter' | 'over' | 'drop' | 'leave'` - Event type
 
 ### HTML5 Drag & Drop
 
@@ -212,59 +221,104 @@ const path: string = event.payload.paths[0]
 ## Progress Tracking
 
 ### Setup Phase
-- [ ] Enable drag & drop in tauri.conf.json
-- [ ] Configure window permissions
-- [ ] Test event listeners
+- [x] Verify dragDropEnabled in tauri.conf.json
+- [x] Configure window permissions in capabilities/default.json
+- [x] Add route to navigation (already in home page)
 
 ### Development Phase
-- [ ] Implement native Tauri file drop
-- [ ] Implement HTML5 drag & drop
-- [ ] Create drop zone UI
-- [ ] Add visual drag-over feedback
-- [ ] Implement file list display
-- [ ] Add file metadata display
-- [ ] Create mode toggle
-- [ ] Add file type validation
-- [ ] Implement clear functionality
-- [ ] Add event logging
+- [x] Implement native Tauri file drop listener
+- [x] Implement HTML5 drag & drop handlers
+- [x] Create drop zone UI component
+- [x] Add visual drag-over feedback
+- [x] Implement file list display
+- [x] Add file metadata display (name, size, type)
+- [x] Create mode toggle (Native vs HTML5)
+- [x] Implement clear functionality
+- [x] Add event logging to output panel
 
 ### Testing Phase
-- [ ] Test native file drop
-- [ ] Test HTML5 drag & drop
-- [ ] Test on desktop platforms
-- [ ] Test on mobile platforms
-- [ ] Verify visual feedback
-- [ ] Test file validation
-- [ ] Test edge cases
+- [x] Test native file drop - Working
+- [x] Test HTML5 drag & drop - Working
+- [x] Verify visual feedback - Working
+- [x] Test with multiple files - Working
+- [x] Fix duplicate file issues - Completed
+- [x] Test mode switching - Working
+- [ ] Test with different file types
+- [ ] Cross-platform testing (Windows/Linux/macOS)
 
 ### Polish Phase
 - [ ] Improve UI/UX
-- [ ] Add file previews
-- [ ] Add animations
-- [ ] Implement file reordering
-- [ ] Add accessibility features
-- [ ] Optimize performance
-- [ ] Document known limitations
+- [ ] Add file previews for images
+- [ ] Code cleanup and documentation
 
 ## Implementation Status
 
-**Status**: Pending
+**Status**: ✅ Fully Working - Both Native and HTML5 modes operational
 
 ### Backend Configuration
-- Route: Not created
-- Component: Not created
-- Permissions: Not configured
-- Window config: Not configured
+- [x] Route: Created at `/drag-drop`
+- [x] Component: Fully implemented at `src/routes/drag-drop.tsx`
+- [x] Permissions: Configured in capabilities/default.json (core:event:default, core:window:default)
+- [x] Window config: dragDropEnabled is set to true in tauri.conf.json:17
 
 ### Frontend Implementation
-- Native file drop: Not implemented
-- HTML5 drag & drop: Not implemented
-- Drop zone UI: Not implemented
-- File list: Not implemented
+- [x] Native file drop: Implemented with Tauri event listeners
+- [x] HTML5 drag & drop: Implemented with React drag handlers
+- [x] Drop zone UI: Implemented with visual feedback
+- [x] File list: Implemented with file cards
+- [x] Mode toggle: Implemented (Native vs HTML5)
+- [x] File metadata display: Implemented (name, size, type, path, timestamp)
+- [x] Visual feedback: Implemented (drag hover states, animations)
+- [x] Event logging: Implemented with timestamped log panel
+- [x] Clear functionality: Implemented (clear all files, clear log, remove individual files)
+
+### Features Implemented
+
+#### Mode Toggle
+- Switch between Native Tauri and HTML5 modes
+- Visual indicators showing current mode
+- Real-time listener status for Native mode
+
+#### Drop Zone
+- Large visual drop area with hover effects
+- Animated scale and color changes on drag-over
+- Clear instructions showing current mode
+- Support for multiple file drops
+
+#### File Management
+- Display dropped files with metadata
+- Native mode: Shows full file paths
+- HTML5 mode: Shows size, type, and last modified date
+- Individual file removal
+- Clear all functionality
+- File count display
+
+#### Event Logging
+- Timestamped event log
+- Success/error indicators
+- Mode switch logging
+- Drag hover/cancel events
+- Clear log functionality
+- Auto-scrolling log panel
+
+#### UI Components
+- Mode toggle buttons (Native/HTML5)
+- Animated drop zone with visual feedback
+- File list with individual cards
+- Metadata display per file
+- Event log with timestamps
+- Info section explaining mode differences
 
 ### Testing Results
-- Desktop: Not tested
-- Mobile: Not tested
+- [x] Native mode: Working - no duplicate files
+- [x] HTML5 mode: Working - no duplicate files
+- [x] Mode switching: Working - proper listener cleanup
+- [x] Multiple file drops: Working
+- [x] Duplicate prevention: Working - React StrictMode handled
+- [ ] Desktop (macOS): Pending manual testing
+- [ ] Desktop (Windows): Pending manual testing
+- [ ] Desktop (Linux): Pending manual testing
+- [ ] Mobile: Not applicable (limited drag & drop support)
 
 ## Known Limitations
 
@@ -274,6 +328,99 @@ const path: string = event.payload.paths[0]
 - Some file types may not be droppable (system files, protected files)
 - Drag & drop from certain applications may be restricted by OS security
 - File path access differs between native and HTML5 modes
+
+## Development Notes
+
+### Issues Fixed
+
+#### 1. Duplicate File Entries (React StrictMode)
+**Problem**: Files were being added twice to the dropped files list.
+
+**Root Cause**: React StrictMode in development mode double-invokes effects, causing drop events to be processed twice.
+
+**Solution**: Implemented duplicate detection using separate refs for each mode to track the last processed drop event within a 100ms window.
+
+#### 2. HTML5 Mode Not Working
+**Problem**: HTML5 drag & drop handlers were not receiving drop events.
+
+**Root Cause**: Native Tauri listener operates at OS level and intercepts ALL drag/drop events before they reach HTML5 handlers.
+
+**Solution**: Conditionally set up native listener only when in native mode, with proper cleanup when switching to HTML5 mode.
+
+#### 3. Tauri v2 API Migration
+**Problem**: Using deprecated Tauri v1 event names (`tauri://file-drop`, etc.) which don't exist in v2.
+
+**Root Cause**: API breaking changes between Tauri v1 and v2.
+
+**Solution**: Migrated to Tauri v2 API using `getCurrentWebviewWindow().onDragDropEvent()` with unified event handler.
+
+### React StrictMode and Duplicate Events
+
+React StrictMode (enabled in development) intentionally double-invokes effects to help detect side effects. This can cause drop events to be processed twice, resulting in duplicate file entries.
+
+**Solution**: Use separate refs to track the last processed drop event for each mode (native and HTML5) and skip duplicates within a 100ms window:
+
+```typescript
+const lastNativeDropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+const lastHtml5DropRef = useRef<{ paths: string[], timestamp: number } | null>(null)
+
+// In native drop handler:
+const now = Date.now()
+const lastDrop = lastNativeDropRef.current
+
+if (lastDrop &&
+    now - lastDrop.timestamp < 100 &&
+    JSON.stringify(lastDrop.paths) === JSON.stringify(paths)) {
+  console.log('SKIPPING DUPLICATE NATIVE DROP EVENT')
+  return
+}
+
+lastNativeDropRef.current = { paths, timestamp: now }
+
+// In HTML5 drop handler:
+// Similar logic using lastHtml5DropRef
+```
+
+This ensures each unique drop event is processed only once, even if React StrictMode causes the effect to run multiple times. Separate refs prevent interference between native and HTML5 modes.
+
+### Native Listener Interference with HTML5 Mode
+
+The native Tauri drag drop listener operates at the OS level and intercepts ALL drag/drop events, preventing them from reaching HTML5 handlers. To support dual-mode operation, the native listener must be completely removed when switching to HTML5 mode.
+
+**Solution**: Conditionally set up the native listener based on current mode and add proper cleanup:
+
+```typescript
+useEffect(() => {
+  let unlisten: UnlistenFn | null = null
+
+  const setupNativeListeners = async () => {
+    // Only set up native listener when in native mode
+    if (mode !== 'native') {
+      setNativeListenerActive(false)
+      return
+    }
+
+    const webview = getCurrentWebviewWindow()
+    unlisten = await webview.onDragDropEvent((event) => {
+      // Handle events...
+    })
+    setNativeListenerActive(true)
+  }
+
+  setupNativeListeners()
+
+  return () => {
+    if (unlisten) {
+      unlisten() // Clean up listener when mode changes
+    }
+  }
+}, [mode]) // Re-run when mode changes
+```
+
+This ensures:
+- Native listener only active in native mode
+- Listener is properly cleaned up when switching to HTML5 mode
+- HTML5 handlers can receive drop events when native listener is disabled
 
 ## Differences: Native vs HTML5
 
@@ -300,7 +447,9 @@ const path: string = event.payload.paths[0]
 
 ## Resources
 
-- [Tauri Events API](https://tauri.app/develop/calling-frontend/#events)
+- [Tauri v2 onDragDropEvent API](https://v2.tauri.app/reference/javascript/api/namespacewebviewwindow/#ondragdropevent)
+- [Tauri v2 WebviewWindow API](https://v2.tauri.app/reference/javascript/api/namespacewebviewwindow/)
+- [Tauri Events API](https://v2.tauri.app/reference/javascript/api/namespaceevent/)
 - [HTML5 Drag and Drop API - MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API)
 - [File API - MDN](https://developer.mozilla.org/en-US/docs/Web/API/File)
-- [Tauri Window Configuration](https://tauri.app/reference/config/#windowconfig)
+- [Tauri Window Configuration](https://v2.tauri.app/reference/config/#windowconfig)
