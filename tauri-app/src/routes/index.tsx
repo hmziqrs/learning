@@ -61,6 +61,13 @@ const modules = [
     icon: Database,
     path: '/sql-storage',
     color: 'text-indigo-500',
+        },
+        {
+    name: 'In-App Purchases',
+    description: 'Test platform billing: iOS IAP, Android Billing, desktop Stripe',
+    icon: DollarSign,
+    path: '/in-app-purchases',
+    color: 'text-emerald-500',
   },
 ]
 
