@@ -1321,7 +1321,7 @@ Track your implementation progress:
 ### Phase 2: Media & Content (Modules 6-8)
 - [x] 6. Alarms (Future Notifications) Module (See: [alarms-module.md](alarms-module.md))
 - [x] 7. Calendar Module (Internal + ICS Export) (See: [calendar-module.md](calendar-module.md))
-- [x] 8. In-App Purchases Module
+- [x] 8. In-App Purchases Module (See: [in-app-purchases-module.md](in-app-purchases-module.md))
 
 ### Phase 3: Monetization & Networking (Modules 9-10)
 - [ ] 9. SQL + Storage Module
