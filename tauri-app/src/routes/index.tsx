@@ -1,5 +1,16 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar, DollarSign, Database, Wifi } from 'lucide-react'
+import {
+  FileText,
+  Bell,
+  Link as LinkIcon,
+  PlayCircle,
+  Upload,
+  Clock,
+  Calendar,
+  Database,
+  DollarSign,
+  Wifi,
+} from 'lucide-react';
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -156,3 +167,4 @@ function Index() {
     </div>
   )
 }
+

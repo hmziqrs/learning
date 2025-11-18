@@ -11,52 +11,150 @@
     "core:webview:default",
     "opener:default",
     {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
       "identifier": "fs:allow-read",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-write",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-create",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-remove",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-exists",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-mkdir",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     {
       "identifier": "fs:allow-read-dir",
       "allow": [
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        }
       ]
     },
     "fs:allow-app-read",
