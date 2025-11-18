@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar, DollarSign } from 'lucide-react'
+import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock, Calendar, DollarSign, Wifi } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -61,6 +61,13 @@ const modules = [
     icon: DollarSign,
     path: '/in-app-purchases',
     color: 'text-emerald-500',
+  },
+  {
+    name: 'Network & Realtime',
+    description: 'Test HTTP requests, WebSocket connections, and file uploads',
+    icon: Wifi,
+    path: '/network-realtime',
+    color: 'text-indigo-500',
   },
 ]
 
