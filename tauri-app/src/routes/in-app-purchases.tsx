@@ -360,6 +360,125 @@ function InAppPurchasesModule() {
           </div>
         </section>
 
+        {/* Desktop Payment Integration Guide */}
+        <section className="rounded-lg border border-green-500/50 bg-green-500/5 p-6">
+          <h3 className="text-lg font-semibold mb-3">💡 Recommended: Desktop App Monetization</h3>
+          <div className="space-y-4 text-sm">
+            <p className="text-muted-foreground">
+              For Tauri desktop apps, the recommended approach is <strong>License Keys + Payment Provider</strong>.
+              This is the industry standard for desktop software.
+            </p>
+
+            <div className="space-y-3">
+              <div className="bg-muted/50 rounded-md p-4">
+                <h4 className="font-semibold mb-2">🔑 Step 1: Choose a License Key System</h4>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
+                  <li>
+                    <strong>Keyforge</strong> - Tauri-specific, REST API, integrates with Stripe{' '}
+                    <a href="https://keyforge.dev" target="_blank" rel="noopener" className="text-primary underline">
+                      keyforge.dev
+                    </a>
+                  </li>
+                  <li>
+                    <strong>Keygen</strong> - Supports Tauri + Electron, feature entitlements, auto-updates{' '}
+                    <a href="https://keygen.sh" target="_blank" rel="noopener" className="text-primary underline">
+                      keygen.sh
+                    </a>
+                  </li>
+                  <li>
+                    <strong>Anystack</strong> - License validation + auto-updates for Tauri{' '}
+                    <a href="https://anystack.sh" target="_blank" rel="noopener" className="text-primary underline">
+                      anystack.sh
+                    </a>
+                  </li>
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Store licenses securely using <code>tauri-plugin-stronghold</code> or macOS Keychain
+                </p>
+              </div>
+
+              <div className="bg-muted/50 rounded-md p-4">
+                <h4 className="font-semibold mb-2">💳 Step 2: Choose a Payment Provider</h4>
+                <div className="space-y-2 text-muted-foreground">
+                  <div>
+                    <strong className="text-green-600">✅ Stripe</strong> - Industry standard, most flexible
+                    <ul className="list-disc list-inside ml-4 text-xs mt-1">
+                      <li>Rate: 2.9% + $0.30 per transaction</li>
+                      <li>Best for: Custom integrations, maximum control</li>
+                      <li>Works with: Keyforge, Keygen, custom backend</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-green-600">✅ Lemon Squeezy</strong> - Simple, all-in-one (Merchant of Record)
+                    <ul className="list-disc list-inside ml-4 text-xs mt-1">
+                      <li>Rate: 5% fee (handles tax, compliance, VAT)</li>
+                      <li>Best for: Indie developers, quick setup</li>
+                      <li>Acquired by Stripe 2024, still operates independently</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong className="text-green-600">✅ Polar.sh</strong> - Developer-focused, transparent pricing
+                    <ul className="list-disc list-inside ml-4 text-xs mt-1">
+                      <li>Rate: 4% + $0.40 per transaction</li>
+                      <li>Best for: Open-source projects, developers</li>
+                      <li>Built by indie makers, powerful API/CLI</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>Dodo Payments</strong> - Modern SaaS billing platform
+                    <ul className="list-disc list-inside ml-4 text-xs mt-1">
+                      <li>Usage-based billing, subscription management</li>
+                      <li>SDKs: TypeScript, Python, Go, PHP, Java, Kotlin, C#, Ruby</li>
+                      <li>AI assistant (Sentra) writes integration code</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-muted/50 rounded-md p-4">
+                <h4 className="font-semibold mb-2">🏢 Traditional Desktop Software (MoR)</h4>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
+                  <li>
+                    <strong>FastSpring</strong> - 4.9% + $0.49, excellent license management{' '}
+                    <a href="https://fastspring.com" target="_blank" rel="noopener" className="text-primary underline">
+                      fastspring.com
+                    </a>
+                  </li>
+                  <li>
+                    <strong>Paddle</strong> - 5% + $0.50, developer SDKs, in-app purchases{' '}
+                    <a href="https://paddle.com" target="_blank" rel="noopener" className="text-primary underline">
+                      paddle.com
+                    </a>
+                  </li>
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Both handle payment processing, tax, fraud protection - no additional software needed
+                </p>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
+                <h4 className="font-semibold mb-2 text-yellow-700 dark:text-yellow-400">⚠️ Important Notes</h4>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2 text-xs">
+                  <li>
+                    <strong>Mac App Store Distribution:</strong> You MUST use Apple's IAP (In-App Purchase).
+                    Third-party payments are not allowed.
+                  </li>
+                  <li>
+                    <strong>Self-Distribution:</strong> Use any payment method you want (recommended approach).
+                  </li>
+                  <li>
+                    <strong>Security:</strong> Never expose API keys in client code. Process payments server-side.
+                  </li>
+                  <li>
+                    <strong>Tax Compliance:</strong> Use MoR (Lemon Squeezy, Paddle, FastSpring) to avoid handling
+                    VAT/tax yourself.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Implementation Notes */}
         <section className="rounded-lg border border-blue-500/50 bg-blue-500/5 p-6">
           <h3 className="text-lg font-semibold mb-3">Implementation Notes</h3>
@@ -373,8 +492,8 @@ function InAppPurchasesModule() {
               integration, and product/subscription configuration.
             </p>
             <p>
-              <strong>Desktop (Stripe):</strong> Can integrate Stripe Checkout or Payment Links for
-              web-based payments in desktop builds.
+              <strong>Desktop (Self-Distributed):</strong> Use license keys + payment provider (see above).
+              Integrate Stripe Checkout, Lemon Squeezy, or Polar for web-based payment pages.
             </p>
             <p className="mt-3">
               <strong>Plugin Setup:</strong> After installing the plugin, add Tauri commands in{' '}
