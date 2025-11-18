@@ -181,7 +181,7 @@ function NetworkRealtimeModule() {
       // Upload file
       const response = await invoke<HttpResponse>('upload_file', {
         url: 'https://httpbin.org/post',
-        filePath
+        file_path: filePath
       })
 
       addOutput(`✓ Upload successful (Status: ${response.status})`)
