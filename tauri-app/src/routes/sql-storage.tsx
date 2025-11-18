@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Database, Save, Trash2, Check, X, HardDrive, Settings } from 'lucide-react'
+import { Database as DatabaseIcon, Save, Trash2, Check, X, HardDrive, Settings } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import Database from '@tauri-apps/plugin-sql'
+import { Store } from '@tauri-apps/plugin-store'
 
 export const Route = createFileRoute('/sql-storage')({
   component: SqlStorage,
@@ -18,6 +20,8 @@ interface Note {
 function SqlStorage() {
   const [output, setOutput] = useState<string[]>([])
   const [loading, setLoading] = useState<string | null>(null)
+  const dbRef = useRef<Database | null>(null)
+  const storeRef = useRef<Store | null>(null)
 
   // User preferences state
   const [userName, setUserName] = useState('')
@@ -35,6 +39,13 @@ function SqlStorage() {
 
   useEffect(() => {
     initializeStorage()
+
+    return () => {
+      // Cleanup on unmount
+      if (dbRef.current) {
+        dbRef.current.close().catch(console.error)
+      }
+    }
   }, [])
 
   const addOutput = (message: string, success: boolean = true) => {
@@ -46,21 +57,43 @@ function SqlStorage() {
   const initializeStorage = async () => {
     setLoading('init')
     try {
-      // TODO: Initialize database and store
-      // For now, use localStorage as placeholder
-      const storedName = localStorage.getItem('userName') || ''
-      const storedTheme = localStorage.getItem('isDarkMode') === 'true'
-      const storedNotes = localStorage.getItem('notes')
+      // Initialize Store plugin
+      const store = await Store.load('settings.json')
+      storeRef.current = store
+      addOutput('Store plugin initialized')
 
-      setSavedUserName(storedName)
-      setUserName(storedName)
-      setIsDarkMode(storedTheme)
+      // Load preferences from store
+      const storedName = (await store.get('userName')) as string | null
+      const storedTheme = (await store.get('isDarkMode')) as boolean | null
 
-      if (storedNotes) {
-        setNotes(JSON.parse(storedNotes))
+      if (storedName) {
+        setSavedUserName(storedName)
+        setUserName(storedName)
+      }
+      if (storedTheme !== null) {
+        setIsDarkMode(storedTheme)
       }
 
-      updateStats()
+      // Initialize SQLite database
+      const db = await Database.load('sqlite:storage.db')
+      dbRef.current = db
+      addOutput('SQLite database initialized')
+
+      // Create notes table if not exists
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          content TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+      addOutput('Notes table created/verified')
+
+      // Load notes from database
+      await loadNotes()
+
+      await updateStats()
       addOutput('Storage initialized successfully')
     } catch (error) {
       addOutput(`Error initializing storage: ${error}`, false)
@@ -69,28 +102,51 @@ function SqlStorage() {
     }
   }
 
-  const updateStats = () => {
-    // Count preferences
-    let prefs = 0
-    if (localStorage.getItem('userName')) prefs++
-    if (localStorage.getItem('isDarkMode')) prefs++
-    setPreferencesCount(prefs)
+  const loadNotes = async () => {
+    try {
+      if (!dbRef.current) {
+        throw new Error('Database not initialized')
+      }
 
-    // Count notes
-    const storedNotes = localStorage.getItem('notes')
-    if (storedNotes) {
-      setNotesCount(JSON.parse(storedNotes).length)
+      const result = await dbRef.current.select<Note[]>('SELECT * FROM notes ORDER BY created_at DESC')
+      setNotes(result)
+      addOutput(`Loaded ${result.length} notes from database`)
+    } catch (error) {
+      addOutput(`Error loading notes: ${error}`, false)
+    }
+  }
+
+  const updateStats = async () => {
+    try {
+      // Count preferences in store
+      let prefs = 0
+      if (storeRef.current) {
+        const hasUserName = await storeRef.current.has('userName')
+        const hasTheme = await storeRef.current.has('isDarkMode')
+        if (hasUserName) prefs++
+        if (hasTheme) prefs++
+      }
+      setPreferencesCount(prefs)
+
+      // Count notes in database
+      setNotesCount(notes.length)
+    } catch (error) {
+      console.error('Error updating stats:', error)
     }
   }
 
   const handleSaveUserName = async () => {
     setLoading('saveName')
     try {
-      // TODO: Save to store plugin
-      localStorage.setItem('userName', userName)
+      if (!storeRef.current) {
+        throw new Error('Store not initialized')
+      }
+
+      await storeRef.current.set('userName', userName)
+      await storeRef.current.save()
       setSavedUserName(userName)
-      updateStats()
-      addOutput(`User name saved: "${userName}"`)
+      await updateStats()
+      addOutput(`User name saved to store: "${userName}"`)
     } catch (error) {
       addOutput(`Error saving user name: ${error}`, false)
     } finally {
@@ -102,11 +158,15 @@ function SqlStorage() {
     setLoading('toggleTheme')
     const newValue = !isDarkMode
     try {
-      // TODO: Save to store plugin
-      localStorage.setItem('isDarkMode', String(newValue))
+      if (!storeRef.current) {
+        throw new Error('Store not initialized')
+      }
+
+      await storeRef.current.set('isDarkMode', newValue)
+      await storeRef.current.save()
       setIsDarkMode(newValue)
-      updateStats()
-      addOutput(`Dark mode ${newValue ? 'enabled' : 'disabled'}`)
+      await updateStats()
+      addOutput(`Dark mode ${newValue ? 'enabled' : 'disabled'} in store`)
     } catch (error) {
       addOutput(`Error toggling dark mode: ${error}`, false)
     } finally {
@@ -122,23 +182,23 @@ function SqlStorage() {
 
     setLoading('addNote')
     try {
-      const newNote: Note = {
-        id: Date.now(),
-        title: noteTitle,
-        content: noteContent,
-        created_at: new Date().toISOString(),
+      if (!dbRef.current) {
+        throw new Error('Database not initialized')
       }
 
-      const updatedNotes = [...notes, newNote]
-      setNotes(updatedNotes)
+      const result = await dbRef.current.execute(
+        'INSERT INTO notes (title, content) VALUES (?, ?)',
+        [noteTitle, noteContent]
+      )
 
-      // TODO: Save to SQLite database
-      localStorage.setItem('notes', JSON.stringify(updatedNotes))
+      addOutput(`Note added to database (ID: ${result.lastInsertId})`)
+
+      // Reload notes from database
+      await loadNotes()
 
       setNoteTitle('')
       setNoteContent('')
-      updateStats()
-      addOutput(`Note added: "${noteTitle}"`)
+      await updateStats()
     } catch (error) {
       addOutput(`Error adding note: ${error}`, false)
     } finally {
@@ -149,14 +209,16 @@ function SqlStorage() {
   const handleDeleteNote = async (id: number, title: string) => {
     setLoading(`deleteNote-${id}`)
     try {
-      const updatedNotes = notes.filter((note) => note.id !== id)
-      setNotes(updatedNotes)
+      if (!dbRef.current) {
+        throw new Error('Database not initialized')
+      }
 
-      // TODO: Delete from SQLite database
-      localStorage.setItem('notes', JSON.stringify(updatedNotes))
+      await dbRef.current.execute('DELETE FROM notes WHERE id = ?', [id])
+      addOutput(`Note deleted from database: "${title}"`)
 
-      updateStats()
-      addOutput(`Note deleted: "${title}"`)
+      // Reload notes from database
+      await loadNotes()
+      await updateStats()
     } catch (error) {
       addOutput(`Error deleting note: ${error}`, false)
     } finally {
@@ -171,16 +233,25 @@ function SqlStorage() {
 
     setLoading('clearAll')
     try {
-      // TODO: Clear database and store
-      localStorage.removeItem('userName')
-      localStorage.removeItem('isDarkMode')
-      localStorage.removeItem('notes')
+      // Clear database
+      if (dbRef.current) {
+        await dbRef.current.execute('DELETE FROM notes')
+        addOutput('All notes deleted from database')
+      }
 
+      // Clear store
+      if (storeRef.current) {
+        await storeRef.current.clear()
+        await storeRef.current.save()
+        addOutput('All preferences cleared from store')
+      }
+
+      // Reset state
       setUserName('')
       setSavedUserName('')
       setIsDarkMode(false)
       setNotes([])
-      updateStats()
+      await updateStats()
 
       addOutput('All data cleared successfully')
     } catch (error) {
@@ -196,7 +267,7 @@ function SqlStorage() {
     <ModulePageLayout
       title="SQL + Storage Module"
       description="Store user state, preferences, and application data using SQLite database and key-value store"
-      icon={Database}
+      icon={DatabaseIcon}
     >
       <div className="space-y-6">
         {/* Storage Stats */}
@@ -276,7 +347,7 @@ function SqlStorage() {
         {/* Notes Demo (SQLite) */}
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-            <Database className="w-6 h-6" />
+            <DatabaseIcon className="w-6 h-6" />
             Notes (SQLite Database)
           </h2>
 
@@ -307,7 +378,7 @@ function SqlStorage() {
               disabled={loading === 'addNote'}
               className="gap-2"
             >
-              <Database className="w-4 h-4" />
+              <DatabaseIcon className="w-4 h-4" />
               {loading === 'addNote' ? 'Adding...' : 'Add Note'}
             </Button>
           </div>
