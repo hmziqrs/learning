@@ -1,12 +1,18 @@
-# Network & Realtime Module Implementation
+# Networking & Radio Access Module
 
 ## Overview
 
-Comprehensive networking and real-time communication system demonstrating HTTP requests, WebSocket connections, Server-Sent Events (SSE), and file upload capabilities for both desktop and mobile platforms.
+Comprehensive networking and radio access module providing HTTP/WebSocket communication, network interface monitoring, connectivity status, and radio hardware information (WiFi, Cellular, Bluetooth) for desktop and mobile platforms.
 
 ## Current Implementation Status
 
-⚠️ **Planned** - Architecture ready, implementation in progress
+🟢 **Partially Implemented**
+- ✅ HTTP GET/POST requests (fully functional)
+- ✅ File upload with multipart support (working)
+- ⚠️ WebSocket (mock implementation, requires plugin)
+- ❌ Network status monitoring (planned)
+- ❌ WiFi information access (planned)
+- ❌ Radio/cellular info (planned)
 
 ## Plugin Setup
 
@@ -82,6 +88,30 @@ serde_json = "1.0"
 - [ ] Ping/pong heartbeat
 - [ ] Error handling
 
+### Network Status & Connectivity
+- [ ] Monitor online/offline status
+- [ ] Detect connection type changes
+- [ ] Network interface enumeration
+- [ ] Connection quality metrics
+- [ ] Bandwidth estimation
+- [ ] Connection speed test
+
+### WiFi Information
+- [ ] Current SSID (network name)
+- [ ] Signal strength (RSSI)
+- [ ] MAC address (BSSID)
+- [ ] IP address information
+- [ ] Scan available networks
+- [ ] WiFi security type
+
+### Radio/Cellular Information (Mobile)
+- [ ] Carrier name
+- [ ] Network type (4G, 5G, LTE)
+- [ ] Signal strength
+- [ ] Cell tower information
+- [ ] Data roaming status
+- [ ] SIM card information
+
 ### Server-Sent Events (SSE)
 - [ ] Subscribe to SSE endpoint
 - [ ] Handle event streams
@@ -90,8 +120,8 @@ serde_json = "1.0"
 - [ ] Connection state management
 
 ### File Upload
-- [ ] Single file upload
-- [ ] Multiple file upload
+- [x] Single file upload
+- [x] Multiple file upload
 - [ ] Upload progress tracking
 - [ ] Chunk-based upload
 - [ ] Upload cancellation
@@ -136,6 +166,53 @@ interface UploadProgress {
   total: number
   percentage: number
   speed: number // bytes per second
+}
+```
+
+### Network Status Schema
+```typescript
+interface NetworkStatus {
+  online: boolean
+  connectionType: 'wifi' | 'ethernet' | 'cellular' | 'bluetooth' | 'none' | 'unknown'
+  effectiveType?: '4g' | '3g' | '2g' | 'slow-2g'
+  downlink?: number // Mbps
+  rtt?: number // milliseconds
+}
+```
+
+### WiFi Information Schema
+```typescript
+interface WiFiInfo {
+  ssid: string
+  bssid: string
+  rssi: number // Signal strength in dBm
+  frequency: number // MHz
+  ipAddress: string
+  macAddress: string
+  securityType: 'WPA2' | 'WPA3' | 'WEP' | 'Open'
+  channel: number
+}
+
+interface WiFiNetwork {
+  ssid: string
+  bssid: string
+  rssi: number
+  securityType: string
+  frequency: number
+}
+```
+
+### Cellular/Radio Information Schema
+```typescript
+interface CellularInfo {
+  carrierName: string
+  mcc: string // Mobile Country Code
+  mnc: string // Mobile Network Code
+  networkType: '5G' | '4G' | 'LTE' | '3G' | '2G' | 'unknown'
+  signalStrength: number // 0-4 bars
+  isRoaming: boolean
+  cellId?: string
+  lac?: string // Location Area Code
 }
 ```
 
@@ -277,6 +354,178 @@ async fn websocket_close(connection_id: u32) -> Result<(), String> {
 }
 ```
 
+### Network Status & Monitoring Implementation
+
+#### Network Status Check
+```rust
+use std::net::TcpStream;
+
+#[tauri::command]
+async fn check_network_status() -> Result<bool, String> {
+    // Simple connectivity check
+    match TcpStream::connect("8.8.8.8:53") {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+#[tauri::command]
+async fn get_network_interfaces() -> Result<Vec<NetworkInterface>, String> {
+    // Requires `network-interface` crate
+    // Add to Cargo.toml: network-interface = "1.0"
+    use network_interface::NetworkInterface;
+
+    let interfaces = NetworkInterface::show()
+        .map_err(|e| e.to_string())?;
+
+    Ok(interfaces)
+}
+```
+
+### WiFi Information Implementation
+
+#### WiFi Status (Platform-Specific)
+
+**macOS/Linux:**
+```rust
+use std::process::Command;
+
+#[tauri::command]
+async fn get_wifi_info() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("networksetup")
+            .args(["-getairportnetwork", "en0"])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let ssid = String::from_utf8_lossy(&output.stdout);
+        Ok(ssid.to_string())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("iwgetid")
+            .args(["-r"])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let ssid = String::from_utf8_lossy(&output.stdout);
+        Ok(ssid.trim().to_string())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("netsh")
+            .args(["wlan", "show", "interfaces"])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+        Ok(info.to_string())
+    }
+}
+```
+
+**Android (Requires Custom Plugin):**
+```kotlin
+// In Android plugin
+import android.net.wifi.WifiManager
+import android.content.Context
+
+@Command
+fun getWifiInfo(): WifiInfo {
+    val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    val wifiInfo = wifiManager.connectionInfo
+
+    return WifiInfo(
+        ssid = wifiInfo.ssid.replace("\"", ""),
+        bssid = wifiInfo.bssid,
+        rssi = wifiInfo.rssi,
+        linkSpeed = wifiInfo.linkSpeed,
+        ipAddress = intToIp(wifiInfo.ipAddress)
+    )
+}
+```
+
+**iOS (Requires Custom Plugin):**
+```swift
+// In iOS plugin
+import SystemConfiguration.CaptiveNetwork
+import NetworkExtension
+
+@objc func getWifiInfo(_ invoke: Invoke) {
+    if let interfaces = CNCopySupportedInterfaces() as? [String] {
+        for interface in interfaces {
+            if let info = CNCopyCurrentNetworkInfo(interface as CFString) as? [String: AnyObject] {
+                let ssid = info[kCNNetworkInfoKeySSID as String] as? String ?? ""
+                let bssid = info[kCNNetworkInfoKeyBSSID as String] as? String ?? ""
+
+                invoke.resolve([
+                    "ssid": ssid,
+                    "bssid": bssid
+                ])
+                return
+            }
+        }
+    }
+    invoke.reject("No WiFi connection")
+}
+```
+
+### Cellular/Radio Information Implementation
+
+#### Android Cellular Info
+```kotlin
+// In Android plugin
+import android.telephony.TelephonyManager
+import android.content.Context
+
+@Command
+fun getCellularInfo(): CellularInfo {
+    val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+
+    return CellularInfo(
+        carrierName = telephonyManager.networkOperatorName,
+        mcc = telephonyManager.networkOperator.substring(0, 3),
+        mnc = telephonyManager.networkOperator.substring(3),
+        networkType = getNetworkTypeName(telephonyManager.networkType),
+        isRoaming = telephonyManager.isNetworkRoaming
+    )
+}
+
+private fun getNetworkTypeName(type: Int): String {
+    return when (type) {
+        TelephonyManager.NETWORK_TYPE_NR -> "5G"
+        TelephonyManager.NETWORK_TYPE_LTE -> "4G/LTE"
+        TelephonyManager.NETWORK_TYPE_HSPAP -> "3G"
+        else -> "Unknown"
+    }
+}
+```
+
+#### iOS Cellular Info
+```swift
+// In iOS plugin
+import CoreTelephony
+
+@objc func getCellularInfo(_ invoke: Invoke) {
+    let networkInfo = CTTelephonyNetworkInfo()
+
+    if let carrier = networkInfo.subscriberCellularProvider {
+        let info: [String: Any] = [
+            "carrierName": carrier.carrierName ?? "Unknown",
+            "mcc": carrier.mobileCountryCode ?? "",
+            "mnc": carrier.mobileNetworkCode ?? "",
+            "isRoaming": carrier.allowsVOIP
+        ]
+        invoke.resolve(info)
+    } else {
+        invoke.reject("No cellular connection")
+    }
+}
+```
+
 ### Server-Sent Events Implementation
 
 #### SSE Client
@@ -367,6 +616,42 @@ const uploadFile = async (filePath: string) => {
     console.error('Upload failed:', error)
   }
 }
+
+// Network Status Example
+const [networkStatus, setNetworkStatus] = useState<NetworkStatus>()
+
+const checkNetworkStatus = async () => {
+  try {
+    const isOnline = await invoke<boolean>('check_network_status')
+    setNetworkStatus({ online: isOnline })
+  } catch (error) {
+    console.error('Network check failed:', error)
+  }
+}
+
+// WiFi Information Example
+const [wifiInfo, setWifiInfo] = useState<string>()
+
+const getWifiInfo = async () => {
+  try {
+    const info = await invoke<string>('get_wifi_info')
+    setWifiInfo(info)
+  } catch (error) {
+    console.error('WiFi info failed:', error)
+  }
+}
+
+// Cellular Info Example (Mobile)
+const [cellularInfo, setCellularInfo] = useState<CellularInfo>()
+
+const getCellularInfo = async () => {
+  try {
+    const info = await invoke<CellularInfo>('get_cellular_info')
+    setCellularInfo(info)
+  } catch (error) {
+    console.error('Cellular info failed:', error)
+  }
+}
 ```
 
 ## Security Best Practices
@@ -398,6 +683,8 @@ const uploadFile = async (filePath: string) => {
 
 ## Permissions Configuration
 
+### Tauri Configuration
+
 Add to `src-tauri/tauri.conf.json`:
 
 ```json
@@ -416,6 +703,55 @@ Add to `src-tauri/tauri.conf.json`:
     ]
   }
 }
+```
+
+### Android Permissions
+
+Add to `AndroidManifest.xml`:
+
+```xml
+<!-- Network access -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<!-- WiFi information -->
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> <!-- Required for WiFi SSID on Android 8.1+ -->
+
+<!-- Cellular/Radio information -->
+<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+```
+
+### iOS Permissions
+
+Add to `Info.plist`:
+
+```xml
+<!-- Location permission required for WiFi SSID access -->
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>This app needs access to your location to detect WiFi network information</string>
+
+<!-- Network usage description -->
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+</dict>
+```
+
+### macOS Permissions
+
+Add to `Info.plist`:
+
+```xml
+<!-- Network client for HTTP requests -->
+<key>com.apple.security.network.client</key>
+<true/>
+
+<!-- Network server for WebSocket servers -->
+<key>com.apple.security.network.server</key>
+<true/>
 ```
 
 ## Testing Endpoints
@@ -492,6 +828,67 @@ const syncFile = async (localPath: string) => {
     url: 'https://api.example.com/upload',
     filePath: localPath
   })
+}
+```
+
+### 5. Network Status Monitoring
+```typescript
+// Monitor network connectivity changes
+useEffect(() => {
+  const checkInterval = setInterval(async () => {
+    const isOnline = await invoke<boolean>('check_network_status')
+    if (!isOnline) {
+      showOfflineNotification()
+    }
+  }, 5000) // Check every 5 seconds
+
+  return () => clearInterval(checkInterval)
+}, [])
+```
+
+### 6. WiFi Network Display
+```typescript
+// Show current WiFi network information
+const displayWifiInfo = async () => {
+  try {
+    const wifiInfo = await invoke<string>('get_wifi_info')
+    // Display: "Connected to: MyNetwork"
+    setStatusMessage(`Connected to: ${wifiInfo}`)
+  } catch (error) {
+    setStatusMessage('Not connected to WiFi')
+  }
+}
+```
+
+### 7. Carrier Information (Mobile)
+```typescript
+// Display cellular carrier and network type
+const showCarrierInfo = async () => {
+  try {
+    const cellular = await invoke<CellularInfo>('get_cellular_info')
+    // Display: "Verizon - 5G"
+    setCarrierDisplay(`${cellular.carrierName} - ${cellular.networkType}`)
+  } catch (error) {
+    console.error('Not on cellular network')
+  }
+}
+```
+
+### 8. Adaptive Quality Based on Connection
+```typescript
+// Adjust video/image quality based on connection type
+const getOptimalQuality = async () => {
+  const status = await invoke<NetworkStatus>('get_network_status')
+
+  if (status.connectionType === 'wifi') {
+    return 'high' // HD quality
+  } else if (status.connectionType === 'cellular') {
+    if (status.effectiveType === '4g' || status.effectiveType === '5g') {
+      return 'medium'
+    }
+    return 'low' // Save data on slower connections
+  }
+  return 'low'
 }
 ```
 
@@ -684,9 +1081,21 @@ async fn cached_http_get(url: String, cache_duration: u64) -> Result<String, Str
 | File Upload | ✅ | ✅ | ✅ | ✅ | ✅ |
 | SSE | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Custom Headers | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Network Status | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Network Interfaces | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
+| WiFi SSID | ✅ | ✅ | ✅ | ✅* | ✅* |
+| WiFi Signal Strength | ⚠️ | ⚠️ | ⚠️ | ✅* | ✅* |
+| Cellular Info | ❌ | ❌ | ❌ | ✅* | ✅* |
+| Carrier Name | ❌ | ❌ | ❌ | ✅* | ✅* |
+
+**Legend:**
+- ✅ Fully supported
+- ⚠️ Limited support or requires additional setup
+- ❌ Not applicable
+- \* Requires custom plugin and platform-specific permissions
 
 ---
 
 **Last Updated**: November 2025
-**Module Version**: 1.0.0
-**Status**: Documentation Complete ✅
+**Module Version**: 2.0.0
+**Status**: Documentation Complete - Networking & Radio Access Module ✅

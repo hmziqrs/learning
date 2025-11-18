@@ -205,8 +205,8 @@ function NetworkRealtimeModule() {
 
   return (
     <ModulePageLayout
-      title="Network & Realtime Module"
-      description="Test HTTP requests, WebSocket connections, and file uploads"
+      title="Networking & Radio Access Module"
+      description="HTTP/WebSocket communication, network monitoring, and radio hardware information"
       icon={Wifi}
     >
       <div className="space-y-6">
