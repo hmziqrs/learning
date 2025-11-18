@@ -1,7 +1,22 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer};
+
+// Helper function to deserialize SQLite integer (0/1) to boolean
+fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match i64::deserialize(deserializer)? {
+        0 => Ok(false),
+        1 => Ok(true),
+        other => Err(serde::de::Error::custom(format!(
+            "Expected 0 or 1 for boolean, got {}",
+            other
+        ))),
+    }
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -36,6 +51,7 @@ struct Event {
     description: Option<String>,
     start_time: String,
     end_time: String,
+    #[serde(deserialize_with = "deserialize_bool_from_int")]
     is_all_day: bool,
     created_at: String,
     updated_at: String,

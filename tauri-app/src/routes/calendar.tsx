@@ -77,9 +77,11 @@ function CalendarModule() {
     try {
       const db = await Database.load('sqlite:calendar.db')
       const loadedEvents = await db.select<Event[]>('SELECT * FROM events ORDER BY start_time ASC')
+      console.log('Loaded events:', loadedEvents)
       setEvents(loadedEvents)
       addOutput(`Loaded ${loadedEvents.length} events`)
     } catch (error) {
+      console.error('Error loading events:', error)
       addOutput(`Error loading events: ${error}`, false)
     } finally {
       setLoading(null)
@@ -116,12 +118,13 @@ function CalendarModule() {
     try {
       const db = await Database.load('sqlite:calendar.db')
 
-      await db.execute(
+      const result = await db.execute(
         'INSERT INTO events (title, description, start_time, end_time, is_all_day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime("now"), datetime("now"))',
         [eventTitle, eventDescription || null, startDateTime, endDateTime, isAllDay ? 1 : 0]
       )
 
-      addOutput(`Event "${eventTitle}" created successfully`)
+      console.log('Insert result:', result)
+      addOutput(`Event "${eventTitle}" created successfully (ID: ${result.lastInsertId})`)
 
       // Reset form
       setEventTitle('')
@@ -135,6 +138,7 @@ function CalendarModule() {
       // Reload events
       await loadEvents()
     } catch (error) {
+      console.error('Error creating event:', error)
       addOutput(`Error creating event: ${error}`, false)
     } finally {
       setLoading(null)
