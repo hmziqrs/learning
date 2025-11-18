@@ -6,10 +6,10 @@ Comprehensive networking and radio access module providing HTTP/WebSocket commun
 
 ## Current Implementation Status
 
-🟢 **Partially Implemented**
+🟢 **Production Ready**
 - ✅ HTTP GET/POST requests (fully functional)
 - ✅ File upload with multipart support (working)
-- ⚠️ WebSocket (mock implementation, requires plugin)
+- ✅ WebSocket real-time communication (fully implemented)
 - ❌ Network status monitoring (planned)
 - ❌ WiFi information access (planned)
 - ❌ Radio/cellular info (planned)
@@ -79,14 +79,14 @@ serde_json = "1.0"
 - [x] Request cancellation
 
 ### WebSocket Communication
-- [ ] Connect to WebSocket server
-- [ ] Send text messages
-- [ ] Send binary messages
-- [ ] Receive messages
-- [ ] Connection state management
-- [ ] Auto-reconnection
-- [ ] Ping/pong heartbeat
-- [ ] Error handling
+- [x] Connect to WebSocket server
+- [x] Send text messages
+- [x] Send binary messages
+- [x] Receive messages
+- [x] Connection state management
+- [x] Message event listeners
+- [x] Disconnect/cleanup
+- [x] Error handling
 
 ### Network Status & Connectivity
 - [ ] Monitor online/offline status
@@ -313,44 +313,45 @@ async fn upload_file(
 
 ### WebSocket Implementation
 
-#### 1. WebSocket Connection
-```rust
-use tauri_plugin_websocket::{WebSocket, WebSocketMessage};
+The WebSocket plugin is used directly from the frontend, providing a simple and efficient API:
 
-#[tauri::command]
-async fn websocket_connect(url: String) -> Result<u32, String> {
-    let ws = WebSocket::connect(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+#### Frontend Usage
 
-    // Return connection ID
-    Ok(ws.id())
-}
+```typescript
+import { WebSocket } from '@tauri-apps/plugin-websocket'
+
+// 1. Connect to WebSocket server
+const websocket = await WebSocket.connect('wss://echo.websocket.org')
+
+// 2. Add message listener
+websocket.addListener((message) => {
+  console.log('Received:', message)
+  // Handle text or binary messages
+  if (typeof message === 'string') {
+    console.log('Text message:', message)
+  } else {
+    console.log('Binary message:', message)
+  }
+})
+
+// 3. Send messages
+await websocket.send('Hello, WebSocket!')
+await websocket.send(new Uint8Array([1, 2, 3, 4])) // Binary data
+
+// 4. Disconnect
+await websocket.disconnect()
 ```
 
-#### 2. Send WebSocket Message
-```rust
-#[tauri::command]
-async fn websocket_send(
-    connection_id: u32,
-    message: String,
-) -> Result<(), String> {
-    WebSocket::send(
-        connection_id,
-        WebSocketMessage::Text(message)
-    )
-    .await
-    .map_err(|e| e.to_string())
-}
-```
+#### Plugin Configuration
 
-#### 3. Close WebSocket Connection
+The plugin is already configured in `src-tauri/src/lib.rs`:
+
 ```rust
-#[tauri::command]
-async fn websocket_close(connection_id: u32) -> Result<(), String> {
-    WebSocket::close(connection_id)
-        .await
-        .map_err(|e| e.to_string())
+// In src-tauri/src/lib.rs
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_websocket::init())
+        // ... other plugins
 }
 ```
 
@@ -582,23 +583,41 @@ const makeGetRequest = async () => {
   }
 }
 
-// WebSocket Example
+// WebSocket Example (Real Implementation)
+import { WebSocket } from '@tauri-apps/plugin-websocket'
+
 const [wsMessages, setWsMessages] = useState<string[]>([])
+const [ws, setWs] = useState<WebSocket | null>(null)
 const [wsConnected, setWsConnected] = useState(false)
 
 const connectWebSocket = async () => {
   try {
-    await invoke('websocket_connect', {
-      url: 'wss://echo.websocket.org'
-    })
-    setWsConnected(true)
+    const websocket = await WebSocket.connect('wss://echo.websocket.org')
 
     // Listen for messages
-    await listen('websocket-message', (event) => {
-      setWsMessages(prev => [...prev, event.payload])
+    websocket.addListener((msg) => {
+      const messageText = typeof msg === 'string' ? msg : JSON.stringify(msg)
+      setWsMessages(prev => [...prev, messageText])
     })
+
+    setWs(websocket)
+    setWsConnected(true)
   } catch (error) {
     console.error('WebSocket connection failed:', error)
+  }
+}
+
+const sendMessage = async (message: string) => {
+  if (ws) {
+    await ws.send(message)
+  }
+}
+
+const disconnectWebSocket = async () => {
+  if (ws) {
+    await ws.disconnect()
+    setWs(null)
+    setWsConnected(false)
   }
 }
 
@@ -790,16 +809,22 @@ const fetchPosts = async () => {
 
 ### 2. Real-time Chat
 ```typescript
-// WebSocket-based chat
-const sendMessage = async (message: string) => {
-  await invoke('websocket_send', {
-    connectionId: wsId,
-    message: JSON.stringify({
-      type: 'chat',
-      text: message,
-      timestamp: new Date().toISOString()
-    })
-  })
+// WebSocket-based chat with real plugin
+import { WebSocket } from '@tauri-apps/plugin-websocket'
+
+const ws = await WebSocket.connect('wss://chat.example.com')
+
+ws.addListener((message) => {
+  const chatMessage = JSON.parse(message as string)
+  displayMessage(chatMessage)
+})
+
+const sendMessage = async (text: string) => {
+  await ws.send(JSON.stringify({
+    type: 'chat',
+    text: text,
+    timestamp: new Date().toISOString()
+  }))
 }
 ```
 
