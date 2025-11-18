@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload } from 'lucide-react'
+import { FileText, Bell, Link as LinkIcon, PlayCircle, Upload, Clock } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
   component: Index,
@@ -40,6 +40,13 @@ const modules = [
     icon: Upload,
     path: '/drag-drop',
     color: 'text-pink-500',
+  },
+  {
+    name: 'Alarms',
+    description: 'Lightweight alarm simulation with scheduled notifications',
+    icon: Clock,
+    path: '/alarms',
+    color: 'text-yellow-500',
   },
 ]
 

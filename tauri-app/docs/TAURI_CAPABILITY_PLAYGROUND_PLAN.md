@@ -1319,7 +1319,7 @@ Track your implementation progress:
 - [x] 5. Drag & Drop Module (See: [drag-drop-module.md](drag-drop-module.md))
 
 ### Phase 2: Media & Content (Modules 6-8)
-- [ ] 6. Alarms (Future Notifications) Module
+- [ ] 6. Alarms (Future Notifications) Module (See: [alarms-module.md](alarms-module.md))
 - [ ] 7. Calendar Module (Internal + ICS Export)
 - [ ] 8. In-App Purchases Module
 

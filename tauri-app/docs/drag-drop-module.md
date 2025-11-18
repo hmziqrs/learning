@@ -54,18 +54,18 @@ Enable drag & drop in `src-tauri/tauri.conf.json`:
 
 ## Core Features
 
-- [ ] Native Tauri file drop events
-- [ ] HTML5 drag and drop API
-- [ ] Large drop zone UI
-- [ ] File type validation
-- [ ] Multiple file drop support
-- [ ] Visual drag-over feedback
-- [ ] Dropped file list display
-- [ ] File metadata display (name, size, type)
-- [ ] Toggle between native and HTML5 modes
-- [ ] Clear dropped files
-- [ ] File preview (images)
-- [ ] Drag and drop reordering (HTML5)
+- [x] Native Tauri file drop events
+- [x] HTML5 drag and drop API
+- [x] Large drop zone UI
+- [ ] File type validation (optional enhancement)
+- [x] Multiple file drop support
+- [x] Visual drag-over feedback
+- [x] Dropped file list display
+- [x] File metadata display (name, size, type)
+- [x] Toggle between native and HTML5 modes
+- [x] Clear dropped files
+- [ ] File preview (images) (optional enhancement)
+- [ ] Drag and drop reordering (HTML5) (optional enhancement)
 
 ## Frontend Implementation
 
