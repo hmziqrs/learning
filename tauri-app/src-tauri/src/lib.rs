@@ -336,6 +336,242 @@ fn get_platform_name() -> String {
     return "unknown".to_string();
 }
 
+// Contacts Module Structs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PhoneNumber {
+    r#type: String,
+    number: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Email {
+    r#type: String,
+    address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Contact {
+    id: String,
+    name: String,
+    #[serde(rename = "phoneNumbers")]
+    phone_numbers: Vec<PhoneNumber>,
+    emails: Vec<Email>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    photo_uri: Option<String>,
+}
+
+// Contacts Module Commands
+// These are mock implementations for development
+// In production, these would integrate with platform-specific contact APIs:
+// - iOS/macOS: Contacts framework (CNContactStore)
+// - Android: ContactsContract API
+
+#[tauri::command]
+async fn check_contacts_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // On mobile/macOS, this would call the platform plugin to check permission
+        // For now, return false to trigger permission request flow
+        // TODO: Implement actual permission check via platform APIs
+        Ok(false)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn request_contacts_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // On mobile/macOS, this would call the platform plugin to request permission
+        // Simulate permission request delay
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // TODO: Implement actual permission request via platform APIs
+        // For now, return true to simulate granted permission
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn get_contacts() -> Result<Vec<Contact>, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // Simulate loading delay
+        tokio::time::sleep(Duration::from_millis(800)).await;
+
+        // TODO: Implement actual contact fetching via platform APIs
+        // iOS/macOS: Use Contacts framework (CNContactStore)
+        // Android: Use ContactsContract
+        // For now, return mock contacts for testing UI
+        Ok(generate_mock_contacts())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        Err("Contacts API is only available on Android, iOS, and macOS".to_string())
+    }
+}
+
+fn generate_mock_contacts() -> Vec<Contact> {
+    vec![
+        Contact {
+            id: "1".to_string(),
+            name: "John Smith".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 123-4567".to_string(),
+                },
+                PhoneNumber {
+                    r#type: "work".to_string(),
+                    number: "+1 (555) 987-6543".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "john.smith@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "2".to_string(),
+            name: "Sarah Johnson".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 234-5678".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "work".to_string(),
+                    address: "sarah.j@company.com".to_string(),
+                },
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "sarah.johnson@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "3".to_string(),
+            name: "Michael Chen".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 345-6789".to_string(),
+                },
+            ],
+            emails: vec![],
+            photo_uri: None,
+        },
+        Contact {
+            id: "4".to_string(),
+            name: "Emily Davis".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "home".to_string(),
+                    number: "+1 (555) 456-7890".to_string(),
+                },
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 567-8901".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "emily.davis@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "5".to_string(),
+            name: "David Martinez".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 678-9012".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "work".to_string(),
+                    address: "d.martinez@company.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "6".to_string(),
+            name: "Lisa Anderson".to_string(),
+            phone_numbers: vec![],
+            emails: vec![
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "lisa.anderson@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "7".to_string(),
+            name: "Robert Taylor".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 789-0123".to_string(),
+                },
+                PhoneNumber {
+                    r#type: "work".to_string(),
+                    number: "+1 (555) 890-1234".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "work".to_string(),
+                    address: "robert.taylor@company.com".to_string(),
+                },
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "rob.taylor@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+        Contact {
+            id: "8".to_string(),
+            name: "Jennifer Wilson".to_string(),
+            phone_numbers: vec![
+                PhoneNumber {
+                    r#type: "mobile".to_string(),
+                    number: "+1 (555) 901-2345".to_string(),
+                },
+            ],
+            emails: vec![
+                Email {
+                    r#type: "personal".to_string(),
+                    address: "jennifer.wilson@email.com".to_string(),
+                },
+            ],
+            photo_uri: None,
+        },
+    ]
+}
+
 // Network & Realtime Module
 // HTTP Client with connection pooling for better performance
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
@@ -500,7 +736,10 @@ pub fn run() {
             get_iap_platform,
             http_get,
             http_post,
-            upload_file
+            upload_file,
+            check_contacts_permission,
+            request_contacts_permission,
+            get_contacts
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
