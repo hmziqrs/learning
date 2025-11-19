@@ -219,6 +219,15 @@
     "geolocation:allow-request-permissions",
     "geolocation:allow-get-current-position",
     "geolocation:allow-watch-position",
-    "geolocation:allow-clear-watch"
+    "geolocation:allow-clear-watch",
+    "core:app:allow-app-show",
+    "core:app:allow-app-hide",
+    "biometry:default",
+    "biometry:allow-status",
+    "biometry:allow-authenticate",
+    "biometry:allow-set-data",
+    "biometry:allow-get-data",
+    "biometry:allow-has-data",
+    "biometry:allow-remove-data"
   ]
 }

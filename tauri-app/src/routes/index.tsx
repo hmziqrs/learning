@@ -21,6 +21,8 @@ import {
   Clipboard,
   Timer,
   Map,
+  Server,
+  Shield,
   Info,
 } from 'lucide-react';
 
@@ -175,6 +177,20 @@ const modules = [
     icon: Timer,
     path: '/background-tasks',
     color: 'text-sky-500',
+  },
+  {
+    name: 'Local Web Server',
+    description: 'Start and manage local HTTP servers for serving static files and testing',
+    icon: Server,
+    path: '/local-web-server',
+    color: 'text-orange-600',
+  },
+  {
+    name: 'Security & Biometrics',
+    description: 'Biometric authentication and secure cryptographic operations',
+    icon: Shield,
+    path: '/security-biometrics',
+    color: 'text-red-500',
   },
   {
     name: 'System Info & Device Profiling',
