@@ -19,6 +19,7 @@ import {
   Monitor,
   Clipboard,
   Timer,
+  Map,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -123,6 +124,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'Maps & Navigation',
+    description: 'Interactive maps, routing, turn-by-turn navigation, and geocoding services',
+    icon: Map,
+    path: '/maps-navigation',
+    color: 'text-blue-600',
   },
   {
     name: 'Haptics / Vibrations',
