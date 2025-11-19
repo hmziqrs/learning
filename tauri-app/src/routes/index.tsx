@@ -15,6 +15,8 @@ import {
   Camera,
   Activity,
   Mic,
+  Monitor,
+  Clipboard,
   Timer,
 } from 'lucide-react';
 
@@ -129,11 +131,25 @@ const modules = [
     color: 'text-fuchsia-500',
   },
   {
+    name: 'App Lifecycle & OS Integration',
+    description: 'Monitor window events, manage app state, and integrate with system dialogs',
+    icon: Monitor,
+    path: '/app-lifecycle',
+    color: 'text-lime-500',
+  },
+  {
+    name: 'System Services',
+    description: 'Access clipboard, battery info, and system audio devices',
+    icon: Clipboard,
+    path: '/system-services',
+    color: 'text-slate-500',
+  },
+  {
     name: 'Background Tasks',
     description: 'Schedule and manage background tasks with execution monitoring',
     icon: Timer,
     path: '/background-tasks',
-    color: 'text-lime-500',
+    color: 'text-sky-500',
   },
 ]
 
