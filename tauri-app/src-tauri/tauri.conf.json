@@ -18,12 +18,19 @@
         "dragDropEnabled": true
       }
     ],
+    "withGlobalTauri": true,
     "security": {
       "csp": null,
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]
       }
+    }
+  },
+  "webview": {
+    "permissions": {
+      "microphone": true,
+      "camera": true
     }
   },
   "bundle": {
@@ -35,7 +42,23 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs microphone access for speech recognition and voice commands.",
+        "NSCameraUsageDescription": "This app needs camera access for taking photos and recording videos.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access for GPS and location-based features."
+      },
+      "exceptionDomain": null,
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.13"
+    },
+    "iOS": {
+      "developmentTeam": null
+    }
   },
   "plugins": {
     "deep-link": {
