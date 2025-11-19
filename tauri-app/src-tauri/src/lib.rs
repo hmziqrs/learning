@@ -1228,6 +1228,185 @@ fn get_app_uptime() -> u64 {
     now - *APP_START_TIME
 }
 
+// Extended System Info & Device Profiling
+#[derive(Debug, Serialize)]
+struct CPUInfo {
+    name: String,
+    vendor: String,
+    brand: String,
+    physical_cores: usize,
+    logical_cores: usize,
+    frequency: u64, // MHz
+}
+
+#[derive(Debug, Serialize)]
+struct StorageDevice {
+    name: String,
+    mount_point: String,
+    total_space: u64,
+    available_space: u64,
+    used_space: u64,
+    file_system: String,
+    is_removable: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DeviceProfile {
+    hostname: String,
+    username: String,
+    device_name: String,
+    os_name: String,
+    os_version: String,
+    architecture: String,
+    cpu: CPUInfo,
+    total_memory: u64,
+    storage_devices: Vec<StorageDevice>,
+    kernel_version: String,
+}
+
+#[tauri::command]
+fn get_cpu_info() -> Result<CPUInfo, String> {
+    let mut sys = System::new_all();
+    sys.refresh_cpu_all();
+
+    let cpus = sys.cpus();
+    let physical_cores = sys.physical_core_count().unwrap_or(0);
+    let logical_cores = cpus.len();
+
+    let cpu_name = if !cpus.is_empty() {
+        cpus[0].brand().to_string()
+    } else {
+        "Unknown CPU".to_string()
+    };
+
+    let cpu_vendor = if !cpus.is_empty() {
+        cpus[0].vendor_id().to_string()
+    } else {
+        "Unknown Vendor".to_string()
+    };
+
+    let frequency = if !cpus.is_empty() {
+        cpus[0].frequency()
+    } else {
+        0
+    };
+
+    Ok(CPUInfo {
+        name: cpu_name.clone(),
+        vendor: cpu_vendor,
+        brand: cpu_name,
+        physical_cores,
+        logical_cores,
+        frequency,
+    })
+}
+
+#[tauri::command]
+fn get_storage_devices() -> Result<Vec<StorageDevice>, String> {
+    let disks = Disks::new_with_refreshed_list();
+    let mut devices = Vec::new();
+
+    for disk in &disks {
+        let total_space = disk.total_space();
+        let available_space = disk.available_space();
+        let used_space = total_space - available_space;
+
+        devices.push(StorageDevice {
+            name: disk.name().to_string_lossy().to_string(),
+            mount_point: disk.mount_point().to_string_lossy().to_string(),
+            total_space,
+            available_space,
+            used_space,
+            file_system: disk.file_system().to_string_lossy().to_string(),
+            is_removable: disk.is_removable(),
+        });
+    }
+
+    Ok(devices)
+}
+
+#[tauri::command]
+fn get_device_profile() -> Result<DeviceProfile, String> {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Get CPU info
+    let cpus = sys.cpus();
+    let physical_cores = sys.physical_core_count().unwrap_or(0);
+    let logical_cores = cpus.len();
+
+    let cpu_name = if !cpus.is_empty() {
+        cpus[0].brand().to_string()
+    } else {
+        "Unknown CPU".to_string()
+    };
+
+    let cpu_vendor = if !cpus.is_empty() {
+        cpus[0].vendor_id().to_string()
+    } else {
+        "Unknown Vendor".to_string()
+    };
+
+    let frequency = if !cpus.is_empty() {
+        cpus[0].frequency()
+    } else {
+        0
+    };
+
+    let cpu = CPUInfo {
+        name: cpu_name.clone(),
+        vendor: cpu_vendor,
+        brand: cpu_name,
+        physical_cores,
+        logical_cores,
+        frequency,
+    };
+
+    // Get storage devices
+    let disks = Disks::new_with_refreshed_list();
+    let mut storage_devices = Vec::new();
+
+    for disk in &disks {
+        let total_space = disk.total_space();
+        let available_space = disk.available_space();
+        let used_space = total_space - available_space;
+
+        storage_devices.push(StorageDevice {
+            name: disk.name().to_string_lossy().to_string(),
+            mount_point: disk.mount_point().to_string_lossy().to_string(),
+            total_space,
+            available_space,
+            used_space,
+            file_system: disk.file_system().to_string_lossy().to_string(),
+            is_removable: disk.is_removable(),
+        });
+    }
+
+    // Get system info
+    let hostname = System::host_name().unwrap_or_else(|| "Unknown".to_string());
+    let os_name = System::name().unwrap_or_else(|| std::env::consts::OS.to_string());
+    let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
+    let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
+    let total_memory = sys.total_memory();
+
+    // Get username and device name using whoami
+    let username = whoami::username();
+    let device_name = whoami::devicename();
+
+    Ok(DeviceProfile {
+        hostname,
+        username,
+        device_name,
+        os_name,
+        os_version,
+        architecture: std::env::consts::ARCH.to_string(),
+        cpu,
+        total_memory,
+        storage_devices,
+        kernel_version,
+    })
+}
+
 // System Services Module
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -2800,7 +2979,10 @@ pub fn run() {
             list_background_tasks,
             cancel_background_task,
             delete_background_task,
-            execute_demo_task
+            execute_demo_task,
+            get_cpu_info,
+            get_storage_devices,
+            get_device_profile
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

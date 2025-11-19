@@ -21,6 +21,7 @@ import {
   Clipboard,
   Timer,
   Map,
+  Info,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -174,6 +175,13 @@ const modules = [
     icon: Timer,
     path: '/background-tasks',
     color: 'text-sky-500',
+  },
+  {
+    name: 'System Info & Device Profiling',
+    description: 'Comprehensive system information, hardware details, and device metrics profiling',
+    icon: Info,
+    path: '/system-info',
+    color: 'text-gray-500',
   },
 ]
 
