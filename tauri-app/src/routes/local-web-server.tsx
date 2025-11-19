@@ -120,6 +120,24 @@ function LocalWebServerModule() {
     }
   }
 
+  const handleCreateTestDirectory = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    const testDirPath = './test-server'
+    addOutput(`Creating test directory at ${testDirPath}...`)
+
+    try {
+      const result = await invoke<string>('create_test_directory', { path: testDirPath })
+      setStaticDir(testDirPath)
+      addOutput(result)
+      addOutput('Test directory includes index.html and style.css')
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Load existing servers on mount
   useEffect(() => {
     const loadServers = async () => {
@@ -214,6 +232,21 @@ function LocalWebServerModule() {
                   Directory to serve files from
                 </p>
               </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-sm text-blue-900 dark:text-blue-100 mb-2">
+                <strong>Need a test directory?</strong> Create one with sample files to get started quickly.
+              </p>
+              <Button
+                onClick={handleCreateTestDirectory}
+                disabled={isLoading}
+                variant="outline"
+                size="sm"
+                className="border-blue-300 dark:border-blue-700"
+              >
+                Create Test Directory (./test-server)
+              </Button>
             </div>
 
             <div className="space-y-3">
