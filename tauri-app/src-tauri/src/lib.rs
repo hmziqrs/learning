@@ -895,7 +895,6 @@ fn get_system_info() -> SystemInfo {
 
 // System Monitoring
 use sysinfo::{System, Disks, Networks};
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static APP_START_TIME: Lazy<u64> = Lazy::new(|| {
