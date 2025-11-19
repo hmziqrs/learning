@@ -991,10 +991,18 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
             security_type: None,
         };
 
-        // Get SSID
-        if let Ok(output) = Command::new("iwgetid").args(["-r"]).output() {
-            let ssid = String::from_utf8_lossy(&output.stdout);
-            wifi_info.ssid = ssid.trim().to_string();
+        // Get SSID - check if command exists first
+        match Command::new("iwgetid").args(["-r"]).output() {
+            Ok(output) => {
+                let ssid = String::from_utf8_lossy(&output.stdout);
+                wifi_info.ssid = ssid.trim().to_string();
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    return Err("WiFi tools not found. Please install wireless-tools: sudo apt-get install wireless-tools (Ubuntu/Debian) or sudo dnf install wireless-tools (Fedora)".to_string());
+                }
+                return Err(format!("Failed to get WiFi info: {}", e));
+            }
         }
 
         // Get more detailed info with iwconfig
@@ -1178,7 +1186,13 @@ async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
         let output = Command::new("nmcli")
             .args(["-t", "-f", "SSID,BSSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
             .output()
-            .map_err(|e| format!("Failed to scan WiFi networks: {}", e))?;
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "NetworkManager not found. Please install NetworkManager: sudo apt-get install network-manager (Ubuntu/Debian) or sudo dnf install NetworkManager (Fedora)".to_string()
+                } else {
+                    format!("Failed to scan WiFi networks: {}", e)
+                }
+            })?;
 
         let info = String::from_utf8_lossy(&output.stdout);
         let mut networks = Vec::new();

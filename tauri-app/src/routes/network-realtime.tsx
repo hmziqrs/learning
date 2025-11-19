@@ -508,8 +508,8 @@ function NetworkRealtimeModule() {
 
       const response = await invoke<HttpResponse>('upload_file_with_progress', {
         url: 'https://httpbin.org/post',
-        file_path: filePath,
-        upload_id: newUploadId,
+        filePath: filePath,
+        uploadId: newUploadId,
       })
 
       unlisten()
@@ -529,7 +529,7 @@ function NetworkRealtimeModule() {
     if (!uploadId) return
 
     try {
-      await invoke('cancel_upload', { upload_id: uploadId })
+      await invoke('cancel_upload', { uploadId: uploadId })
       addOutput('✓ Upload cancelled')
     } catch (error) {
       addOutput(`✗ Failed to cancel upload: ${error}`, false)
