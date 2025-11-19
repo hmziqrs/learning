@@ -13,6 +13,7 @@ import {
   Images,
   Users,
   Camera,
+  Activity,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -110,6 +111,13 @@ const modules = [
     icon: Camera,
     path: '/camera',
     color: 'text-red-500',
+  },
+  {
+    name: 'Sensors & Hardware',
+    description: 'Access device sensors for motion tracking, compass, and GPS location',
+    icon: Activity,
+    path: '/sensors',
+    color: 'text-amber-500',
   },
 ]
 
