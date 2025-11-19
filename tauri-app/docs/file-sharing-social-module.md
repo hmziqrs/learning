@@ -959,24 +959,25 @@ const handleShare = async () => {
 | Feature | Windows | macOS | Linux | iOS | Android |
 |---------|---------|-------|-------|-----|---------|
 | **Basic Sharing** |
-| Share Text | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Share URL | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Share Files | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Native Share Sheet | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Share Text | 🔶* | ✅ | 🔶* | ✅ | ✅ |
+| Share URL | 🔶* | ✅ | 🔶* | ✅ | ✅ |
+| Share Files | 🔶* | 🔶** | 🔶* | ✅ | ✅ |
+| Native Share Sheet | ❌ | ✅ | ❌ | ✅ | ✅ |
 | **Advanced Features** |
-| Share to Specific App | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Share Multiple Files | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Custom MIME Types | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Share Result Callback | ❌ | ❌ | ❌ | ⚠️** | ⚠️** |
+| Share to Specific App | ❌ | ✅ | ❌ | ✅ | ✅ |
+| Share Multiple Files | ❌ | 🔶** | ❌ | ✅ | ✅ |
+| Custom MIME Types | ❌ | 🔶** | ❌ | ✅ | ✅ |
+| Share Result Callback | ❌ | ⚠️*** | ❌ | ⚠️*** | ⚠️*** |
 | **Fallback Options** |
 | Clipboard Copy | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Email Intent | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Web Share API | ✅*** | ✅*** | ✅*** | ✅*** | ✅*** |
+| Web Share API | ✅**** | ✅**** | ✅**** | ✅**** | ✅**** |
 
 **Notes:**
-- 🔶* Desktop: Use clipboard or system-specific sharing
-- ⚠️** Limited callback information on share completion
-- ✅*** Web Share API requires HTTPS and user gesture
+- 🔶* Windows/Linux: Use Web Share API (browser-dependent) or clipboard fallback
+- 🔶** macOS: Native share for text/URLs via NSSharingService; file sharing requires additional implementation
+- ⚠️*** Limited callback information on share completion
+- ✅**** Web Share API requires HTTPS and user gesture
 
 ## Implementation Status
 
@@ -987,9 +988,10 @@ const handleShare = async () => {
 - [x] Desktop clipboard implementation
 - [x] Error handling with Result types
 - [x] **tauri-plugin-share integration** (v2.0.5)
-- [x] **Android share intent implementation** (via tauri-plugin-share)
+- [x] **Android share intent implementation** (Intent.ACTION_SEND via tauri-plugin-share)
 - [x] **iOS UIActivityViewController implementation** (via tauri-plugin-share)
-- [x] **Native mobile share commands** (share_text, share_files)
+- [x] **macOS NSSharingService implementation** (via tauri-plugin-share)
+- [x] **Native share commands** (share_text, share_files for Android/iOS/macOS)
 - [ ] File URI generation (requires additional native implementation)
 - [ ] MIME type detection (requires additional native implementation)
 
@@ -1010,9 +1012,9 @@ const handleShare = async () => {
 - [x] Comprehensive usage documentation
 
 ### Features Implemented
-- [x] **Native mobile text sharing** (Android Intent.ACTION_SEND, iOS UIActivityViewController)
-- [x] Basic text sharing (Native → Web Share API → Clipboard)
-- [x] URL sharing (Native → Web Share API → Web intents)
+- [x] **Native text sharing** (Android Intent.ACTION_SEND, iOS UIActivityViewController, macOS NSSharingService)
+- [x] Basic text sharing (Native [Android/iOS/macOS] → Web Share API → Clipboard)
+- [x] URL sharing (Native [Android/iOS/macOS] → Web Share API → Web intents)
 - [x] Single file sharing (Web Share API on supported browsers)
 - [x] Multiple file sharing (Web Share API on supported browsers)
 - [x] Social media quick share (web intents)
@@ -1045,5 +1047,5 @@ const handleShare = async () => {
 ---
 
 Last Updated: November 2025
-Module Version: 1.1.0
-Status: ✅ Production Ready (Desktop + Mobile Native Sharing)
+Module Version: 1.2.0
+Status: ✅ Production Ready (Android/iOS/macOS Native Sharing + Windows/Linux Web/Clipboard)
