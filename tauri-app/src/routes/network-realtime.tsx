@@ -18,9 +18,18 @@ interface HttpResponse {
   body: string
 }
 
+interface NetworkStatus {
+  online: boolean
+  connectionType: string
+}
+
 function NetworkRealtimeModule() {
   const [output, setOutput] = useState<string[]>([])
   const [loading, setLoading] = useState<string | null>(null)
+
+  // Network Status State
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null)
+  const [wifiSsid, setWifiSsid] = useState<string>('')
 
   // HTTP State
   const [httpUrl, setHttpUrl] = useState('https://jsonplaceholder.typicode.com/posts/1')
@@ -165,6 +174,42 @@ function NetworkRealtimeModule() {
     }
   }, [ws])
 
+  // Network Status Check
+  const handleCheckNetworkStatus = async () => {
+    setLoading('network-status')
+    addOutput('Checking network status...')
+
+    try {
+      const status = await invoke<NetworkStatus>('check_network_status')
+      setNetworkStatus(status)
+      addOutput(`✓ Network ${status.online ? 'online' : 'offline'}`)
+      if (status.online) {
+        addOutput(`Connection type: ${status.connectionType}`)
+      }
+    } catch (error) {
+      addOutput(`✗ Failed to check network status: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  // Get WiFi Info
+  const handleGetWifiInfo = async () => {
+    setLoading('wifi-info')
+    addOutput('Getting WiFi information...')
+
+    try {
+      const ssid = await invoke<string>('get_wifi_info')
+      setWifiSsid(ssid)
+      addOutput(`✓ Connected to: ${ssid}`)
+    } catch (error) {
+      setWifiSsid('')
+      addOutput(`✗ ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   // File Upload
   const handleFileUpload = async () => {
     setLoading('upload')
@@ -227,19 +272,21 @@ function NetworkRealtimeModule() {
             Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
-            <p className="font-medium">All features are now production-ready:</p>
+            <p className="font-medium">Core features are production-ready:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li><strong className="text-green-600">✓ HTTP GET/POST</strong> - Fully functional with reqwest</li>
               <li><strong className="text-green-600">✓ File Upload</strong> - Multipart form upload working</li>
               <li><strong className="text-green-600">✓ WebSocket</strong> - Real-time bidirectional communication</li>
+              <li><strong className="text-green-600">✓ Network Status</strong> - Check online/offline connectivity</li>
+              <li><strong className="text-green-600">✓ WiFi Information</strong> - Get SSID on desktop platforms</li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># WebSocket plugin installed and configured</div>
-              <div># Try connecting to: wss://echo.websocket.org</div>
-              <div className="mt-1"># Test real-time messaging with the echo server</div>
+              <div># All core networking features implemented</div>
+              <div># WebSocket: wss://echo.websocket.org</div>
+              <div className="mt-1"># Network monitoring and WiFi info working on desktop</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              All networking features are ready for production use. WebSocket provides real-time communication.
+              5 core networking features ready for production. Mobile-specific features (cellular info) require custom plugins.
             </p>
           </div>
         </section>
@@ -372,6 +419,76 @@ function NetworkRealtimeModule() {
                 )}
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Network Status Section */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Network Status
+          </h2>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Check your internet connectivity and connection status
+            </p>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <Button
+                onClick={handleCheckNetworkStatus}
+                disabled={loading === 'network-status'}
+                variant="outline"
+              >
+                <Activity className={`w-4 h-4 mr-2 ${loading === 'network-status' ? 'animate-pulse' : ''}`} />
+                {loading === 'network-status' ? 'Checking...' : 'Check Network Status'}
+              </Button>
+
+              {networkStatus && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+                  networkStatus.online
+                    ? 'bg-green-500/10 text-green-500'
+                    : 'bg-red-500/10 text-red-500'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    networkStatus.online ? 'bg-green-500' : 'bg-red-500'
+                  }`}></div>
+                  {networkStatus.online ? 'Online' : 'Offline'}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* WiFi Information Section */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Radio className="w-5 h-5" />
+            WiFi Information
+          </h2>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Get information about your current WiFi connection (Desktop only)
+            </p>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <Button
+                onClick={handleGetWifiInfo}
+                disabled={loading === 'wifi-info'}
+                variant="outline"
+              >
+                <Radio className={`w-4 h-4 mr-2 ${loading === 'wifi-info' ? 'animate-pulse' : ''}`} />
+                {loading === 'wifi-info' ? 'Getting Info...' : 'Get WiFi Info'}
+              </Button>
+
+              {wifiSsid && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 text-blue-500 rounded-md text-sm">
+                  <Radio className="w-4 h-4" />
+                  <span className="font-mono">{wifiSsid}</span>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

@@ -711,6 +711,105 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// Network Status & WiFi Module
+#[derive(Debug, Serialize, Deserialize)]
+struct NetworkStatus {
+    online: bool,
+    #[serde(rename = "connectionType")]
+    connection_type: String,
+}
+
+#[tauri::command]
+async fn check_network_status() -> Result<NetworkStatus, String> {
+    use std::net::TcpStream;
+
+    // Try to connect to Google DNS to check internet connectivity
+    let online = match TcpStream::connect_timeout(
+        &"8.8.8.8:53".parse().unwrap(),
+        Duration::from_secs(3)
+    ) {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
+    Ok(NetworkStatus {
+        online,
+        connection_type: if online { "unknown".to_string() } else { "none".to_string() },
+    })
+}
+
+#[tauri::command]
+async fn get_wifi_info() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let output = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
+            .args(["-I"])
+            .output()
+            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+
+        // Parse SSID from output
+        for line in info.lines() {
+            if line.contains("SSID:") && !line.contains("BSSID") {
+                let ssid = line.split(':').nth(1).unwrap_or("").trim();
+                if !ssid.is_empty() {
+                    return Ok(ssid.to_string());
+                }
+            }
+        }
+
+        Err("Not connected to WiFi".to_string())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        let output = Command::new("iwgetid")
+            .args(["-r"])
+            .output()
+            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
+
+        let ssid = String::from_utf8_lossy(&output.stdout);
+        let trimmed = ssid.trim();
+
+        if trimmed.is_empty() {
+            Err("Not connected to WiFi".to_string())
+        } else {
+            Ok(trimmed.to_string())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        let output = Command::new("netsh")
+            .args(["wlan", "show", "interfaces"])
+            .output()
+            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+
+        // Parse SSID from output
+        for line in info.lines() {
+            if line.trim().starts_with("SSID") && !line.contains("BSSID") {
+                let ssid = line.split(':').nth(1).unwrap_or("").trim();
+                if !ssid.is_empty() {
+                    return Ok(ssid.to_string());
+                }
+            }
+        }
+
+        Err("Not connected to WiFi".to_string())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err("WiFi info not supported on this platform".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -740,7 +839,9 @@ pub fn run() {
             upload_file,
             check_contacts_permission,
             request_contacts_permission,
-            get_contacts
+            get_contacts,
+            check_network_status,
+            get_wifi_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
