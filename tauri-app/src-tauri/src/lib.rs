@@ -1680,7 +1680,7 @@ async fn run_speed_test() -> Result<SpeedTestResult, String> {
 }
 
 // Upload Progress Tracking
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct UploadProgress {
@@ -1998,6 +1998,10 @@ async fn sse_connect(url: String, window: tauri::Window) -> Result<(), String> {
                 let _ = window.emit("sse-error", format!("Connection failed: {}", e));
             }
         }
+    });
+
+    Ok(())
+}
 
 // Background Tasks Module - State Management
 struct AppState {
