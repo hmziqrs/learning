@@ -214,6 +214,13 @@
     "clipboard-manager:allow-clear",
     "websocket:default",
     "websocket:allow-connect",
-    "websocket:allow-send"
+    "websocket:allow-send",
+    "biometry:default",
+    "biometry:allow-status",
+    "biometry:allow-authenticate",
+    "biometry:allow-set-data",
+    "biometry:allow-get-data",
+    "biometry:allow-has-data",
+    "biometry:allow-remove-data"
   ]
 }
