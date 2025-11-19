@@ -729,6 +729,137 @@ async fn request_camera_permission() -> Result<bool, String> {
     }
 }
 
+// Haptics Module Commands
+// Platform-specific haptic feedback
+#[tauri::command]
+async fn haptic_impact(style: String) -> Result<(), String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // Mobile implementation will be handled by platform plugins
+        // Android: Uses Vibrator API with VibrationEffect
+        // iOS: Uses UIFeedbackGenerator
+        match style.as_str() {
+            "light" | "medium" | "heavy" => {
+                // TODO: Call platform-specific implementation
+                Err(format!("Haptic impact '{}' requires custom mobile plugin. See docs/haptics-module.md", style))
+            }
+            _ => Err("Invalid impact style. Must be 'light', 'medium', or 'heavy'".to_string()),
+        }
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Haptic feedback is only available on mobile platforms (iOS, Android)".to_string())
+    }
+}
+
+#[tauri::command]
+async fn haptic_notification(notification_type: String) -> Result<(), String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // Mobile implementation will be handled by platform plugins
+        match notification_type.as_str() {
+            "success" | "warning" | "error" => {
+                // TODO: Call platform-specific implementation
+                Err(format!("Haptic notification '{}' requires custom mobile plugin. See docs/haptics-module.md", notification_type))
+            }
+            _ => Err("Invalid notification type. Must be 'success', 'warning', or 'error'".to_string()),
+        }
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Haptic feedback is only available on mobile platforms (iOS, Android)".to_string())
+    }
+}
+
+#[tauri::command]
+async fn vibrate(duration: u64) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        // Android can support custom vibration durations
+        // TODO: Call platform-specific implementation
+        Err(format!("Vibration ({}ms) requires custom mobile plugin. See docs/haptics-module.md", duration))
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS doesn't support custom duration vibrations via UIFeedbackGenerator
+        // Use Core Haptics for more control, or fall back to predefined patterns
+        Err("Custom duration vibration not directly supported on iOS. Use haptic_impact or haptic_notification instead.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn vibrate_pattern(pattern: Vec<u64>) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        if pattern.is_empty() {
+            return Err("Pattern cannot be empty".to_string());
+        }
+
+        // Android supports pattern vibrations
+        // TODO: Call platform-specific implementation
+        Err(format!("Pattern vibration {:?} requires custom mobile plugin. See docs/haptics-module.md", pattern))
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS doesn't support pattern vibrations via UIFeedbackGenerator
+        // Would need Core Haptics framework for custom patterns
+        Err("Pattern vibration not supported on iOS via UIFeedbackGenerator. Use Core Haptics framework for custom patterns.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn cancel_vibration() -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        // Android supports canceling ongoing vibrations
+        // TODO: Call platform-specific implementation
+        Err("Cancel vibration requires custom mobile plugin. See docs/haptics-module.md".to_string())
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS haptic feedback is instantaneous, no need to cancel
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn has_vibrator() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // On mobile platforms, assume vibrator is available
+        // TODO: Implement actual device capability check
+        // Android: Check if Vibrator service is available
+        // iOS: Check for Taptic Engine (iPhone 6s+)
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Desktop platforms don't have vibration hardware
+        Ok(false)
+    }
+}
+
 // Network & Realtime Module
 // HTTP Client with connection pooling for better performance
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
@@ -906,7 +1037,13 @@ pub fn run() {
             set_zoom,
             get_cameras,
             check_camera_permission,
-            request_camera_permission
+            request_camera_permission,
+            haptic_impact,
+            haptic_notification,
+            vibrate,
+            vibrate_pattern,
+            cancel_vibration,
+            has_vibrator
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

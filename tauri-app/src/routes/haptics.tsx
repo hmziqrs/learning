@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { invoke } from '@tauri-apps/api/core'
 import { Smartphone } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ type HapticNotificationType = 'success' | 'warning' | 'error'
 function HapticsModule() {
   const [output, setOutput] = useState<string[]>([])
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -21,62 +23,87 @@ function HapticsModule() {
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
   }
 
-  // Simulate haptic impact (desktop fallback)
-  const handleImpact = (style: HapticImpactStyle) => {
+  // Trigger haptic impact
+  const handleImpact = async (style: HapticImpactStyle) => {
+    if (isLoading) return
+    setIsLoading(true)
     addOutput(`Triggering ${style} impact haptic feedback...`)
 
-    // Desktop simulation - would call Tauri command on mobile
-    addOutput(`${style.charAt(0).toUpperCase() + style.slice(1)} haptic impact simulated (desktop mode)`, false)
-
-    // Real implementation would be:
-    // await invoke('haptic_impact', { style })
+    try {
+      await invoke('haptic_impact', { style })
+      addOutput(`${style.charAt(0).toUpperCase() + style.slice(1)} haptic impact triggered successfully`)
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Simulate notification haptic (desktop fallback)
-  const handleNotification = (type: HapticNotificationType) => {
+  // Trigger notification haptic
+  const handleNotification = async (type: HapticNotificationType) => {
+    if (isLoading) return
+    setIsLoading(true)
     addOutput(`Triggering ${type} notification haptic...`)
 
-    // Desktop simulation - would call Tauri command on mobile
-    addOutput(`${type.charAt(0).toUpperCase() + type.slice(1)} haptic notification simulated (desktop mode)`, false)
-
-    // Real implementation would be:
-    // await invoke('haptic_notification', { notificationType: type })
+    try {
+      await invoke('haptic_notification', { notificationType: type })
+      addOutput(`${type.charAt(0).toUpperCase() + type.slice(1)} haptic notification triggered successfully`)
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Simulate custom vibration
-  const handleVibrate = (duration: number) => {
+  // Trigger custom vibration
+  const handleVibrate = async (duration: number) => {
+    if (isLoading) return
+    setIsLoading(true)
     addOutput(`Vibrating for ${duration}ms...`)
 
-    // Desktop simulation - would call Tauri command on mobile
-    addOutput(`Vibration simulated (desktop mode)`, false)
-
-    // Real implementation would be:
-    // await invoke('vibrate', { duration })
+    try {
+      await invoke('vibrate', { duration })
+      addOutput(`Vibration triggered successfully`)
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Simulate pattern vibration
-  const handleVibratePattern = () => {
+  // Trigger pattern vibration
+  const handleVibratePattern = async () => {
+    if (isLoading) return
+    setIsLoading(true)
     const pattern = [100, 50, 100, 50, 200]
     addOutput(`Vibrating with pattern: [${pattern.join(', ')}]ms...`)
 
-    // Desktop simulation - would call Tauri command on mobile
-    addOutput(`Pattern vibration simulated (desktop mode)`, false)
-
-    // Real implementation would be:
-    // await invoke('vibrate_pattern', { pattern })
+    try {
+      await invoke('vibrate_pattern', { pattern })
+      addOutput(`Pattern vibration triggered successfully`)
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Check device capability
-  const handleCheckAvailability = () => {
+  const handleCheckAvailability = async () => {
+    if (isLoading) return
+    setIsLoading(true)
     addOutput('Checking vibrator availability...')
 
-    // Desktop always returns false
-    setIsAvailable(false)
-    addOutput('Haptics not available on desktop platform', false)
-
-    // Real implementation would be:
-    // const available = await invoke<boolean>('has_vibrator')
-    // setIsAvailable(available)
+    try {
+      const available = await invoke<boolean>('has_vibrator')
+      setIsAvailable(available)
+      addOutput(available ? 'Haptics available on this device' : 'Haptics not available on this platform', available)
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+      setIsAvailable(false)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -96,27 +123,26 @@ function HapticsModule() {
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-yellow-600">⚠ Planned</strong> - Custom mobile plugin required
+                <strong className="text-green-600">✓ Rust Commands</strong> - Tauri commands registered and functional
               </li>
               <li>
-                <strong className="text-blue-600">ℹ Android</strong> - Vibrator API with VibrationEffect
+                <strong className="text-green-600">✓ Android Plugin</strong> - Vibrator API with VibrationEffect implemented
               </li>
               <li>
-                <strong className="text-blue-600">ℹ iOS</strong> - UIFeedbackGenerator (Impact, Notification, Selection)
+                <strong className="text-yellow-600">⚠ iOS</strong> - UIFeedbackGenerator requires Swift implementation
               </li>
               <li>
                 <strong className="text-red-600">✗ Desktop</strong> - Haptics not available on Windows/macOS/Linux
               </li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Android Implementation:</div>
-              <div>vibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude))</div>
-              <div className="mt-2"># iOS Implementation:</div>
-              <div>let generator = UIImpactFeedbackGenerator(style: .medium)</div>
-              <div>generator.impactOccurred()</div>
+              <div># Android Implementation (Complete):</div>
+              <div>HapticsPlugin.kt with VibrationEffect support</div>
+              <div className="mt-2"># iOS Implementation (TODO):</div>
+              <div>Requires Swift UIFeedbackGenerator integration</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Desktop: Simulated feedback only. Mobile: Full haptic support requires custom plugin development.
+              Android: Fully functional haptic feedback. Desktop: Returns appropriate error messages. iOS: Requires Swift implementation.
             </p>
           </div>
         </section>
@@ -134,8 +160,8 @@ function HapticsModule() {
             </p>
 
             <div className="flex flex-wrap gap-2 items-center">
-              <Button onClick={handleCheckAvailability} variant="outline">
-                Check Availability
+              <Button onClick={handleCheckAvailability} variant="outline" disabled={isLoading}>
+                {isLoading ? 'Checking...' : 'Check Availability'}
               </Button>
 
               {isAvailable !== null && (
@@ -170,6 +196,7 @@ function HapticsModule() {
                   onClick={() => handleImpact('light')}
                   variant="outline"
                   className="w-full"
+                  disabled={isLoading}
                 >
                   Trigger Light
                 </Button>
@@ -184,6 +211,7 @@ function HapticsModule() {
                   onClick={() => handleImpact('medium')}
                   variant="outline"
                   className="w-full"
+                  disabled={isLoading}
                 >
                   Trigger Medium
                 </Button>
@@ -198,6 +226,7 @@ function HapticsModule() {
                   onClick={() => handleImpact('heavy')}
                   variant="outline"
                   className="w-full"
+                  disabled={isLoading}
                 >
                   Trigger Heavy
                 </Button>
@@ -225,6 +254,7 @@ function HapticsModule() {
                   onClick={() => handleNotification('success')}
                   variant="outline"
                   className="w-full border-green-500/50"
+                  disabled={isLoading}
                 >
                   Trigger Success
                 </Button>
@@ -239,6 +269,7 @@ function HapticsModule() {
                   onClick={() => handleNotification('warning')}
                   variant="outline"
                   className="w-full border-yellow-500/50"
+                  disabled={isLoading}
                 >
                   Trigger Warning
                 </Button>
@@ -253,6 +284,7 @@ function HapticsModule() {
                   onClick={() => handleNotification('error')}
                   variant="outline"
                   className="w-full border-red-500/50"
+                  disabled={isLoading}
                 >
                   Trigger Error
                 </Button>
@@ -274,16 +306,16 @@ function HapticsModule() {
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm">Duration-based</h3>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => handleVibrate(50)} variant="outline" size="sm">
+                  <Button onClick={() => handleVibrate(50)} variant="outline" size="sm" disabled={isLoading}>
                     50ms
                   </Button>
-                  <Button onClick={() => handleVibrate(100)} variant="outline" size="sm">
+                  <Button onClick={() => handleVibrate(100)} variant="outline" size="sm" disabled={isLoading}>
                     100ms
                   </Button>
-                  <Button onClick={() => handleVibrate(200)} variant="outline" size="sm">
+                  <Button onClick={() => handleVibrate(200)} variant="outline" size="sm" disabled={isLoading}>
                     200ms
                   </Button>
-                  <Button onClick={() => handleVibrate(500)} variant="outline" size="sm">
+                  <Button onClick={() => handleVibrate(500)} variant="outline" size="sm" disabled={isLoading}>
                     500ms
                   </Button>
                 </div>
@@ -291,7 +323,7 @@ function HapticsModule() {
 
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm">Pattern-based</h3>
-                <Button onClick={handleVibratePattern} variant="outline" className="w-full">
+                <Button onClick={handleVibratePattern} variant="outline" className="w-full" disabled={isLoading}>
                   Trigger Pattern [100, 50, 100, 50, 200]
                 </Button>
                 <p className="text-xs text-muted-foreground">
