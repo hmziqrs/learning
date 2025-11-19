@@ -71,51 +71,75 @@ function PrintingPdfModule() {
         creator: 'Tauri PDF Module',
       })
 
-      // Parse HTML content and add to PDF
-      // For better HTML rendering, we'll use html method
+      // Create a clean element for PDF rendering
       const element = document.createElement('div')
       element.innerHTML = pdfContent
-      element.style.width = '180mm'
-      element.style.padding = '10mm'
-      element.style.fontFamily = 'Arial, sans-serif'
 
-      await doc.html(element, {
-        callback: async (doc) => {
-          // Get PDF as blob
-          const pdfBlob = doc.output('blob')
+      // Apply inline styles that work with jsPDF
+      element.style.cssText = `
+        width: 180mm;
+        padding: 10mm;
+        font-family: Arial, sans-serif;
+        background: white;
+        color: black;
+      `
 
-          // Ask user where to save
-          const filePath = await save({
-            defaultPath: `${pdfTitle}.pdf`,
-            filters: [{ name: 'PDF', extensions: ['pdf'] }],
-          })
+      // Append to body temporarily (needed for jsPDF to render)
+      element.style.position = 'absolute'
+      element.style.left = '-9999px'
+      document.body.appendChild(element)
 
-          if (filePath) {
-            // Convert blob to array buffer
-            const arrayBuffer = await pdfBlob.arrayBuffer()
-            const uint8Array = new Uint8Array(arrayBuffer)
+      try {
+        await doc.html(element, {
+          callback: async (doc) => {
+            // Remove temporary element
+            document.body.removeChild(element)
 
-            // Write file using Tauri
-            await writeFile(filePath, uint8Array)
+            // Get PDF as blob
+            const pdfBlob = doc.output('blob')
 
-            addOutput(`PDF generated and saved to: ${filePath}`)
-            setCurrentPdfPath(filePath)
+            // Ask user where to save
+            const filePath = await save({
+              defaultPath: `${pdfTitle}.pdf`,
+              filters: [{ name: 'PDF', extensions: ['pdf'] }],
+            })
 
-            // Create object URL for preview
-            const url = URL.createObjectURL(pdfBlob)
-            setPdfUrl(url)
-            setPageNumber(1)
-          } else {
-            addOutput('PDF generation cancelled', false)
-          }
+            if (filePath) {
+              // Convert blob to array buffer
+              const arrayBuffer = await pdfBlob.arrayBuffer()
+              const uint8Array = new Uint8Array(arrayBuffer)
 
-          setIsLoading(false)
-        },
-        x: 10,
-        y: 10,
-        width: 180,
-        windowWidth: 800,
-      })
+              // Write file using Tauri
+              await writeFile(filePath, uint8Array)
+
+              addOutput(`PDF generated and saved to: ${filePath}`)
+              setCurrentPdfPath(filePath)
+
+              // Create object URL for preview
+              const url = URL.createObjectURL(pdfBlob)
+              setPdfUrl(url)
+              setPageNumber(1)
+            } else {
+              addOutput('PDF generation cancelled', false)
+            }
+
+            setIsLoading(false)
+          },
+          x: 10,
+          y: 10,
+          width: 180,
+          windowWidth: 800,
+          html2canvas: {
+            scale: 0.5,
+          },
+        })
+      } catch (err) {
+        // Make sure to remove element even if error occurs
+        if (document.body.contains(element)) {
+          document.body.removeChild(element)
+        }
+        throw err
+      }
     } catch (error) {
       addOutput(`Failed to generate PDF: ${error}`, false)
       setIsLoading(false)
@@ -341,40 +365,134 @@ function PrintingPdfModule() {
 
   // Preview current content
   const handlePreviewPdf = () => {
-    const previewWindow = window.open('', '_blank')
-    if (previewWindow) {
-      previewWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${pdfTitle} - Preview</title>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 40px 20px;
-                background: #f5f5f5;
-              }
-              .page {
-                background: white;
-                padding: 40px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                min-height: 1000px;
-              }
-              h1 { color: #333; margin-top: 0; }
-              p { line-height: 1.6; color: #666; }
-            </style>
-          </head>
-          <body>
-            <div class="page">
-              ${pdfContent}
-            </div>
-          </body>
-        </html>
-      `)
-      previewWindow.document.close()
-      addOutput('Preview opened in new tab')
+    try {
+      const previewWindow = window.open('', '_blank', 'width=900,height=800')
+      if (previewWindow) {
+        // Escape HTML content to prevent XSS and sanitize
+        const sanitizedContent = pdfContent
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+
+        // Create the preview HTML
+        const previewHtml = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${pdfTitle.replace(/[<>]/g, '')} - Preview</title>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                * {
+                  margin: 0;
+                  padding: 0;
+                  box-sizing: border-box;
+                }
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                  background: #f5f5f5;
+                  padding: 20px;
+                  line-height: 1.6;
+                }
+                .container {
+                  max-width: 800px;
+                  margin: 0 auto;
+                  background: white;
+                  padding: 40px;
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                  border-radius: 8px;
+                  min-height: 1000px;
+                }
+                .title {
+                  font-size: 24px;
+                  font-weight: bold;
+                  color: #333;
+                  margin-bottom: 20px;
+                  padding-bottom: 10px;
+                  border-bottom: 2px solid #eee;
+                }
+                .content {
+                  color: #444;
+                  white-space: pre-wrap;
+                  word-wrap: break-word;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                  color: #333;
+                  margin: 20px 0 10px 0;
+                }
+                h1 { font-size: 2em; }
+                h2 { font-size: 1.5em; }
+                h3 { font-size: 1.3em; }
+                p {
+                  margin: 10px 0;
+                  line-height: 1.8;
+                }
+                ul, ol {
+                  margin: 10px 0;
+                  padding-left: 30px;
+                }
+                li {
+                  margin: 5px 0;
+                }
+                strong, b {
+                  font-weight: bold;
+                  color: #222;
+                }
+                em, i {
+                  font-style: italic;
+                }
+                code {
+                  background: #f4f4f4;
+                  padding: 2px 6px;
+                  border-radius: 3px;
+                  font-family: 'Courier New', monospace;
+                  font-size: 0.9em;
+                }
+                @media print {
+                  body {
+                    background: white;
+                    padding: 0;
+                  }
+                  .container {
+                    box-shadow: none;
+                    padding: 20px;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="title">${pdfTitle.replace(/[<>]/g, '')}</div>
+                <div class="content" id="htmlContent"></div>
+              </div>
+              <script>
+                // Safely render HTML content
+                try {
+                  const content = document.getElementById('htmlContent');
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(\`${pdfContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, 'text/html');
+
+                  // Copy nodes from parsed document
+                  while (doc.body.firstChild) {
+                    content.appendChild(doc.body.firstChild);
+                  }
+                } catch (error) {
+                  console.error('Error rendering content:', error);
+                  document.getElementById('htmlContent').innerHTML = '<p style="color: red;">Error rendering HTML content. Please check your HTML syntax.</p>';
+                }
+              </script>
+            </body>
+          </html>
+        `
+
+        previewWindow.document.write(previewHtml)
+        previewWindow.document.close()
+        addOutput('Preview opened in new window')
+      } else {
+        addOutput('Failed to open preview - popup may be blocked', false)
+      }
+    } catch (error) {
+      addOutput(`Preview failed: ${error}`, false)
     }
   }
 
