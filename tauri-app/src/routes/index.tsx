@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Monitor,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'App Lifecycle & OS Integration',
+    description: 'Monitor window events, manage app state, and integrate with system dialogs',
+    icon: Monitor,
+    path: '/app-lifecycle',
+    color: 'text-lime-500',
   },
 ]
 

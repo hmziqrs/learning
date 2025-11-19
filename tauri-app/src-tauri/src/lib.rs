@@ -868,6 +868,27 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// App Lifecycle & OS Integration Module
+#[derive(Debug, Serialize)]
+struct SystemInfo {
+    os: String,
+    version: String,
+    arch: String,
+    app_version: String,
+    process_id: u32,
+}
+
+#[tauri::command]
+fn get_system_info() -> SystemInfo {
+    SystemInfo {
+        os: std::env::consts::OS.to_string(),
+        version: std::env::consts::VERSION.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        process_id: std::process::id(),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -885,6 +906,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
+            get_system_info,
             export_events_to_ics,
             fetch_iap_products,
             purchase_product,
