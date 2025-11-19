@@ -2945,6 +2945,11 @@ async fn stop_all_servers(
 }
 
 #[tauri::command]
+fn create_test_directory(path: String) -> Result<String, String> {
+    web_server::create_test_directory(&path)
+}
+
+#[tauri::command]
 async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
     if let Some(state) = window.try_state::<SseState>() {
         *state.active.lock().unwrap() = false;
@@ -3039,6 +3044,7 @@ pub fn run() {
             list_servers,
             is_port_available,
             stop_all_servers,
+            create_test_directory,
             get_cpu_info,
             get_storage_devices,
             get_device_profile
