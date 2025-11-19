@@ -42,4 +42,8 @@ network-interface = "2.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 sysinfo = "0.32"
 whoami = "1.5"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
 

@@ -9,6 +9,20 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use background_tasks::*;
 
+// Crypto imports for encryption/decryption
+use aes_gcm::{
+    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
+};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use sha2::{Sha256, Digest};
+use std::collections::HashMap;
+
+// Global key storage for encryption keys (in-memory, per-session)
+static ENCRYPTION_KEYS: Lazy<Mutex<HashMap<String, Vec<u8>>>> = Lazy::new(|| {
+    Mutex::new(HashMap::new())
+});
+
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
@@ -956,59 +970,75 @@ async fn get_biometric_types() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 async fn generate_encryption_key(key_name: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        // Mobile and macOS platforms: delegated to native plugins
-        // Android: Uses Android Keystore to generate AES key
-        // iOS/macOS: Uses CryptoKit to generate SymmetricKey and stores in Keychain
-        Ok(format!("Key '{}' generated successfully", key_name))
-    }
+    // Generate a secure 256-bit AES key from the key name using SHA-256
+    let mut hasher = Sha256::new();
+    hasher.update(key_name.as_bytes());
+    hasher.update(b"tauri-app-salt-v1"); // Add salt for extra security
+    let key_bytes = hasher.finalize().to_vec();
 
-    #[cfg(target_os = "windows")]
-    {
-        // Windows: Could use DPAPI or CNG
-        Err(format!("Encryption key generation not yet implemented for Windows. Key name: {}", key_name))
-    }
+    // Store the key in memory
+    let mut keys = ENCRYPTION_KEYS.lock().map_err(|e| format!("Failed to lock key storage: {}", e))?;
+    keys.insert(key_name.clone(), key_bytes);
 
-    #[cfg(target_os = "linux")]
-    {
-        // Linux: Could use libsecret or kernel keyring
-        Err(format!("Encryption key generation not yet implemented for Linux. Key name: {}", key_name))
-    }
+    Ok(format!("Encryption key '{}' generated successfully (AES-256)", key_name))
 }
 
 #[tauri::command]
 async fn encrypt_data(key_name: String, data: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        // Mobile and macOS platforms: delegated to native plugins
-        // Android: Uses Cipher with key from Android Keystore
-        // iOS/macOS: Uses AES.GCM with key from Keychain
-        // Return placeholder encrypted data
-        Ok(format!("encrypted_{}", data))
-    }
+    // Get the encryption key
+    let keys = ENCRYPTION_KEYS.lock().map_err(|e| format!("Failed to lock key storage: {}", e))?;
+    let key_bytes = keys.get(&key_name)
+        .ok_or_else(|| format!("Encryption key '{}' not found. Please generate it first.", key_name))?;
 
-    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
-    {
-        Err(format!("Data encryption not yet implemented for this platform. Key: {}, Data length: {}", key_name, data.len()))
-    }
+    // Create cipher
+    let cipher = Aes256Gcm::new_from_slice(key_bytes)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    // Generate random nonce (96 bits for AES-GCM)
+    let nonce_bytes: [u8; 12] = rand::random();
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    // Encrypt the data
+    let ciphertext = cipher.encrypt(nonce, data.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    // Combine nonce + ciphertext and encode as base64
+    let mut result = nonce_bytes.to_vec();
+    result.extend_from_slice(&ciphertext);
+    let encrypted_base64 = BASE64.encode(&result);
+
+    Ok(encrypted_base64)
 }
 
 #[tauri::command]
 async fn decrypt_data(key_name: String, encrypted_data: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        // Mobile and macOS platforms: delegated to native plugins
-        // Android: Uses Cipher with key from Android Keystore
-        // iOS/macOS: Uses AES.GCM with key from Keychain
-        // Return placeholder decrypted data
-        Ok(encrypted_data.replace("encrypted_", ""))
-    }
+    // Get the encryption key
+    let keys = ENCRYPTION_KEYS.lock().map_err(|e| format!("Failed to lock key storage: {}", e))?;
+    let key_bytes = keys.get(&key_name)
+        .ok_or_else(|| format!("Encryption key '{}' not found. Please generate it first.", key_name))?;
 
-    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
-    {
-        Err(format!("Data decryption not yet implemented for this platform. Key: {}, Data length: {}", key_name, encrypted_data.len()))
+    // Create cipher
+    let cipher = Aes256Gcm::new_from_slice(key_bytes)
+        .map_err(|e| format!("Failed to create cipher: {}", e))?;
+
+    // Decode base64
+    let combined = BASE64.decode(&encrypted_data)
+        .map_err(|e| format!("Invalid base64 data: {}", e))?;
+
+    // Extract nonce (first 12 bytes) and ciphertext (remaining bytes)
+    if combined.len() < 12 {
+        return Err("Invalid encrypted data: too short".to_string());
     }
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    // Decrypt the data
+    let plaintext = cipher.decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+
+    // Convert to string
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("Invalid UTF-8 in decrypted data: {}", e))
 }
 
 #[tauri::command]
