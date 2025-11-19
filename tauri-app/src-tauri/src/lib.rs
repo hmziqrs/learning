@@ -3117,6 +3117,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_websocket::init())
+        .plugin(tauri_plugin_biometry::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,

@@ -6,36 +6,52 @@ The Security & Biometrics Module provides biometric authentication capabilities 
 
 ## Current Implementation Status
 
-✅ **Status**: Implemented (Android, iOS & macOS)
+✅ **Status**: Implemented (Android, iOS, macOS & Windows)
 
-This module has been fully implemented for mobile and macOS platforms:
-- **Android**: Complete implementation with BiometricPrompt API and Android Keystore
-- **iOS**: Complete implementation with LocalAuthentication and iOS Keychain
-- **macOS**: Complete implementation with LocalAuthentication (Touch ID) and macOS Keychain
-- **Windows/Linux**: Returns appropriate error messages with platform-specific guidance
+This module has been fully implemented using a combination of custom mobile plugins and the community biometry plugin for desktop:
+- **Mobile (Android)**: Custom implementation with BiometricPrompt API and Android Keystore
+- **Mobile (iOS)**: Custom implementation with LocalAuthentication and iOS Keychain
+- **Desktop (macOS)**: tauri-plugin-biometry with Touch ID via LocalAuthentication
+- **Desktop (Windows)**: tauri-plugin-biometry with Windows Hello integration
+- **Linux**: Not currently supported by the biometry plugin
 
 ## Plugin Setup
 
 ### Dependencies
 
-**Custom Mobile Plugin Required**
-- No existing Tauri plugin available for biometric authentication
-- Requires native platform APIs:
-  - **Android**: BiometricPrompt API
-  - **iOS**: LocalAuthentication framework
-  - **Desktop**: Platform-specific secure storage APIs
+**Hybrid Approach**
+- **Desktop Platforms**: Uses `tauri-plugin-biometry` (v0.2.4) for macOS Touch ID and Windows Hello
+- **Mobile Platforms**: Custom native plugins for Android BiometricPrompt and iOS LocalAuthentication
+- **Secure Storage**: Platform keychains (iOS/macOS Keychain, Android Keystore, Windows Credential Manager)
 
 ### Cargo Dependencies
 
 ```toml
 [dependencies]
-# Mobile platform dependencies will be added during implementation
+tauri-plugin-biometry = "0.2.4"
+```
+
+### NPM Dependencies
+
+```json
+{
+  "dependencies": {
+    "@choochmeque/tauri-plugin-biometry-api": "^0.2.4"
+  }
+}
 ```
 
 ### Plugin Registration
 
 ```rust
-// Plugin registration will be added in src-tauri/src/lib.rs
+// In src-tauri/src/lib.rs
+fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_biometry::init())
+        // ... other plugins
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
 ```
 
 ## Permissions Configuration
@@ -220,6 +236,53 @@ SecItemAdd(query as CFDictionary, nil)
 ```
 
 ## Frontend Implementation
+
+### Using tauri-plugin-biometry (Desktop)
+
+The plugin provides a clean JavaScript API for desktop platforms (macOS, Windows):
+
+```typescript
+import { checkStatus, authenticate, setData, getData, hasData, removeData } from '@choochmeque/tauri-plugin-biometry-api'
+
+// Check biometric availability
+const status = await checkStatus()
+// status.biometryType: 0=none, 1=TouchID/Fingerprint, 2=FaceID, 3=Iris, 4=Auto(WindowsHello)
+// status.isAvailable: boolean
+
+// Authenticate user
+await authenticate('Please authenticate to continue', {
+  allowDeviceCredential: true,
+  cancelTitle: 'Cancel',
+  title: 'Authenticate'
+})
+
+// Store data securely in platform keychain
+await setData({
+  domain: 'com.tauriapp.security',
+  name: 'mySecretKey',
+  data: 'mySecretValue'
+})
+
+// Retrieve data from keychain (requires authentication)
+const response = await getData({
+  domain: 'com.tauriapp.security',
+  name: 'mySecretKey',
+  reason: 'Access your secure data'
+})
+console.log(response.data) // 'mySecretValue'
+
+// Check if data exists
+const exists = await hasData({
+  domain: 'com.tauriapp.security',
+  name: 'mySecretKey'
+})
+
+// Remove data from keychain
+await removeData({
+  domain: 'com.tauriapp.security',
+  name: 'mySecretKey'
+})
+```
 
 ### React Hook
 
