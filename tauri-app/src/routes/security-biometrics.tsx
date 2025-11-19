@@ -5,7 +5,6 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
-import { checkStatus, authenticate, setData, getData, hasData, removeData } from '@choochmeque/tauri-plugin-biometry-api'
 
 export const Route = createFileRoute('/security-biometrics')({
   component: SecurityBiometricsModule,
@@ -54,25 +53,10 @@ function SecurityBiometricsModule() {
     addOutput('Checking biometric availability...')
 
     try {
-      const status = await checkStatus()
-      const biometryTypes = {
-        0: 'none',
-        1: 'fingerprint',
-        2: 'face',
-        3: 'iris',
-        4: 'auto'
-      }
-      const typeStr = biometryTypes[status.biometryType as keyof typeof biometryTypes] || 'unknown'
-
-      const info: BiometricInfo = {
-        available: status.isAvailable,
-        enrolled: status.isAvailable,
-        types: status.isAvailable ? [typeStr as BiometricType] : []
-      }
-
+      const info = await invoke<BiometricInfo>('check_biometric_availability')
       setBiometricInfo(info)
       addOutput(`Biometrics ${info.available ? 'available' : 'not available'}`)
-      addOutput(`Enrolled: ${info.enrolled}, Type: ${typeStr}`)
+      addOutput(`Enrolled: ${info.enrolled}, Types: ${info.types.join(', ')}`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
       setBiometricInfo(null)
@@ -88,15 +72,23 @@ function SecurityBiometricsModule() {
     addOutput('Requesting biometric authentication...')
 
     try {
-      await authenticate('Please authenticate to continue', {
-        allowDeviceCredential: true,
-        cancelTitle: 'Cancel',
-        title: 'Authenticate'
+      const result = await invoke<AuthenticationResult>('authenticate_biometric', {
+        options: {
+          title: 'Authenticate',
+          subtitle: 'Verify your identity',
+          description: 'Use biometrics to authenticate',
+          negativeButtonText: 'Cancel',
+          allowDeviceCredential: false,
+        },
       })
 
-      addOutput(`Authentication successful!`)
+      if (result.success) {
+        addOutput(`Authentication successful (${result.biometricType || 'unknown'})`)
+      } else {
+        addOutput(`Authentication failed: ${result.error || 'Unknown error'}`, false)
+      }
     } catch (error) {
-      addOutput(`Authentication failed: ${error}`, false)
+      addOutput(`Failed: ${error}`, false)
     } finally {
       setIsLoading(false)
     }
@@ -183,12 +175,11 @@ function SecurityBiometricsModule() {
     addOutput(`Storing data securely: ${storageKey}...`)
 
     try {
-      await setData({
-        domain: 'com.tauriapp.security',
-        name: storageKey,
-        data: storageValue
+      await invoke('secure_storage_set', {
+        key: storageKey,
+        value: storageValue,
       })
-      addOutput(`Data stored successfully in secure keychain`)
+      addOutput(`Data stored successfully`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -202,24 +193,10 @@ function SecurityBiometricsModule() {
     addOutput(`Retrieving data: ${storageKey}...`)
 
     try {
-      const exists = await hasData({
-        domain: 'com.tauriapp.security',
-        name: storageKey
+      const value = await invoke<string>('secure_storage_get', {
+        key: storageKey,
       })
-
-      if (!exists) {
-        addOutput(`Key not found in secure storage`, false)
-        setRetrievedValue('')
-        return
-      }
-
-      const response = await getData({
-        domain: 'com.tauriapp.security',
-        name: storageKey,
-        reason: 'Access your stored data'
-      })
-
-      setRetrievedValue(response.data)
+      setRetrievedValue(value)
       addOutput(`Data retrieved successfully`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
@@ -234,12 +211,9 @@ function SecurityBiometricsModule() {
     addOutput(`Deleting data: ${storageKey}...`)
 
     try {
-      await removeData({
-        domain: 'com.tauriapp.security',
-        name: storageKey
-      })
+      await invoke('secure_storage_delete', { key: storageKey })
       setRetrievedValue('')
-      addOutput(`Data deleted successfully from secure keychain`)
+      addOutput(`Data deleted successfully`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -255,41 +229,35 @@ function SecurityBiometricsModule() {
     >
       <div className="space-y-6">
         {/* Status Notice */}
-        <section className="rounded-lg border border-green-500/50 bg-green-500/10 p-6">
+        <section className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-6">
           <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <span className="text-green-500">✓</span>
+            <span className="text-yellow-500">⚠️</span>
             Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-green-600">✓ tauri-plugin-biometry</strong> - Native biometric authentication
+                <strong className="text-yellow-600">⚠️ Rust Commands</strong> - Not yet implemented
               </li>
               <li>
-                <strong className="text-green-600">✓ Android</strong> - BiometricPrompt API (fingerprint, face)
+                <strong className="text-yellow-600">⚠️ Android Plugin</strong> - BiometricPrompt integration pending
               </li>
               <li>
-                <strong className="text-green-600">✓ iOS</strong> - LocalAuthentication (Touch ID, Face ID)
+                <strong className="text-yellow-600">⚠️ iOS Plugin</strong> - LocalAuthentication integration pending
               </li>
               <li>
-                <strong className="text-green-600">✓ macOS</strong> - LocalAuthentication (Touch ID) + Keychain
-              </li>
-              <li>
-                <strong className="text-green-600">✓ Windows</strong> - Windows Hello (face, fingerprint, PIN)
-              </li>
-              <li>
-                <strong className="text-red-600">✗ Linux</strong> - Biometrics not supported
+                <strong className="text-yellow-600">⚠️ Desktop</strong> - Limited support (secure storage only)
               </li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Plugin: tauri-plugin-biometry v0.2.4</div>
-              <div>- macOS: Touch ID via LocalAuthentication + Keychain storage</div>
-              <div>- Windows: Windows Hello (face, fingerprint, PIN)</div>
-              <div>- Mobile: Native biometric APIs (Android BiometricPrompt, iOS LocalAuth)</div>
+              <div># Android (Planned):</div>
+              <div>BiometricPrompt API + Android Keystore</div>
+              <div className="mt-2"># iOS (Planned):</div>
+              <div>LocalAuthentication Framework + iOS Keychain</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Using tauri-plugin-biometry for native biometric authentication on all supported platforms. Secure data is encrypted and stored in platform keychains (macOS Keychain, iOS Keychain, Android Keystore, Windows Credential Manager).
+              This module requires custom native plugins for mobile platforms. UI is ready for testing once backend is implemented.
             </p>
           </div>
         </section>
