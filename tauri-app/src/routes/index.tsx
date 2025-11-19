@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Mic,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'Speech & Media Intelligence',
+    description: 'Speech recognition, text-to-speech, transcription, and AI-powered media analysis',
+    icon: Mic,
+    path: '/speech-media-intelligence',
+    color: 'text-fuchsia-500',
   },
 ]
 
