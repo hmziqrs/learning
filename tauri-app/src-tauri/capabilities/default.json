@@ -192,8 +192,6 @@
     "clipboard-manager:allow-write-text",
     "websocket:default",
     "websocket:allow-connect",
-    "websocket:allow-send",
-    "share:default",
-    "share:allow-share"
+    "websocket:allow-send"
   ]
 }
