@@ -1184,6 +1184,84 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
             }
         }
 
+        // Method 3: Fallback to system_profiler if other methods failed
+        if wifi_info.ssid.is_empty() {
+            if let Ok(output) = Command::new("system_profiler")
+                .args(["SPAirPortDataType"])
+                .output()
+            {
+                let info = String::from_utf8_lossy(&output.stdout);
+                let mut in_current_network = false;
+                let mut current_ssid = String::new();
+
+                for line in info.lines() {
+                    let trimmed = line.trim();
+
+                    // Look for Current Network Information section
+                    if trimmed.contains("Current Network Information:") {
+                        in_current_network = true;
+                        continue;
+                    }
+
+                    // Stop when we hit "Other Local Wi-Fi Networks" section
+                    if in_current_network && trimmed.contains("Other Local Wi-Fi Networks:") {
+                        // Found SSID in current network, use it
+                        if !current_ssid.is_empty() {
+                            wifi_info.ssid = current_ssid.clone();
+                        }
+                        break;
+                    }
+
+                    if in_current_network && !trimmed.is_empty() {
+                        // SSID is a line that ends with ":" but is NOT a known property key
+                        // Known properties: PHY Mode:, Channel:, Country Code:, Network Type:, Security:, Signal / Noise:, Transmit Rate:, MCS Index:
+                        if trimmed.ends_with(":") &&
+                           !trimmed.starts_with("PHY Mode") &&
+                           !trimmed.starts_with("Channel") &&
+                           !trimmed.starts_with("Country") &&
+                           !trimmed.starts_with("Network Type") &&
+                           !trimmed.starts_with("Security") &&
+                           !trimmed.starts_with("Signal") &&
+                           !trimmed.starts_with("Transmit") &&
+                           !trimmed.starts_with("MCS") {
+                            current_ssid = trimmed.trim_end_matches(':').to_string();
+                        }
+
+                        // Extract signal strength: "-56 dBm"
+                        if trimmed.contains("Signal / Noise:") {
+                            if let Some(signal_part) = trimmed.split(':').nth(1) {
+                                let signal_str = signal_part.split_whitespace().next().unwrap_or("");
+                                if let Ok(signal) = signal_str.parse::<i32>() {
+                                    wifi_info.signal_strength = Some(signal);
+                                }
+                            }
+                        }
+
+                        // Extract security type
+                        if trimmed.starts_with("Security:") {
+                            if let Some(security) = trimmed.split(':').nth(1) {
+                                wifi_info.security_type = Some(security.trim().to_string());
+                            }
+                        }
+                    }
+                }
+
+                // If still no SSID, try to get IP address as confirmation we're connected
+                if !wifi_info.ssid.is_empty() {
+                    if let Ok(ip_output) = Command::new("ipconfig")
+                        .args(["getifaddr", "en0"])
+                        .output()
+                    {
+                        let ip = String::from_utf8_lossy(&ip_output.stdout);
+                        let ip_trimmed = ip.trim();
+                        if !ip_trimmed.is_empty() {
+                            wifi_info.ip_address = Some(ip_trimmed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
         if wifi_info.ssid.is_empty() {
             Err("Not connected to WiFi. Please enable WiFi and connect to a network. Note: This feature only works when connected via WiFi (not ethernet).".to_string())
         } else {
@@ -1408,20 +1486,82 @@ async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
             }
         }
 
-        // Method 2: Fallback to system_profiler
-        if let Ok(output) = Command::new("system_profiler")
-            .args(["SPAirPortDataType", "-xml"])
-            .output()
-        {
-            if output.status.success() {
-                let info = String::from_utf8_lossy(&output.stdout);
+        // Method 2: Fallback to system_profiler (non-XML format for easier parsing)
+        if networks.is_empty() {
+            if let Ok(output) = Command::new("system_profiler")
+                .args(["SPAirPortDataType"])
+                .output()
+            {
+                if output.status.success() {
+                    let info = String::from_utf8_lossy(&output.stdout);
+                    let mut current_ssid = String::new();
+                    let mut current_signal: Option<i32> = None;
+                    let mut current_security: Option<String> = None;
 
-                // Parse basic network info from XML output
-                // This is a simple parser - could be improved with proper XML parsing
-                for line in info.lines() {
-                    if line.contains("<key>_name</key>") {
-                        // Try to extract SSID from next line
-                        continue;
+                    let mut in_other_networks = false;
+                    let mut in_network_block = false;
+
+                    for line in info.lines() {
+                        let trimmed = line.trim();
+
+                        // Check if we're in the "Other Local Wi-Fi Networks" section
+                        if trimmed.contains("Other Local Wi-Fi Networks:") {
+                            in_other_networks = true;
+                            continue;
+                        }
+
+                        if in_other_networks && !trimmed.is_empty() {
+                            // SSID line: ends with ":" but is NOT a known property
+                            if trimmed.ends_with(":") &&
+                               !trimmed.starts_with("PHY Mode") &&
+                               !trimmed.starts_with("Channel") &&
+                               !trimmed.starts_with("Country") &&
+                               !trimmed.starts_with("Network Type") &&
+                               !trimmed.starts_with("Security") &&
+                               !trimmed.starts_with("Signal") &&
+                               !trimmed.starts_with("Transmit") &&
+                               !trimmed.starts_with("MCS") {
+                                // Save previous network before starting a new one
+                                if in_network_block && !current_ssid.is_empty() {
+                                    networks.push(WiFiNetwork {
+                                        ssid: current_ssid.clone(),
+                                        bssid: String::new(),
+                                        signal_strength: current_signal,
+                                        security_type: current_security.clone(),
+                                        frequency: None,
+                                    });
+                                    current_signal = None;
+                                    current_security = None;
+                                }
+                                current_ssid = trimmed.trim_end_matches(':').to_string();
+                                in_network_block = true;
+                            } else if in_network_block {
+                                // Parse properties within a network block
+                                if trimmed.starts_with("Security:") {
+                                    if let Some(security) = trimmed.split(':').nth(1) {
+                                        current_security = Some(security.trim().to_string());
+                                    }
+                                } else if trimmed.contains("Signal / Noise:") {
+                                    if let Some(signal_part) = trimmed.split(':').nth(1) {
+                                        let signal_str = signal_part.split_whitespace().next().unwrap_or("");
+                                        if let Ok(signal) = signal_str.parse::<i32>() {
+                                            current_signal = Some(signal);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add last network if exists
+                    if in_network_block && !current_ssid.is_empty() {
+                        networks.push(WiFiNetwork {
+                            ssid: current_ssid,
+                            bssid: String::new(),
+                            signal_strength: current_signal,
+                            security_type: current_security,
+                            frequency: None,
+                        });
                     }
                 }
             }
