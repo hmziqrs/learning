@@ -86,8 +86,8 @@ const modules = [
     color: 'text-indigo-500',
   },
   {
-    name: 'Network & Realtime',
-    description: 'Test HTTP requests, WebSocket connections, and file uploads',
+    name: 'Networking & Radio Access',
+    description: 'HTTP/WebSocket communication, network monitoring, and radio hardware info',
     icon: Wifi,
     path: '/network-realtime',
     color: 'text-violet-500',
