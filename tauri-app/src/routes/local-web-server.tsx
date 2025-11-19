@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { invoke } from '@tauri-apps/api/core'
 import { Server } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export const Route = createFileRoute('/local-web-server')({
   component: LocalWebServerModule,
@@ -45,19 +46,15 @@ function LocalWebServerModule() {
     addOutput('Starting local web server...')
 
     try {
-      // Placeholder - will be implemented with actual Tauri command
-      addOutput('Server implementation pending - commands not yet registered', false)
-
-      // TODO: Implement actual server start
-      // const config: ServerConfig = {
-      //   port: port ? parseInt(port) : undefined,
-      //   staticDir,
-      //   cors: true,
-      //   directoryListing: false,
-      // }
-      // const serverInfo = await invoke<ServerInfo>('start_server', { config })
-      // setServers(prev => [...prev, serverInfo])
-      // addOutput(`Server started at ${serverInfo.url}`)
+      const config: ServerConfig = {
+        port: port ? parseInt(port) : undefined,
+        staticDir,
+        cors: true,
+        directoryListing: false,
+      }
+      const serverInfo = await invoke<ServerInfo>('start_server', { config })
+      setServers(prev => [...prev, serverInfo])
+      addOutput(`Server started successfully at ${serverInfo.url}`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -71,13 +68,9 @@ function LocalWebServerModule() {
     addOutput(`Stopping server ${serverId}...`)
 
     try {
-      // Placeholder - will be implemented with actual Tauri command
-      addOutput('Server implementation pending - commands not yet registered', false)
-
-      // TODO: Implement actual server stop
-      // await invoke('stop_server', { serverId })
-      // setServers(prev => prev.filter(s => s.id !== serverId))
-      // addOutput('Server stopped successfully')
+      await invoke('stop_server', { serverId })
+      setServers(prev => prev.filter(s => s.id !== serverId))
+      addOutput('Server stopped successfully')
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -91,12 +84,8 @@ function LocalWebServerModule() {
     addOutput(`Checking if port ${port} is available...`)
 
     try {
-      // Placeholder - will be implemented with actual Tauri command
-      addOutput('Server implementation pending - commands not yet registered', false)
-
-      // TODO: Implement actual port check
-      // const available = await invoke<boolean>('is_port_available', { port: parseInt(port) })
-      // addOutput(available ? `Port ${port} is available` : `Port ${port} is in use`, available)
+      const available = await invoke<boolean>('is_port_available', { port: parseInt(port) })
+      addOutput(available ? `Port ${port} is available` : `Port ${port} is in use`, available)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -110,19 +99,31 @@ function LocalWebServerModule() {
     addOutput('Stopping all servers...')
 
     try {
-      // Placeholder - will be implemented with actual Tauri command
-      addOutput('Server implementation pending - commands not yet registered', false)
-
-      // TODO: Implement actual stop all
-      // await invoke('stop_all_servers')
-      // setServers([])
-      // addOutput('All servers stopped successfully')
+      await invoke('stop_all_servers')
+      setServers([])
+      addOutput('All servers stopped successfully')
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Load existing servers on mount
+  useEffect(() => {
+    const loadServers = async () => {
+      try {
+        const existingServers = await invoke<ServerInfo[]>('list_servers')
+        setServers(existingServers)
+        if (existingServers.length > 0) {
+          addOutput(`Loaded ${existingServers.length} existing server(s)`)
+        }
+      } catch (error) {
+        console.error('Failed to load servers:', error)
+      }
+    }
+    loadServers()
+  }, [])
 
   return (
     <ModulePageLayout
@@ -132,35 +133,37 @@ function LocalWebServerModule() {
     >
       <div className="space-y-6">
         {/* Status Notice */}
-        <section className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-6">
+        <section className="rounded-lg border border-green-500/50 bg-green-500/10 p-6">
           <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <span className="text-yellow-500">⏳</span>
+            <span className="text-green-500">✓</span>
             Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-yellow-600">⏳ Planned</strong> - Module documentation created
+                <strong className="text-green-600">✓ Rust Backend</strong> - Axum HTTP server with static file serving
               </li>
               <li>
-                <strong className="text-red-600">✗ Rust Commands</strong> - Tauri commands not yet implemented
+                <strong className="text-green-600">✓ Tauri Commands</strong> - 6 commands registered and functional
               </li>
               <li>
-                <strong className="text-red-600">✗ HTTP Server</strong> - Server implementation pending
+                <strong className="text-green-600">✓ Server Management</strong> - Start, stop, list, and monitor servers
               </li>
               <li>
-                <strong className="text-red-600">✗ Frontend Integration</strong> - UI placeholder only
+                <strong className="text-green-600">✓ Frontend Integration</strong> - Full UI with real-time updates
               </li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Planned Implementation:</div>
-              <div>- Rust: Axum/Actix-web HTTP server with static file serving</div>
-              <div>- Commands: start_server, stop_server, is_port_available, list_servers</div>
-              <div>- Platform Support: All desktop and mobile platforms</div>
+              <div># Implemented Features:</div>
+              <div>- HTTP server with Axum and Tower HTTP</div>
+              <div>- Commands: start_server, stop_server, get_server_info, list_servers, is_port_available, stop_all_servers</div>
+              <div>- Static file serving with CORS support</div>
+              <div>- Auto port assignment and port availability checking</div>
+              <div>- Multiple concurrent server instances</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              See <code className="bg-muted px-1 rounded">docs/local-web-server-module.md</code> for complete implementation plan.
+              See <code className="bg-muted px-1 rounded">docs/local-web-server-module.md</code> for complete documentation.
             </p>
           </div>
         </section>
@@ -276,7 +279,7 @@ function LocalWebServerModule() {
 
         {/* Features Overview */}
         <section className="rounded-lg border border-border p-6">
-          <h3 className="text-lg font-semibold mb-4">Planned Features</h3>
+          <h3 className="text-lg font-semibold mb-4">Available Features</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex items-start gap-2">
               <span className="text-muted-foreground">•</span>
