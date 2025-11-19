@@ -1,4 +1,5 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
@@ -805,7 +806,7 @@ async fn detect_connection_type() -> String {
     match NI::show() {
         Ok(interfaces) => {
             for iface in interfaces {
-                if let Some(mac) = iface.mac_addr {
+                if let Some(_mac) = iface.mac_addr {
                     let name_lower = iface.name.to_lowercase();
 
                     // Check if interface has IP addresses (is active)
