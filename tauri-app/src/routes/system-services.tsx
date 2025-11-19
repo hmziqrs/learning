@@ -172,50 +172,13 @@ function SystemServices() {
     setBatteryError(null)
 
     try {
-      // Try native implementation first
+      // Try native Rust implementation
       const info = await invoke<BatteryInfo>('get_battery_info')
       setBatteryInfo(info)
       addOutput('Battery info loaded (native)', true)
     } catch (error) {
-      // Try Web Battery API
-      try {
-        const battery = await (navigator as any).getBattery()
-        setBatteryInfo({
-          level: Math.round(battery.level * 100),
-          charging: battery.charging,
-          chargingTime: battery.chargingTime !== Infinity ? battery.chargingTime : null,
-          dischargingTime: battery.dischargingTime !== Infinity ? battery.dischargingTime : null,
-          temperature: null,
-          powerSource: battery.charging ? 'ac' : 'battery',
-          batteryState: battery.charging
-            ? 'charging'
-            : battery.level === 1
-              ? 'full'
-              : 'discharging',
-        })
-
-        // Listen for battery events
-        battery.addEventListener('levelchange', () => {
-          setBatteryInfo((prev) => ({
-            ...prev!,
-            level: Math.round(battery.level * 100),
-          }))
-        })
-
-        battery.addEventListener('chargingchange', () => {
-          setBatteryInfo((prev) => ({
-            ...prev!,
-            charging: battery.charging,
-            powerSource: battery.charging ? 'ac' : 'battery',
-            batteryState: battery.charging ? 'charging' : 'discharging',
-          }))
-        })
-
-        addOutput('Battery info loaded (Web API)', true)
-      } catch (webError) {
-        setBatteryError('Battery API not available on this platform')
-        addOutput('Battery API not available', false)
-      }
+      setBatteryError(`Battery not available: ${error}`)
+      addOutput(`Battery error: ${error}`, false)
     } finally {
       setLoading(null)
     }
@@ -227,30 +190,13 @@ function SystemServices() {
     setAudioError(null)
 
     try {
-      // Try native implementation first
+      // Try native Rust implementation
       const result = await invoke<{ devices: AudioDevice[] }>('get_audio_devices')
       setAudioDevices(result.devices)
       addOutput(`Found ${result.devices.length} audio devices (native)`, true)
     } catch (error) {
-      // Try Web Audio API
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        const audioDeviceList: AudioDevice[] = devices
-          .filter((d) => d.kind === 'audioinput' || d.kind === 'audiooutput')
-          .map((d) => ({
-            id: d.deviceId,
-            name: d.label || 'Unnamed Device',
-            kind: d.kind as 'audioinput' | 'audiooutput',
-            isDefault: d.deviceId === 'default',
-            isConnected: true,
-            type: 'unknown',
-          }))
-        setAudioDevices(audioDeviceList)
-        addOutput(`Found ${audioDeviceList.length} audio devices (Web API)`, true)
-      } catch (webError) {
-        setAudioError('Audio device enumeration not available')
-        addOutput('Audio device enumeration not available', false)
-      }
+      setAudioError(`Audio devices not available: ${error}`)
+      addOutput(`Audio error: ${error}`, false)
     } finally {
       setLoading(null)
     }

@@ -868,6 +868,133 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// System Services Module
+#[derive(Debug, Serialize, Deserialize)]
+struct BatteryInfo {
+    level: i32,
+    charging: bool,
+    temperature: Option<i32>,
+    power_source: String,
+    battery_state: String,
+    charging_time: Option<i64>,
+    discharging_time: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AudioDevice {
+    id: String,
+    name: String,
+    kind: String,
+    is_default: bool,
+    is_connected: bool,
+    device_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AudioDevicesResponse {
+    devices: Vec<AudioDevice>,
+}
+
+#[tauri::command]
+async fn get_battery_info() -> Result<BatteryInfo, String> {
+    use battery::Manager;
+
+    let manager = Manager::new().map_err(|e| format!("Failed to create battery manager: {}", e))?;
+
+    let mut batteries = manager.batteries().map_err(|e| format!("Failed to get batteries: {}", e))?;
+
+    if let Some(Ok(battery)) = batteries.next() {
+        let state_of_charge = battery.state_of_charge().value;
+        let level = (state_of_charge * 100.0) as i32;
+
+        let state = battery.state();
+        let charging = matches!(state, battery::State::Charging);
+        let battery_state = match state {
+            battery::State::Charging => "charging",
+            battery::State::Discharging => "discharging",
+            battery::State::Full => "full",
+            battery::State::Empty => "empty",
+            _ => "unknown",
+        };
+
+        let power_source = if charging { "ac" } else { "battery" };
+
+        // Try to get temperature if available
+        let temperature = battery.temperature()
+            .map(|t| (t.value - 273.15) as i32); // Convert Kelvin to Celsius
+
+        Ok(BatteryInfo {
+            level,
+            charging,
+            temperature,
+            power_source: power_source.to_string(),
+            battery_state: battery_state.to_string(),
+            charging_time: None,
+            discharging_time: None,
+        })
+    } else {
+        Err("No battery found".to_string())
+    }
+}
+
+#[tauri::command]
+async fn get_audio_devices() -> Result<AudioDevicesResponse, String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = cpal::default_host();
+    let mut devices = Vec::new();
+
+    // Get default devices
+    let default_input = host.default_input_device();
+    let default_output = host.default_output_device();
+
+    // Get all input devices
+    if let Ok(input_devices) = host.input_devices() {
+        for (idx, device) in input_devices.enumerate() {
+            if let Ok(name) = device.name() {
+                let device_name = device.name().unwrap_or_else(|_| format!("Input Device {}", idx));
+                let is_default = default_input.as_ref()
+                    .and_then(|d| d.name().ok())
+                    .map(|n| n == name)
+                    .unwrap_or(false);
+
+                devices.push(AudioDevice {
+                    id: format!("input-{}", idx),
+                    name: device_name,
+                    kind: "audioinput".to_string(),
+                    is_default,
+                    is_connected: true,
+                    device_type: "unknown".to_string(),
+                });
+            }
+        }
+    }
+
+    // Get all output devices
+    if let Ok(output_devices) = host.output_devices() {
+        for (idx, device) in output_devices.enumerate() {
+            if let Ok(name) = device.name() {
+                let device_name = device.name().unwrap_or_else(|_| format!("Output Device {}", idx));
+                let is_default = default_output.as_ref()
+                    .and_then(|d| d.name().ok())
+                    .map(|n| n == name)
+                    .unwrap_or(false);
+
+                devices.push(AudioDevice {
+                    id: format!("output-{}", idx),
+                    name: device_name,
+                    kind: "audiooutput".to_string(),
+                    is_default,
+                    is_connected: true,
+                    device_type: "unknown".to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(AudioDevicesResponse { devices })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -907,7 +1034,9 @@ pub fn run() {
             set_zoom,
             get_cameras,
             check_camera_permission,
-            request_camera_permission
+            request_camera_permission,
+            get_battery_info,
+            get_audio_devices
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
