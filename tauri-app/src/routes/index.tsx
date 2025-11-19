@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Share2,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'File Sharing & Social',
+    description: 'Share files, text, and links with other apps using native share dialogs',
+    icon: Share2,
+    path: '/file-sharing',
+    color: 'text-lime-500',
   },
 ]
 
