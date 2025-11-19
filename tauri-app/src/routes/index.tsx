@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Smartphone,
   Mic,
   Monitor,
   Clipboard,
@@ -124,11 +125,18 @@ const modules = [
     color: 'text-amber-500',
   },
   {
+    name: 'Haptics / Vibrations',
+    description: 'Provide tactile feedback through vibrations and haptic effects on mobile devices',
+    icon: Smartphone,
+    path: '/haptics',
+    color: 'text-fuchsia-500',
+  },
+  {
     name: 'Speech & Media Intelligence',
     description: 'Speech recognition, text-to-speech, transcription, and AI-powered media analysis',
     icon: Mic,
     path: '/speech-media-intelligence',
-    color: 'text-fuchsia-500',
+    color: 'text-pink-500',
   },
   {
     name: 'App Lifecycle & OS Integration',
