@@ -882,7 +882,7 @@ struct SystemInfo {
 fn get_system_info() -> SystemInfo {
     SystemInfo {
         os: std::env::consts::OS.to_string(),
-        version: std::env::consts::VERSION.to_string(),
+        version: std::env::consts::FAMILY.to_string(),
         arch: std::env::consts::ARCH.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         process_id: std::process::id(),
