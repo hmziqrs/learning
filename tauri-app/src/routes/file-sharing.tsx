@@ -4,7 +4,8 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export const Route = createFileRoute('/file-sharing')({
   component: FileSharingModule,
@@ -28,6 +29,8 @@ function FileSharingModule() {
   const [shareText, setShareText] = useState('This is shared from my Tauri app')
   const [shareUrl, setShareUrl] = useState('https://tauri.app')
   const [isSupported, setIsSupported] = useState(false)
+  const [nativeSupport, setNativeSupport] = useState(false)
+  const [platform, setPlatform] = useState('unknown')
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -35,11 +38,35 @@ function FileSharingModule() {
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
   }
 
-  // Check if Web Share API is supported
-  const checkShareSupport = () => {
-    const supported = 'share' in navigator
-    setIsSupported(supported)
-    addOutput(`Web Share API: ${supported ? 'Supported' : 'Not supported'}`, supported)
+  // Check platform and support on mount
+  useEffect(() => {
+    const checkPlatform = async () => {
+      try {
+        const platformName = await invoke<string>('get_share_platform')
+        setPlatform(platformName)
+        addOutput(`Platform: ${platformName}`)
+      } catch (error) {
+        addOutput('Failed to get platform info', false)
+      }
+    }
+    checkPlatform()
+  }, [])
+
+  // Check if Web Share API and backend sharing are supported
+  const checkShareSupport = async () => {
+    const webShareSupported = 'share' in navigator
+    setIsSupported(webShareSupported)
+    addOutput(`Web Share API: ${webShareSupported ? 'Supported' : 'Not supported'}`, webShareSupported)
+
+    try {
+      const backendSupported = await invoke<boolean>('is_share_supported')
+      setNativeSupport(backendSupported)
+      addOutput(`Native sharing: ${backendSupported ? 'Supported' : 'Not supported'}`, backendSupported)
+    } catch (error) {
+      addOutput('Failed to check native share support', false)
+    }
+
+    addOutput(`Recommendation: ${webShareSupported || nativeSupport ? 'Use native share or Web Share API' : 'Use clipboard fallback'}`)
   }
 
   // Share text using Web Share API
@@ -209,16 +236,23 @@ function FileSharingModule() {
           </div>
         </section>
 
-        {/* Share Support Check */}
+        {/* Platform Info */}
         <section className="rounded-lg border p-6 space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Share2 className="w-5 h-5" />
-            Share Support
+            Platform & Share Support
           </h2>
 
           <div className="space-y-3">
+            <div className="bg-muted rounded-md p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Current Platform:</span>
+                <span className="font-mono font-semibold">{platform}</span>
+              </div>
+            </div>
+
             <p className="text-sm text-muted-foreground">
-              Check if Web Share API is supported in your browser
+              Check if Web Share API and native sharing are supported
             </p>
 
             <Button onClick={checkShareSupport} variant="outline">
@@ -226,17 +260,29 @@ function FileSharingModule() {
               Check Share Support
             </Button>
 
-            {isSupported ? (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-md p-4">
-                <p className="text-sm text-green-700 dark:text-green-400 font-medium">
-                  ✓ Web Share API is supported on this platform
-                </p>
-              </div>
-            ) : output.length > 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
-                <p className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
-                  ⚠ Web Share API not supported. Fallback to clipboard and social sharing.
-                </p>
+            {output.length > 0 && (
+              <div className="space-y-2">
+                {isSupported && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-md p-4">
+                    <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+                      ✓ Web Share API is supported on this platform
+                    </p>
+                  </div>
+                )}
+                {nativeSupport && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-md p-4">
+                    <p className="text-sm text-green-700 dark:text-green-400 font-medium">
+                      ✓ Native sharing is supported (requires plugin implementation)
+                    </p>
+                  </div>
+                )}
+                {!isSupported && !nativeSupport && output.length > 1 && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
+                    <p className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
+                      ⚠ Native sharing not available. Use Web Share API or clipboard fallback.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

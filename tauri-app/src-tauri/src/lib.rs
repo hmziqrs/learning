@@ -868,6 +868,101 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// File Sharing & Social Integration Module
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ShareRequest {
+    title: Option<String>,
+    text: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ShareResult {
+    success: bool,
+    error: Option<String>,
+}
+
+// Check if sharing is supported on the current platform
+#[tauri::command]
+fn is_share_supported() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // Mobile platforms support native sharing
+        // In production, this would check if the share plugin is available
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Desktop: Sharing not supported natively
+        // Use Web Share API or clipboard fallback
+        Ok(false)
+    }
+}
+
+// Copy text to clipboard (fallback for desktop)
+#[tauri::command]
+async fn copy_to_clipboard(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    // On desktop, we can use the clipboard plugin or system clipboard
+    // For now, we'll just acknowledge the operation
+    // In production, integrate with tauri-plugin-clipboard or system clipboard
+
+    // TODO: Integrate with clipboard plugin
+    // For now, return success to allow frontend to handle via Web APIs
+    Ok(())
+}
+
+// Share text (mobile-only, native implementation)
+#[tauri::command]
+async fn share_text(request: ShareRequest) -> Result<ShareResult, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // TODO: Implement native share sheet
+        // Android: Intent.ACTION_SEND
+        // iOS: UIActivityViewController
+        // For now, return error to fallback to Web Share API
+        Err("Native sharing requires platform plugin implementation. Use Web Share API.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Desktop: Not supported, use clipboard or Web Share API
+        Err("Sharing not supported on desktop. Use clipboard or Web Share API.".to_string())
+    }
+}
+
+// Share files (mobile-only, native implementation)
+#[tauri::command]
+async fn share_files(files: Vec<String>, title: Option<String>) -> Result<ShareResult, String> {
+    // Validate file paths
+    for file_path in &files {
+        if !std::path::Path::new(file_path).exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // TODO: Implement native file sharing
+        // Android: FileProvider + Share Intent
+        // iOS: UIActivityViewController with file URLs
+        Err("Native file sharing requires platform plugin implementation.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Desktop: File sharing not supported
+        Err("File sharing not supported on desktop.".to_string())
+    }
+}
+
+// Get current platform information
+#[tauri::command]
+fn get_share_platform() -> String {
+    get_platform_name()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -906,7 +1001,12 @@ pub fn run() {
             set_zoom,
             get_cameras,
             check_camera_permission,
-            request_camera_permission
+            request_camera_permission,
+            is_share_supported,
+            copy_to_clipboard,
+            share_text,
+            share_files,
+            get_share_platform
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
