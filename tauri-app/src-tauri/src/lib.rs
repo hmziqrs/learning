@@ -882,6 +882,7 @@ pub fn run() {
                 .build()
         )
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
