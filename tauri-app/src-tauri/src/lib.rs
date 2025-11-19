@@ -888,24 +888,14 @@ struct ShareResult {
     error: Option<String>,
 }
 
-// Check if sharing is supported on the current platform
+// Check if native backend sharing is supported
+// Returns false - native sharing not implemented in backend
+// Use Web Share API from frontend instead
 #[tauri::command]
 fn is_share_supported() -> Result<bool, String> {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        // Mobile platforms and macOS support native sharing
-        // macOS: NSSharingService
-        // iOS: UIActivityViewController
-        // Android: Intent.ACTION_SEND
-        Ok(true)
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
-    {
-        // Windows/Linux: Sharing not supported natively
-        // Use Web Share API or clipboard fallback
-        Ok(false)
-    }
+    // Native backend sharing not implemented
+    // Users should use Web Share API (navigator.share) from frontend
+    Ok(false)
 }
 
 // Copy text to clipboard (works on all platforms)
@@ -926,58 +916,20 @@ async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to read from clipboard: {}", e))
 }
 
-// Share text (native implementation for mobile + macOS)
+// Share text - Use Web Share API from frontend
+// Note: tauri-plugin-share only supports file sharing, not text sharing
+// Text sharing should be done via Web Share API (navigator.share) or clipboard
 #[tauri::command]
-async fn share_text(app: tauri::AppHandle, request: ShareRequest) -> Result<ShareResult, String> {
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        use tauri_plugin_share::ShareExt;
-
-        // Build the share text
-        let mut share_text = String::new();
-
-        if let Some(title) = &request.title {
-            share_text.push_str(title);
-            share_text.push_str("\n\n");
-        }
-
-        if let Some(text) = &request.text {
-            share_text.push_str(text);
-            if request.url.is_some() {
-                share_text.push_str("\n\n");
-            }
-        }
-
-        if let Some(url) = &request.url {
-            share_text.push_str(url);
-        }
-
-        // Share using the plugin
-        // macOS: NSSharingService
-        // iOS: UIActivityViewController
-        // Android: Intent.ACTION_SEND
-        match app.share(share_text) {
-            Ok(_) => Ok(ShareResult {
-                success: true,
-                error: None,
-            }),
-            Err(e) => Ok(ShareResult {
-                success: false,
-                error: Some(format!("Share failed: {}", e)),
-            }),
-        }
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
-    {
-        // Windows/Linux: Not supported, use clipboard or Web Share API
-        Err("Sharing not supported on Windows/Linux. Use clipboard or Web Share API.".to_string())
-    }
+async fn share_text(_app: tauri::AppHandle, _request: ShareRequest) -> Result<ShareResult, String> {
+    // Native text sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native text sharing not implemented. Use Web Share API (navigator.share) or clipboard fallback.".to_string())
 }
 
-// Share files (native implementation for mobile + macOS)
+// Share files - Use Web Share API from frontend
+// Note: Native file sharing requires platform-specific implementation
 #[tauri::command]
-async fn share_files(app: tauri::AppHandle, files: Vec<String>, title: Option<String>) -> Result<ShareResult, String> {
+async fn share_files(_app: tauri::AppHandle, files: Vec<String>, _title: Option<String>) -> Result<ShareResult, String> {
     // Validate file paths
     for file_path in &files {
         if !std::path::Path::new(file_path).exists() {
@@ -985,36 +937,9 @@ async fn share_files(app: tauri::AppHandle, files: Vec<String>, title: Option<St
         }
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
-    {
-        use tauri_plugin_share::ShareExt;
-
-        // For now, the share plugin primarily handles text
-        // File sharing requires additional platform-specific implementation
-        // We can provide the file path in the share text as a workaround
-        let share_text = if let Some(title_text) = title {
-            format!("{}\n\nFiles: {}", title_text, files.join(", "))
-        } else {
-            format!("Sharing files: {}", files.join(", "))
-        };
-
-        match app.share(share_text) {
-            Ok(_) => Ok(ShareResult {
-                success: true,
-                error: None,
-            }),
-            Err(e) => Ok(ShareResult {
-                success: false,
-                error: Some(format!("Share failed: {}. Note: Direct file sharing requires additional native implementation.", e)),
-            }),
-        }
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
-    {
-        // Windows/Linux: File sharing not supported
-        Err("File sharing not supported on Windows/Linux. Use Web Share API or file dialogs.".to_string())
-    }
+    // Native file sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native file sharing not implemented. Use Web Share API (navigator.share with files) or file dialogs.".to_string())
 }
 
 // Get current platform information
@@ -2407,7 +2332,6 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_websocket::init())
-        .plugin(tauri_plugin_share::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
