@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Timer,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'Background Tasks',
+    description: 'Schedule and manage background tasks with execution monitoring',
+    icon: Timer,
+    path: '/background-tasks',
+    color: 'text-fuchsia-500',
   },
 ]
 
