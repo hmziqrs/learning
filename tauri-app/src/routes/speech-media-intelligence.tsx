@@ -123,8 +123,33 @@ function SpeechMediaIntelligenceModule() {
       }
 
       recognition.onerror = (event: any) => {
-        const errorMsg = `Speech recognition error: ${event.error}`
-        setRecognitionError(errorMsg)
+        let errorMsg = `Speech recognition error: ${event.error}`
+        let userMsg = errorMsg
+
+        // Provide user-friendly error messages with solutions
+        switch (event.error) {
+          case 'not-allowed':
+          case 'service-not-allowed':
+            userMsg = 'Microphone access denied. Please allow microphone permissions in your browser settings and refresh the page.'
+            errorMsg = `${event.error}: ${userMsg}`
+            break
+          case 'no-speech':
+            userMsg = 'No speech detected. Please try speaking again.'
+            break
+          case 'audio-capture':
+            userMsg = 'Microphone not found or already in use. Please check your audio settings.'
+            break
+          case 'network':
+            userMsg = 'Network error. Speech recognition requires an internet connection.'
+            break
+          case 'aborted':
+            userMsg = 'Speech recognition was aborted.'
+            break
+          default:
+            userMsg = `Speech recognition error: ${event.error}. Please try again.`
+        }
+
+        setRecognitionError(userMsg)
         addOutput(errorMsg, false)
         setIsListening(false)
       }
@@ -192,6 +217,26 @@ function SpeechMediaIntelligenceModule() {
     setTranscript('')
     setInterimTranscript('')
     addOutput('Transcript cleared')
+  }
+
+  // Check microphone permissions
+  const checkMicrophonePermissions = async () => {
+    try {
+      addOutput('Checking microphone permissions...')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      // Permission granted - stop the stream immediately
+      stream.getTracks().forEach(track => track.stop())
+      addOutput('✓ Microphone permissions granted')
+      setRecognitionError(null)
+    } catch (error: any) {
+      const errorMsg = error.name === 'NotAllowedError'
+        ? 'Microphone access denied. Please allow microphone permissions in your browser.'
+        : `Microphone error: ${error.message}`
+
+      addOutput(`✗ ${errorMsg}`, false)
+      setRecognitionError(errorMsg)
+    }
   }
 
   // Text-to-Speech Controls
@@ -304,7 +349,11 @@ function SpeechMediaIntelligenceModule() {
                     {isListening ? 'Stop Listening' : 'Start Listening'}
                   </Button>
 
-                  <Button onClick={resetTranscript} variant="outline">
+                  <Button onClick={checkMicrophonePermissions} variant="outline">
+                    Check Permissions
+                  </Button>
+
+                  <Button onClick={resetTranscript} variant="ghost" size="sm">
                     Reset Transcript
                   </Button>
                 </div>
@@ -321,8 +370,21 @@ function SpeechMediaIntelligenceModule() {
                 )}
 
                 {recognitionError && (
-                  <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive">
-                    {recognitionError}
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-md p-4 space-y-3">
+                    <p className="text-sm text-destructive font-medium">
+                      {recognitionError}
+                    </p>
+                    {recognitionError.includes('Microphone access denied') && (
+                      <div className="bg-muted/50 rounded-md p-3 space-y-2">
+                        <p className="text-xs font-semibold text-foreground">How to fix:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+                          <li>Look for the microphone icon 🎤 in your browser's address bar</li>
+                          <li>Click it and select "Allow" for microphone access</li>
+                          <li>Refresh the page or click "Start Listening" again</li>
+                          <li>If the issue persists, check browser settings → Privacy → Microphone</li>
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 )}
 
