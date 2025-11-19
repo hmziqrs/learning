@@ -39,4 +39,5 @@ battery = "0.7"
 cpal = "0.15"
 network-interface = "2.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
+sysinfo = "0.32"
 
