@@ -2,6 +2,7 @@
 mod background_tasks;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
@@ -1211,6 +1212,81 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
         headers,
         body,
     })
+}
+
+// File Sharing & Social Integration Module
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ShareRequest {
+    title: Option<String>,
+    text: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ShareResult {
+    success: bool,
+    error: Option<String>,
+}
+
+// Check if native backend sharing is supported
+// Returns false - native sharing not implemented in backend
+// Use Web Share API from frontend instead
+#[tauri::command]
+fn is_share_supported() -> Result<bool, String> {
+    // Native backend sharing not implemented
+    // Users should use Web Share API (navigator.share) from frontend
+    Ok(false)
+}
+
+// Copy text to clipboard (works on all platforms)
+#[tauri::command]
+async fn copy_to_clipboard_backend(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    // Use clipboard plugin to write text
+    app.clipboard()
+        .write_text(text)
+        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
+    Ok(())
+}
+
+// Read text from clipboard
+#[tauri::command]
+async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
+    app.clipboard()
+        .read_text()
+        .map_err(|e| format!("Failed to read from clipboard: {}", e))
+}
+
+// Share text - Use Web Share API from frontend
+// Note: tauri-plugin-share only supports file sharing, not text sharing
+// Text sharing should be done via Web Share API (navigator.share) or clipboard
+#[tauri::command]
+async fn share_text(_app: tauri::AppHandle, _request: ShareRequest) -> Result<ShareResult, String> {
+    // Native text sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native text sharing not implemented. Use Web Share API (navigator.share) or clipboard fallback.".to_string())
+}
+
+// Share files - Use Web Share API from frontend
+// Note: Native file sharing requires platform-specific implementation
+#[tauri::command]
+async fn share_files(_app: tauri::AppHandle, files: Vec<String>, _title: Option<String>) -> Result<ShareResult, String> {
+    // Validate file paths
+    for file_path in &files {
+        if !std::path::Path::new(file_path).exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+    }
+
+    // Native file sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native file sharing not implemented. Use Web Share API (navigator.share with files) or file dialogs.".to_string())
+}
+
+// Get current platform information
+#[tauri::command]
+fn get_share_platform() -> String {
+    get_platform_name()
 }
 
 // App Lifecycle & OS Integration Module
@@ -2915,6 +2991,12 @@ pub fn run() {
             get_cameras,
             check_camera_permission,
             request_camera_permission,
+            is_share_supported,
+            copy_to_clipboard_backend,
+            read_from_clipboard,
+            share_text,
+            share_files,
+            get_share_platform,
             haptic_impact,
             haptic_notification,
             vibrate,
