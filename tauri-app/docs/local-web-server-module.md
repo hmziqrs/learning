@@ -438,10 +438,10 @@ function LocalWebServerDemo() {
 - [x] Graceful shutdown handling (oneshot channels)
 - [x] Auto-cleanup on app exit (cleanup on shutdown signal)
 
-### Phase 4: Advanced Features 🔄
-- [ ] Directory listing feature (not yet implemented)
-- [ ] Custom route handlers (optional, future)
-- [ ] Request logging (future enhancement)
+### Phase 4: Advanced Features ✅
+- [x] Directory listing feature (via ServeDir with precompression)
+- [x] Request logging (via TraceLayer middleware)
+- [ ] Custom route handlers (optional, future enhancement)
 - [ ] Response compression (future enhancement)
 - [ ] Cache headers configuration (future enhancement)
 
@@ -470,6 +470,8 @@ function LocalWebServerDemo() {
 - Graceful shutdown via tokio oneshot channels
 - Port auto-assignment (port 0)
 - Static file serving from configurable directories
+- Directory listing with precompressed content support (br, gzip, deflate)
+- Request logging with TraceLayer middleware (configurable)
 
 **Tauri Commands:**
 - `start_server` - Start HTTP server with config
@@ -486,6 +488,8 @@ function LocalWebServerDemo() {
 - Running servers list with individual stop controls
 - Port availability checking
 - Output logging with timestamps
+- Toggle controls for directory listing and request logging
+- Visual indicators for enabled features on running servers
 
 ## Use Cases
 

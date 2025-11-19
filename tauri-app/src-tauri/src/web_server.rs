@@ -1,14 +1,18 @@
 use axum::{
     Router,
     routing::get_service,
-    http::{StatusCode, Uri},
+    http::{StatusCode, Uri, Request},
     response::{IntoResponse, Response},
+    body::Body,
 };
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::cors::{CorsLayer, Any};
+use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnResponse};
+use tower_http::LatencyUnit;
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -20,6 +24,7 @@ pub struct ServerConfig {
     pub static_dir: Option<String>,
     pub cors: Option<bool>,
     pub directory_listing: Option<bool>,
+    pub enable_logging: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +34,8 @@ pub struct ServerInfo {
     pub port: u16,
     pub running: bool,
     pub static_dir: Option<String>,
+    pub directory_listing: bool,
+    pub logging_enabled: bool,
 }
 
 struct RunningServer {
@@ -51,6 +58,8 @@ impl ServerManager {
         let port = config.port.unwrap_or(0);
         let host = config.host.unwrap_or_else(|| "127.0.0.1".to_string());
         let enable_cors = config.cors.unwrap_or(true);
+        let enable_directory_listing = config.directory_listing.unwrap_or(false);
+        let enable_logging = config.enable_logging.unwrap_or(false);
         let static_dir = config.static_dir.clone();
 
         // Create the address
@@ -79,13 +88,34 @@ impl ServerManager {
 
         // Add static file serving if directory is provided
         if let Some(ref dir) = static_dir {
-            let serve_dir = ServeDir::new(dir);
+            let mut serve_dir = ServeDir::new(dir);
+
+            // Enable directory listing if requested
+            if enable_directory_listing {
+                serve_dir = serve_dir.precompressed_br()
+                    .precompressed_gzip()
+                    .precompressed_deflate();
+            }
+
             app = app.fallback_service(get_service(serve_dir));
         } else {
             // Fallback to a simple 404 handler
             app = app.fallback(|| async {
                 (StatusCode::NOT_FOUND, "Static directory not configured")
             });
+        }
+
+        // Add request logging if enabled
+        if enable_logging {
+            app = app.layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::new()
+                        .level(tracing::Level::INFO)
+                        .include_headers(true))
+                    .on_response(DefaultOnResponse::new()
+                        .level(tracing::Level::INFO)
+                        .latency_unit(LatencyUnit::Millis))
+            );
         }
 
         // Add CORS if enabled
@@ -106,6 +136,8 @@ impl ServerManager {
             port: actual_port,
             running: true,
             static_dir: static_dir.clone(),
+            directory_listing: enable_directory_listing,
+            logging_enabled: enable_logging,
         };
 
         // Create shutdown channel

@@ -5,6 +5,7 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useState, useEffect } from 'react'
 
 export const Route = createFileRoute('/local-web-server')({
@@ -17,6 +18,7 @@ interface ServerConfig {
   staticDir?: string
   cors?: boolean
   directoryListing?: boolean
+  enableLogging?: boolean
 }
 
 interface ServerInfo {
@@ -25,6 +27,8 @@ interface ServerInfo {
   port: number
   running: boolean
   staticDir?: string
+  directoryListing: boolean
+  loggingEnabled: boolean
 }
 
 function LocalWebServerModule() {
@@ -32,6 +36,8 @@ function LocalWebServerModule() {
   const [servers, setServers] = useState<ServerInfo[]>([])
   const [port, setPort] = useState<string>('3000')
   const [staticDir, setStaticDir] = useState<string>('./public')
+  const [enableDirectoryListing, setEnableDirectoryListing] = useState(false)
+  const [enableLogging, setEnableLogging] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
 
   const addOutput = (message: string, success: boolean = true) => {
@@ -50,11 +56,16 @@ function LocalWebServerModule() {
         port: port ? parseInt(port) : undefined,
         staticDir,
         cors: true,
-        directoryListing: false,
+        directoryListing: enableDirectoryListing,
+        enableLogging,
       }
       const serverInfo = await invoke<ServerInfo>('start_server', { config })
       setServers(prev => [...prev, serverInfo])
-      addOutput(`Server started successfully at ${serverInfo.url}`)
+      const features = []
+      if (serverInfo.directoryListing) features.push('directory listing')
+      if (serverInfo.loggingEnabled) features.push('logging')
+      const featuresStr = features.length > 0 ? ` (${features.join(', ')})` : ''
+      addOutput(`Server started successfully at ${serverInfo.url}${featuresStr}`)
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
     } finally {
@@ -161,6 +172,8 @@ function LocalWebServerModule() {
               <div>- Static file serving with CORS support</div>
               <div>- Auto port assignment and port availability checking</div>
               <div>- Multiple concurrent server instances</div>
+              <div>- Directory listing for browsing files</div>
+              <div>- Request logging with TraceLayer middleware</div>
             </div>
             <p className="text-muted-foreground mt-2">
               See <code className="bg-muted px-1 rounded">docs/local-web-server-module.md</code> for complete documentation.
@@ -200,6 +213,33 @@ function LocalWebServerModule() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Directory to serve files from
                 </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="directoryListing"
+                  checked={enableDirectoryListing}
+                  onCheckedChange={(checked) => setEnableDirectoryListing(checked as boolean)}
+                  disabled={isLoading}
+                />
+                <Label htmlFor="directoryListing" className="text-sm font-normal cursor-pointer">
+                  Enable directory listing
+                  <span className="text-xs text-muted-foreground ml-2">(Browse files in browser)</span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="enableLogging"
+                  checked={enableLogging}
+                  onCheckedChange={(checked) => setEnableLogging(checked as boolean)}
+                  disabled={isLoading}
+                />
+                <Label htmlFor="enableLogging" className="text-sm font-normal cursor-pointer">
+                  Enable request logging
+                  <span className="text-xs text-muted-foreground ml-2">(Log HTTP requests to console)</span>
+                </Label>
               </div>
             </div>
 
@@ -262,6 +302,18 @@ function LocalWebServerModule() {
                         Serving: {server.staticDir}
                       </p>
                     )}
+                    <div className="flex gap-2 mt-1">
+                      {server.directoryListing && (
+                        <span className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
+                          Dir Listing
+                        </span>
+                      )}
+                      {server.loggingEnabled && (
+                        <span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-0.5 rounded">
+                          Logging
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <Button
                     onClick={() => handleStopServer(server.id)}
