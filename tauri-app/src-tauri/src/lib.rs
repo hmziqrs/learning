@@ -1,8 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod background_tasks;
+use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
+use background_tasks::*;
 
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -971,9 +975,1377 @@ fn get_share_platform() -> String {
     get_platform_name()
 }
 
+
+// Network Status & WiFi Module
+#[derive(Debug, Serialize, Deserialize)]
+struct NetworkStatus {
+    online: bool,
+    #[serde(rename = "connectionType")]
+    connection_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    downlink: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rtt: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct NetworkInterface {
+    name: String,
+    #[serde(rename = "type")]
+    interface_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mac_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip_addresses: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WiFiInfo {
+    ssid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal_strength: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    security_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WiFiNetwork {
+    ssid: String,
+    bssid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal_strength: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    security_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ConnectionQualityMetrics {
+    latency: u64,
+    jitter: u64,
+    packet_loss: f64,
+    quality_score: u8,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SpeedTestResult {
+    download_speed: f64,
+    upload_speed: f64,
+    latency: u64,
+    server: String,
+}
+
+#[tauri::command]
+async fn check_network_status() -> Result<NetworkStatus, String> {
+    use std::net::TcpStream;
+
+    // Try to connect to Google DNS to check internet connectivity
+    let online = match TcpStream::connect_timeout(
+        &"8.8.8.8:53".parse().unwrap(),
+        Duration::from_secs(3)
+    ) {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+
+    let connection_type = detect_connection_type().await;
+
+    Ok(NetworkStatus {
+        online,
+        connection_type,
+        downlink: None,
+        rtt: None,
+    })
+}
+
+async fn detect_connection_type() -> String {
+    use network_interface::NetworkInterface as NI;
+    use network_interface::NetworkInterfaceConfig;
+
+    match NI::show() {
+        Ok(interfaces) => {
+            for iface in interfaces {
+                if let Some(_mac) = iface.mac_addr {
+                    let name_lower = iface.name.to_lowercase();
+
+                    // Check if interface has IP addresses (is active)
+                    if !iface.addr.is_empty() {
+                        // WiFi detection
+                        if name_lower.contains("wi") ||
+                           name_lower.contains("wl") ||
+                           name_lower.contains("airport") ||
+                           name_lower.starts_with("en") && cfg!(target_os = "macos") {
+                            // Verify it's actually WiFi (not ethernet)
+                            #[cfg(target_os = "macos")]
+                            {
+                                if is_wifi_active_macos().await {
+                                    return "wifi".to_string();
+                                }
+                            }
+                            #[cfg(target_os = "linux")]
+                            {
+                                if name_lower.starts_with("wl") {
+                                    return "wifi".to_string();
+                                }
+                            }
+                            #[cfg(target_os = "windows")]
+                            {
+                                if name_lower.contains("wi-fi") || name_lower.contains("wireless") {
+                                    return "wifi".to_string();
+                                }
+                            }
+                        }
+
+                        // Ethernet detection
+                        if name_lower.contains("eth") ||
+                           name_lower.contains("en") && !cfg!(target_os = "macos") ||
+                           name_lower.contains("ethernet") ||
+                           name_lower.starts_with("em") {
+                            return "ethernet".to_string();
+                        }
+                    }
+                }
+            }
+            "unknown".to_string()
+        }
+        Err(_) => "unknown".to_string(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn is_wifi_active_macos() -> bool {
+    use std::process::Command;
+
+    // Try multiple possible airport utility locations
+    let airport_paths = [
+        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+        "/usr/sbin/airport",
+    ];
+
+    for path in &airport_paths {
+        if let Ok(output) = Command::new(path).args(["-I"]).output() {
+            let info = String::from_utf8_lossy(&output.stdout);
+            // If we can get SSID, WiFi is active
+            for line in info.lines() {
+                if line.trim().contains("SSID:") && !line.contains("BSSID") {
+                    if let Some(ssid) = line.split(':').nth(1) {
+                        if !ssid.trim().is_empty() {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: try networksetup to check WiFi status
+    if let Ok(output) = Command::new("networksetup")
+        .args(["-getairportpower", "en0"])
+        .output()
+    {
+        let info = String::from_utf8_lossy(&output.stdout);
+        if info.contains("On") {
+            return true;
+        }
+    }
+
+    false
+}
+
+#[tauri::command]
+async fn get_network_interfaces() -> Result<Vec<NetworkInterface>, String> {
+    use network_interface::NetworkInterface as NI;
+    use network_interface::NetworkInterfaceConfig;
+
+    let interfaces = NI::show()
+        .map_err(|e| format!("Failed to get network interfaces: {}", e))?;
+
+    let result: Vec<NetworkInterface> = interfaces
+        .into_iter()
+        .map(|iface| {
+            let name_lower = iface.name.to_lowercase();
+            let interface_type = if name_lower.contains("wi") || name_lower.contains("wl") {
+                "wifi".to_string()
+            } else if name_lower.contains("eth") || name_lower.contains("en") {
+                "ethernet".to_string()
+            } else if name_lower.contains("lo") {
+                "loopback".to_string()
+            } else {
+                "other".to_string()
+            };
+
+            NetworkInterface {
+                name: iface.name,
+                interface_type,
+                mac_address: iface.mac_addr.map(|m| m.to_string()),
+                ip_addresses: Some(
+                    iface.addr
+                        .iter()
+                        .map(|addr| addr.ip().to_string())
+                        .collect()
+                ),
+            }
+        })
+        .collect();
+
+    Ok(result)
+}
+
+#[tauri::command]
+async fn get_wifi_info() -> Result<WiFiInfo, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+            security_type: None,
+        };
+
+        // Method 1: Try using airport utility (try multiple possible locations)
+        let airport_paths = [
+            "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+            "/usr/sbin/airport", // Alternative location on some macOS versions
+        ];
+
+        let mut airport_result = None;
+        for path in &airport_paths {
+            if let Ok(output) = Command::new(path).args(["-I"]).output() {
+                airport_result = Some(output);
+                break;
+            }
+        }
+
+        if let Some(output) = airport_result {
+            let info = String::from_utf8_lossy(&output.stdout);
+
+            // Parse WiFi information from output
+            for line in info.lines() {
+                let trimmed = line.trim();
+
+                if trimmed.contains("SSID:") && !trimmed.contains("BSSID") {
+                    if let Some(ssid) = trimmed.split(':').nth(1) {
+                        wifi_info.ssid = ssid.trim().to_string();
+                    }
+                } else if trimmed.starts_with("BSSID:") {
+                    if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+                        wifi_info.bssid = Some(bssid.to_string());
+                    }
+                } else if trimmed.contains("agrCtlRSSI:") {
+                    if let Some(rssi) = trimmed.split(':').nth(1) {
+                        if let Ok(signal) = rssi.trim().parse::<i32>() {
+                            wifi_info.signal_strength = Some(signal);
+                        }
+                    }
+                } else if trimmed.contains("link auth:") {
+                    if let Some(auth) = trimmed.split(':').nth(1) {
+                        wifi_info.security_type = Some(auth.trim().to_string());
+                    }
+                }
+            }
+        }
+
+        // Method 2: Fallback to networksetup if airport failed or gave no results
+        // Try multiple interfaces (en0, en1, etc.)
+        if wifi_info.ssid.is_empty() {
+            let interfaces = ["en0", "en1", "en2"];
+            for interface in &interfaces {
+                if let Ok(output) = Command::new("networksetup")
+                    .args(["-getairportnetwork", interface])
+                    .output()
+                {
+                    let info = String::from_utf8_lossy(&output.stdout);
+                    if info.contains("Current Wi-Fi Network:") {
+                        if let Some(ssid) = info.split("Current Wi-Fi Network:").nth(1) {
+                            let ssid_trimmed = ssid.trim();
+                            if !ssid_trimmed.is_empty() {
+                                wifi_info.ssid = ssid_trimmed.to_string();
+
+                                // Get IP address for this interface
+                                if let Ok(ip_output) = Command::new("ipconfig")
+                                    .args(["getifaddr", interface])
+                                    .output()
+                                {
+                                    let ip = String::from_utf8_lossy(&ip_output.stdout);
+                                    let ip_trimmed = ip.trim();
+                                    if !ip_trimmed.is_empty() {
+                                        wifi_info.ip_address = Some(ip_trimmed.to_string());
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Method 3: Fallback to system_profiler if other methods failed
+        if wifi_info.ssid.is_empty() {
+            if let Ok(output) = Command::new("system_profiler")
+                .args(["SPAirPortDataType"])
+                .output()
+            {
+                let info = String::from_utf8_lossy(&output.stdout);
+                let mut in_current_network = false;
+                let mut current_ssid = String::new();
+
+                for line in info.lines() {
+                    let trimmed = line.trim();
+
+                    // Look for Current Network Information section
+                    if trimmed.contains("Current Network Information:") {
+                        in_current_network = true;
+                        continue;
+                    }
+
+                    // Stop when we hit "Other Local Wi-Fi Networks" section
+                    if in_current_network && trimmed.contains("Other Local Wi-Fi Networks:") {
+                        // Found SSID in current network, use it
+                        if !current_ssid.is_empty() {
+                            wifi_info.ssid = current_ssid.clone();
+                        }
+                        break;
+                    }
+
+                    if in_current_network && !trimmed.is_empty() {
+                        // SSID is a line that ends with ":" but is NOT a known property key
+                        // Known properties: PHY Mode:, Channel:, Country Code:, Network Type:, Security:, Signal / Noise:, Transmit Rate:, MCS Index:
+                        if trimmed.ends_with(":") &&
+                           !trimmed.starts_with("PHY Mode") &&
+                           !trimmed.starts_with("Channel") &&
+                           !trimmed.starts_with("Country") &&
+                           !trimmed.starts_with("Network Type") &&
+                           !trimmed.starts_with("Security") &&
+                           !trimmed.starts_with("Signal") &&
+                           !trimmed.starts_with("Transmit") &&
+                           !trimmed.starts_with("MCS") {
+                            current_ssid = trimmed.trim_end_matches(':').to_string();
+                        }
+
+                        // Extract signal strength: "-56 dBm"
+                        if trimmed.contains("Signal / Noise:") {
+                            if let Some(signal_part) = trimmed.split(':').nth(1) {
+                                let signal_str = signal_part.split_whitespace().next().unwrap_or("");
+                                if let Ok(signal) = signal_str.parse::<i32>() {
+                                    wifi_info.signal_strength = Some(signal);
+                                }
+                            }
+                        }
+
+                        // Extract security type
+                        if trimmed.starts_with("Security:") {
+                            if let Some(security) = trimmed.split(':').nth(1) {
+                                wifi_info.security_type = Some(security.trim().to_string());
+                            }
+                        }
+                    }
+                }
+
+                // If still no SSID, try to get IP address as confirmation we're connected
+                if !wifi_info.ssid.is_empty() {
+                    if let Ok(ip_output) = Command::new("ipconfig")
+                        .args(["getifaddr", "en0"])
+                        .output()
+                    {
+                        let ip = String::from_utf8_lossy(&ip_output.stdout);
+                        let ip_trimmed = ip.trim();
+                        if !ip_trimmed.is_empty() {
+                            wifi_info.ip_address = Some(ip_trimmed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
+            Err("Not connected to WiFi. Please enable WiFi and connect to a network. Note: This feature only works when connected via WiFi (not ethernet).".to_string())
+        } else {
+            Ok(wifi_info)
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+            security_type: None,
+        };
+
+        // Get SSID - check if command exists first
+        match Command::new("iwgetid").args(["-r"]).output() {
+            Ok(output) => {
+                let ssid = String::from_utf8_lossy(&output.stdout);
+                wifi_info.ssid = ssid.trim().to_string();
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    return Err("WiFi tools not found. Please install wireless-tools: sudo apt-get install wireless-tools (Ubuntu/Debian) or sudo dnf install wireless-tools (Fedora)".to_string());
+                }
+                return Err(format!("Failed to get WiFi info: {}", e));
+            }
+        }
+
+        // Get more detailed info with iwconfig
+        if let Ok(output) = Command::new("iwconfig").output() {
+            let info = String::from_utf8_lossy(&output.stdout);
+
+            for line in info.lines() {
+                if line.contains("Access Point:") {
+                    if let Some(bssid) = line.split("Access Point:").nth(1) {
+                        let bssid_clean = bssid.trim().split_whitespace().next().unwrap_or("");
+                        if bssid_clean != "Not-Associated" && !bssid_clean.is_empty() {
+                            wifi_info.bssid = Some(bssid_clean.to_string());
+                        }
+                    }
+                }
+                if line.contains("Signal level=") {
+                    if let Some(signal_part) = line.split("Signal level=").nth(1) {
+                        if let Some(signal_str) = signal_part.split_whitespace().next() {
+                            if let Ok(signal) = signal_str.parse::<i32>() {
+                                wifi_info.signal_strength = Some(signal);
+                            }
+                        }
+                    }
+                }
+                if line.contains("Encryption key:on") {
+                    wifi_info.security_type = Some("WPA/WPA2".to_string());
+                }
+            }
+        }
+
+        // Try to get more specific security info
+        if let Ok(output) = Command::new("nmcli").args(["-t", "-f", "SECURITY,ACTIVE", "dev", "wifi"]).output() {
+            let info = String::from_utf8_lossy(&output.stdout);
+            for line in info.lines() {
+                if line.contains("yes") {
+                    if let Some(security) = line.split(':').next() {
+                        if !security.is_empty() && security != "--" {
+                            wifi_info.security_type = Some(security.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Get IP address
+        if let Ok(output) = Command::new("ip").args(["addr", "show"]).output() {
+            let ip_info = String::from_utf8_lossy(&output.stdout);
+            for line in ip_info.lines() {
+                if line.contains("inet ") && !line.contains("127.0.0.1") {
+                    if let Some(ip_part) = line.trim().split_whitespace().nth(1) {
+                        if let Some(ip) = ip_part.split('/').next() {
+                            wifi_info.ip_address = Some(ip.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
+            Err("Not connected to WiFi".to_string())
+        } else {
+            Ok(wifi_info)
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        let output = Command::new("netsh")
+            .args(["wlan", "show", "interfaces"])
+            .output()
+            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+            security_type: None,
+        };
+
+        // Parse SSID, BSSID, Signal, and Authentication
+        for line in info.lines() {
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("SSID") && !trimmed.contains("BSSID") {
+                if let Some(ssid) = trimmed.split(':').nth(1) {
+                    wifi_info.ssid = ssid.trim().to_string();
+                }
+            } else if trimmed.starts_with("BSSID") {
+                if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+                    wifi_info.bssid = Some(bssid.to_string());
+                }
+            } else if trimmed.starts_with("Signal") {
+                if let Some(signal_str) = trimmed.split(':').nth(1) {
+                    let signal_clean = signal_str.trim().trim_end_matches('%');
+                    if let Ok(signal) = signal_clean.parse::<i32>() {
+                        wifi_info.signal_strength = Some(signal);
+                    }
+                }
+            } else if trimmed.starts_with("Authentication") {
+                if let Some(auth) = trimmed.split(':').nth(1) {
+                    wifi_info.security_type = Some(auth.trim().to_string());
+                }
+            }
+        }
+
+        // Get IP address
+        if let Ok(ip_output) = Command::new("ipconfig").output() {
+            let ip_info = String::from_utf8_lossy(&ip_output.stdout);
+            let mut found_wireless = false;
+
+            for line in ip_info.lines() {
+                if line.contains("Wireless") {
+                    found_wireless = true;
+                } else if found_wireless && line.contains("IPv4") {
+                    if let Some(ip) = line.split(':').nth(1) {
+                        wifi_info.ip_address = Some(ip.trim().to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
+            Err("Not connected to WiFi".to_string())
+        } else {
+            Ok(wifi_info)
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err("WiFi info not supported on this platform".to_string())
+    }
+}
+
+#[tauri::command]
+async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let mut networks = Vec::new();
+
+        // Method 1: Try using airport utility (try multiple possible locations)
+        let airport_paths = [
+            "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+            "/usr/sbin/airport", // Alternative location on some macOS versions
+        ];
+
+        let mut airport_result = None;
+        for path in &airport_paths {
+            if let Ok(output) = Command::new(path).args(["-s"]).output() {
+                if output.status.success() {
+                    airport_result = Some(output);
+                    break;
+                }
+            }
+        }
+
+        if let Some(output) = airport_result {
+            if output.status.success() {
+                let info = String::from_utf8_lossy(&output.stdout);
+
+                // Skip header line
+                for line in info.lines().skip(1) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 3 {
+                        let ssid = parts[0].to_string();
+                        let bssid = parts[1].to_string();
+                        let rssi = parts[2].parse::<i32>().ok();
+
+                        networks.push(WiFiNetwork {
+                            ssid,
+                            bssid,
+                            signal_strength: rssi,
+                            security_type: if parts.len() > 6 { Some(parts[6].to_string()) } else { None },
+                            frequency: None,
+                        });
+                    }
+                }
+
+                if !networks.is_empty() {
+                    return Ok(networks);
+                }
+            }
+        }
+
+        // Method 2: Fallback to system_profiler (non-XML format for easier parsing)
+        if networks.is_empty() {
+            if let Ok(output) = Command::new("system_profiler")
+                .args(["SPAirPortDataType"])
+                .output()
+            {
+                if output.status.success() {
+                    let info = String::from_utf8_lossy(&output.stdout);
+                    let mut current_ssid = String::new();
+                    let mut current_signal: Option<i32> = None;
+                    let mut current_security: Option<String> = None;
+
+                    let mut in_other_networks = false;
+                    let mut in_network_block = false;
+
+                    for line in info.lines() {
+                        let trimmed = line.trim();
+
+                        // Check if we're in the "Other Local Wi-Fi Networks" section
+                        if trimmed.contains("Other Local Wi-Fi Networks:") {
+                            in_other_networks = true;
+                            continue;
+                        }
+
+                        if in_other_networks && !trimmed.is_empty() {
+                            // SSID line: ends with ":" but is NOT a known property
+                            if trimmed.ends_with(":") &&
+                               !trimmed.starts_with("PHY Mode") &&
+                               !trimmed.starts_with("Channel") &&
+                               !trimmed.starts_with("Country") &&
+                               !trimmed.starts_with("Network Type") &&
+                               !trimmed.starts_with("Security") &&
+                               !trimmed.starts_with("Signal") &&
+                               !trimmed.starts_with("Transmit") &&
+                               !trimmed.starts_with("MCS") {
+                                // Save previous network before starting a new one
+                                if in_network_block && !current_ssid.is_empty() {
+                                    networks.push(WiFiNetwork {
+                                        ssid: current_ssid.clone(),
+                                        bssid: String::new(),
+                                        signal_strength: current_signal,
+                                        security_type: current_security.clone(),
+                                        frequency: None,
+                                    });
+                                    current_signal = None;
+                                    current_security = None;
+                                }
+                                current_ssid = trimmed.trim_end_matches(':').to_string();
+                                in_network_block = true;
+                            } else if in_network_block {
+                                // Parse properties within a network block
+                                if trimmed.starts_with("Security:") {
+                                    if let Some(security) = trimmed.split(':').nth(1) {
+                                        current_security = Some(security.trim().to_string());
+                                    }
+                                } else if trimmed.contains("Signal / Noise:") {
+                                    if let Some(signal_part) = trimmed.split(':').nth(1) {
+                                        let signal_str = signal_part.split_whitespace().next().unwrap_or("");
+                                        if let Ok(signal) = signal_str.parse::<i32>() {
+                                            current_signal = Some(signal);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add last network if exists
+                    if in_network_block && !current_ssid.is_empty() {
+                        networks.push(WiFiNetwork {
+                            ssid: current_ssid,
+                            bssid: String::new(),
+                            signal_strength: current_signal,
+                            security_type: current_security,
+                            frequency: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Method 3: Return helpful message if no networks found
+        if networks.is_empty() {
+            return Err("No WiFi networks found. Make sure WiFi is enabled and try again. Note: On some macOS versions, you may need to run the app with proper permissions to scan networks.".to_string());
+        }
+
+        Ok(networks)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+
+        let output = Command::new("nmcli")
+            .args(["-t", "-f", "SSID,BSSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
+            .output()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "NetworkManager not found. Please install NetworkManager: sudo apt-get install network-manager (Ubuntu/Debian) or sudo dnf install NetworkManager (Fedora)".to_string()
+                } else {
+                    format!("Failed to scan WiFi networks: {}", e)
+                }
+            })?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+        let mut networks = Vec::new();
+
+        for line in info.lines() {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() >= 3 {
+                networks.push(WiFiNetwork {
+                    ssid: parts[0].to_string(),
+                    bssid: parts.get(1).unwrap_or(&"").to_string(),
+                    signal_strength: parts.get(2).and_then(|s| s.parse::<i32>().ok()),
+                    security_type: parts.get(3).map(|s| s.to_string()),
+                    frequency: None,
+                });
+            }
+        }
+
+        Ok(networks)
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        let output = Command::new("netsh")
+            .args(["wlan", "show", "networks", "mode=bssid"])
+            .output()
+            .map_err(|e| format!("Failed to scan WiFi networks: {}", e))?;
+
+        let info = String::from_utf8_lossy(&output.stdout);
+        let mut networks = Vec::new();
+        let mut current_ssid = String::new();
+        let mut current_bssid = String::new();
+        let mut current_signal = None;
+        let mut current_auth = None;
+
+        for line in info.lines() {
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("SSID") && !trimmed.contains("BSSID") {
+                if let Some(ssid) = trimmed.split(':').nth(1) {
+                    current_ssid = ssid.trim().to_string();
+                }
+            } else if trimmed.starts_with("BSSID") {
+                if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").split_whitespace().next() {
+                    current_bssid = bssid.to_string();
+                }
+            } else if trimmed.starts_with("Signal") {
+                if let Some(signal_str) = trimmed.split(':').nth(1) {
+                    let signal_clean = signal_str.trim().trim_end_matches('%');
+                    current_signal = signal_clean.parse::<i32>().ok();
+                }
+            } else if trimmed.starts_with("Authentication") {
+                if let Some(auth) = trimmed.split(':').nth(1) {
+                    current_auth = Some(auth.trim().to_string());
+                }
+
+                // Add network when we have all info
+                if !current_ssid.is_empty() && !current_bssid.is_empty() {
+                    networks.push(WiFiNetwork {
+                        ssid: current_ssid.clone(),
+                        bssid: current_bssid.clone(),
+                        signal_strength: current_signal,
+                        security_type: current_auth.clone(),
+                        frequency: None,
+                    });
+                    current_ssid = String::new();
+                    current_bssid = String::new();
+                    current_signal = None;
+                    current_auth = None;
+                }
+            }
+        }
+
+        Ok(networks)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err("WiFi scanning not supported on this platform".to_string())
+    }
+}
+
+#[tauri::command]
+async fn test_connection_quality() -> Result<ConnectionQualityMetrics, String> {
+    use std::net::TcpStream;
+    use std::time::Instant;
+
+    let servers = vec![
+        "8.8.8.8:53",      // Google DNS
+        "1.1.1.1:53",      // Cloudflare DNS
+        "208.67.222.222:53", // OpenDNS
+    ];
+
+    let mut latencies = Vec::new();
+    let mut successful_connections = 0;
+
+    for server in &servers {
+        let start = Instant::now();
+        match TcpStream::connect_timeout(
+            &server.parse().unwrap(),
+            Duration::from_secs(2)
+        ) {
+            Ok(_) => {
+                let latency = start.elapsed().as_millis() as u64;
+                latencies.push(latency);
+                successful_connections += 1;
+            }
+            Err(_) => {}
+        }
+    }
+
+    if latencies.is_empty() {
+        return Err("No successful connections".to_string());
+    }
+
+    // Calculate average latency
+    let avg_latency = latencies.iter().sum::<u64>() / latencies.len() as u64;
+
+    // Calculate jitter (variation in latency)
+    let jitter = if latencies.len() > 1 {
+        let max = *latencies.iter().max().unwrap();
+        let min = *latencies.iter().min().unwrap();
+        max - min
+    } else {
+        0
+    };
+
+    // Calculate packet loss percentage
+    let packet_loss = ((servers.len() - successful_connections) as f64 / servers.len() as f64) * 100.0;
+
+    // Calculate quality score (0-100)
+    let quality_score = if avg_latency < 50 && jitter < 20 && packet_loss == 0.0 {
+        100
+    } else if avg_latency < 100 && jitter < 50 && packet_loss < 10.0 {
+        80
+    } else if avg_latency < 200 && packet_loss < 25.0 {
+        60
+    } else if avg_latency < 500 && packet_loss < 50.0 {
+        40
+    } else {
+        20
+    };
+
+    Ok(ConnectionQualityMetrics {
+        latency: avg_latency,
+        jitter,
+        packet_loss,
+        quality_score,
+    })
+}
+
+#[tauri::command]
+async fn estimate_bandwidth() -> Result<f64, String> {
+    // Download a small test file to estimate bandwidth
+    let test_url = "https://www.google.com/robots.txt"; // Small known file
+    let start = std::time::Instant::now();
+
+    let response = HTTP_CLIENT
+        .get(test_url)
+        .send()
+        .await
+        .map_err(|e| format!("Bandwidth test failed: {}", e))?;
+
+    let bytes = response.bytes()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let elapsed = start.elapsed().as_secs_f64();
+    let bytes_len = bytes.len() as f64;
+
+    // Calculate bandwidth in Mbps
+    let bandwidth_mbps = (bytes_len * 8.0) / (elapsed * 1_000_000.0);
+
+    Ok(bandwidth_mbps)
+}
+
+#[tauri::command]
+async fn run_speed_test() -> Result<SpeedTestResult, String> {
+    use std::time::Instant;
+
+    // Test server - using httpbin for reliable testing
+    let test_server = "https://httpbin.org".to_string();
+
+    // Test latency
+    let latency_start = Instant::now();
+    HTTP_CLIENT
+        .get(&format!("{}/get", test_server))
+        .send()
+        .await
+        .map_err(|e| format!("Latency test failed: {}", e))?;
+    let latency = latency_start.elapsed().as_millis() as u64;
+
+    // Test download speed (download 1MB worth of data)
+    let download_start = Instant::now();
+    let download_response = HTTP_CLIENT
+        .get(&format!("{}/bytes/1048576", test_server)) // 1MB
+        .send()
+        .await
+        .map_err(|e| format!("Download test failed: {}", e))?;
+
+    let download_bytes = download_response.bytes()
+        .await
+        .map_err(|e| format!("Failed to read download data: {}", e))?;
+
+    let download_time = download_start.elapsed().as_secs_f64();
+    let download_speed = (download_bytes.len() as f64 * 8.0) / (download_time * 1_000_000.0); // Mbps
+
+    // Test upload speed (upload 100KB of data)
+    let upload_data = vec![0u8; 102400]; // 100KB
+    let upload_start = Instant::now();
+
+    HTTP_CLIENT
+        .post(&format!("{}/post", test_server))
+        .body(upload_data.clone())
+        .send()
+        .await
+        .map_err(|e| format!("Upload test failed: {}", e))?;
+
+    let upload_time = upload_start.elapsed().as_secs_f64();
+    let upload_speed = (upload_data.len() as f64 * 8.0) / (upload_time * 1_000_000.0); // Mbps
+
+    Ok(SpeedTestResult {
+        download_speed,
+        upload_speed,
+        latency,
+        server: test_server,
+    })
+}
+
+// Upload Progress Tracking
+use std::sync::Arc;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct UploadProgress {
+    loaded: u64,
+    total: u64,
+    percentage: f64,
+    speed: f64, // bytes per second
+}
+
+static UPLOAD_CANCEL_FLAGS: Lazy<Arc<Mutex<std::collections::HashMap<String, bool>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(std::collections::HashMap::new())));
+
+#[tauri::command]
+async fn upload_file_with_progress(
+    url: String,
+    file_path: String,
+    upload_id: String,
+    window: tauri::Window,
+) -> Result<HttpResponse, String> {
+    use std::path::Path;
+    use tokio::fs::File;
+    use tokio::io::AsyncReadExt;
+
+    // Register upload ID for cancellation
+    {
+        let mut flags = UPLOAD_CANCEL_FLAGS.lock().unwrap();
+        flags.insert(upload_id.clone(), false);
+    }
+
+    // Read file
+    let mut file = File::open(&file_path)
+        .await
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    let metadata = file.metadata()
+        .await
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+
+    let total_size = metadata.len();
+
+    // Get filename
+    let file_name = Path::new(&file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Invalid file path".to_string())?
+        .to_string();
+
+    // Read file in chunks and build byte vector
+    let chunk_size = 65536; // 64KB chunks
+    let mut file_bytes = Vec::new();
+    let mut buffer = vec![0u8; chunk_size];
+    let mut loaded = 0u64;
+    let start_time = std::time::Instant::now();
+
+    loop {
+        // Check if upload was cancelled
+        {
+            let flags = UPLOAD_CANCEL_FLAGS.lock().unwrap();
+            if let Some(&cancelled) = flags.get(&upload_id) {
+                if cancelled {
+                    return Err("Upload cancelled by user".to_string());
+                }
+            }
+        }
+
+        let n = file.read(&mut buffer)
+            .await
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+
+        if n == 0 {
+            break;
+        }
+
+        file_bytes.extend_from_slice(&buffer[..n]);
+        loaded += n as u64;
+
+        // Calculate progress
+        let percentage = (loaded as f64 / total_size as f64) * 100.0;
+        let elapsed = start_time.elapsed().as_secs_f64();
+        let speed = if elapsed > 0.0 { loaded as f64 / elapsed } else { 0.0 };
+
+        // Emit progress event
+        let progress = UploadProgress {
+            loaded,
+            total: total_size,
+            percentage,
+            speed,
+        };
+
+        let _ = window.emit("upload-progress", progress);
+    }
+
+    // Create multipart form
+    let part = reqwest::multipart::Part::bytes(file_bytes)
+        .file_name(file_name);
+
+    let form = reqwest::multipart::Form::new()
+        .part("file", part);
+
+    // Send upload request
+    let response = HTTP_CLIENT
+        .post(&url)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("File upload failed: {}", e))?;
+
+    let status = response.status().as_u16();
+
+    // Extract headers
+    let mut headers = std::collections::HashMap::new();
+    for (key, value) in response.headers().iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers.insert(key.to_string(), value_str.to_string());
+        }
+    }
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    // Clean up cancel flag
+    {
+        let mut flags = UPLOAD_CANCEL_FLAGS.lock().unwrap();
+        flags.remove(&upload_id);
+    }
+
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
+#[tauri::command]
+async fn cancel_upload(upload_id: String) -> Result<(), String> {
+    let mut flags = UPLOAD_CANCEL_FLAGS.lock().unwrap();
+    if let Some(flag) = flags.get_mut(&upload_id) {
+        *flag = true;
+        Ok(())
+    } else {
+        Err("Upload ID not found".to_string())
+    }
+}
+
+#[tauri::command]
+async fn upload_file_chunked(
+    url: String,
+    file_path: String,
+    chunk_size: usize,
+    window: tauri::Window,
+) -> Result<Vec<HttpResponse>, String> {
+    use std::path::Path;
+    use tokio::fs::File;
+    use tokio::io::AsyncReadExt;
+
+    let mut file = File::open(&file_path)
+        .await
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    let metadata = file.metadata()
+        .await
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+
+    let total_size = metadata.len();
+    let file_name = Path::new(&file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Invalid file path".to_string())?
+        .to_string();
+
+    let mut responses = Vec::new();
+    let mut chunk_index = 0;
+    let mut loaded = 0u64;
+    let start_time = std::time::Instant::now();
+
+    loop {
+        let mut chunk_buffer = vec![0u8; chunk_size];
+        let n = file.read(&mut chunk_buffer)
+            .await
+            .map_err(|e| format!("Failed to read file chunk: {}", e))?;
+
+        if n == 0 {
+            break;
+        }
+
+        chunk_buffer.truncate(n);
+        loaded += n as u64;
+
+        // Upload chunk
+        let part = reqwest::multipart::Part::bytes(chunk_buffer)
+            .file_name(format!("{}.part{}", file_name, chunk_index));
+
+        let form = reqwest::multipart::Form::new()
+            .part("file", part)
+            .text("chunk_index", chunk_index.to_string())
+            .text("total_chunks", ((total_size + chunk_size as u64 - 1) / chunk_size as u64).to_string());
+
+        let response = HTTP_CLIENT
+            .post(&url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| format!("Chunk upload failed: {}", e))?;
+
+        let status = response.status().as_u16();
+        let mut headers = std::collections::HashMap::new();
+        for (key, value) in response.headers().iter() {
+            if let Ok(value_str) = value.to_str() {
+                headers.insert(key.to_string(), value_str.to_string());
+            }
+        }
+
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+        responses.push(HttpResponse {
+            status,
+            headers,
+            body,
+        });
+
+        // Emit progress
+        let percentage = (loaded as f64 / total_size as f64) * 100.0;
+        let elapsed = start_time.elapsed().as_secs_f64();
+        let speed = if elapsed > 0.0 { loaded as f64 / elapsed } else { 0.0 };
+
+        let progress = UploadProgress {
+            loaded,
+            total: total_size,
+            percentage,
+            speed,
+        };
+
+        let _ = window.emit("chunk-upload-progress", progress);
+
+        chunk_index += 1;
+    }
+
+    Ok(responses)
+}
+
+// SSE Module
+
+#[derive(Clone)]
+struct SseState {
+    active: Arc<Mutex<bool>>,
+}
+
+#[tauri::command]
+async fn sse_connect(url: String, window: tauri::Window) -> Result<(), String> {
+    use futures_util::StreamExt;
+
+    let active = Arc::new(Mutex::new(true));
+    let state = SseState {
+        active: active.clone(),
+    };
+
+    // Store state in window for potential cleanup
+    window.manage(state);
+
+    tokio::spawn(async move {
+        let client = HTTP_CLIENT.clone();
+
+        match client.get(&url).send().await {
+            Ok(response) => {
+                let mut stream = response.bytes_stream();
+                let mut buffer = String::new();
+
+                while let Some(chunk) = stream.next().await {
+                    // Check if connection should be closed
+                    if !*active.lock().unwrap() {
+                        break;
+                    }
+
+                    match chunk {
+                        Ok(bytes) => {
+                            let text = String::from_utf8_lossy(&bytes);
+                            buffer.push_str(&text);
+
+                            // Process complete events (ending with double newline)
+                            while let Some(pos) = buffer.find("\n\n") {
+                                let event = buffer[..pos].to_string();
+                                buffer = buffer[pos + 2..].to_string();
+
+                                // Parse and emit the event
+                                if !event.is_empty() {
+                                    // Extract data from SSE format
+                                    let data = event
+                                        .lines()
+                                        .filter(|line| line.starts_with("data:"))
+                                        .map(|line| line.trim_start_matches("data:").trim())
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+
+                                    if !data.is_empty() {
+                                        let _ = window.emit("sse-message", data);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = window.emit("sse-error", format!("Stream error: {}", e));
+                            break;
+                        }
+                    }
+                }
+
+                let _ = window.emit("sse-close", "Connection closed");
+            }
+            Err(e) => {
+                let _ = window.emit("sse-error", format!("Connection failed: {}", e));
+            }
+        }
+    });
+
+    Ok(())
+}
+
+// Background Tasks Module - State Management
+struct AppState {
+    task_manager: Mutex<TaskManager>,
+}
+
+// Background Tasks Module - Commands
+#[tauri::command]
+async fn create_background_task(
+    state: tauri::State<'_, AppState>,
+    options: CreateTaskOptions,
+) -> Result<String, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.create_task(options)
+}
+
+#[tauri::command]
+async fn get_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Option<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.get_task(&id)
+}
+
+#[tauri::command]
+async fn list_background_tasks(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.list_tasks()
+}
+
+#[tauri::command]
+async fn cancel_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.cancel_task(&id)
+}
+
+#[tauri::command]
+async fn delete_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.delete_task(&id)
+}
+
+#[tauri::command]
+async fn execute_demo_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    delay_seconds: u64,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    let tasks_clone = task_manager.clone_tasks();
+
+    // Spawn the task execution in the background
+    tokio::spawn(async move {
+        let _ = run_task_async(tasks_clone, id, delay_seconds).await;
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
+    if let Some(state) = window.try_state::<SseState>() {
+        *state.active.lock().unwrap() = false;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(AppState {
+            task_manager: Mutex::new(TaskManager::new()),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
@@ -986,6 +2358,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_websocket::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
@@ -998,9 +2371,21 @@ pub fn run() {
             http_get,
             http_post,
             upload_file,
+            upload_file_with_progress,
+            cancel_upload,
+            upload_file_chunked,
             check_contacts_permission,
             request_contacts_permission,
             get_contacts,
+            check_network_status,
+            get_network_interfaces,
+            get_wifi_info,
+            scan_wifi_networks,
+            test_connection_quality,
+            estimate_bandwidth,
+            run_speed_test,
+            sse_connect,
+            sse_disconnect,
             initialize_camera,
             capture_photo,
             start_video_recording,
@@ -1016,7 +2401,13 @@ pub fn run() {
             read_from_clipboard,
             share_text,
             share_files,
-            get_share_platform
+            get_share_platform,
+            create_background_task,
+            get_background_task,
+            list_background_tasks,
+            cancel_background_task,
+            delete_background_task,
+            execute_demo_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

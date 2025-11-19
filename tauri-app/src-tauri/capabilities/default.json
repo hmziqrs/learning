@@ -189,6 +189,9 @@
     "store:allow-load",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "websocket:default",
+    "websocket:allow-connect",
+    "websocket:allow-send"
   ]
 }
