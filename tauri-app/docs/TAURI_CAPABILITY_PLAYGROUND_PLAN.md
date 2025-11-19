@@ -1281,45 +1281,95 @@ Biometric authentication (fingerprint, face) and secure crypto operations.
 
 ### Implementation Status
 
-**Fully Implemented** with comprehensive platform support:
+**Fully Implemented and Tested** with comprehensive platform support:
 
 **Backend** ✅:
 - 9 Rust commands implemented in lib.rs
+- **tauri-plugin-biometry v0.2.4** integrated for desktop platforms
+- AES-256-GCM encryption/decryption implementation
 - Android BiometricPrompt plugin (SecurityBiometricsPlugin.kt)
 - iOS/macOS LocalAuthentication plugin (SecurityBiometricsPlugin.swift)
 - Platform-specific error handling for Windows/Linux
 
-**Platform Features** ✅:
+**Platform Features** ✅ **TESTED & WORKING**:
+- **macOS**: ✅ Touch ID authentication working (tested)
+- **Windows**: ✅ Windows Hello support via tauri-plugin-biometry
 - **Mobile (Android/iOS)**: Biometric authentication (fingerprint, Face ID, Touch ID)
-- **macOS**: Touch ID authentication with LocalAuthentication
-- Secure storage using Android Keystore, iOS Keychain, and macOS Keychain
-- AES-256-GCM encryption/decryption
+- **Secure Keychain Storage**: ✅ Working on macOS with proper entitlements
+- **Encryption**: ✅ AES-256-GCM with random nonces, SHA-256 key derivation
 - Biometric availability and type detection
 - Device credential fallback support
 
+**Encryption Implementation** ✅:
+- AES-256-GCM authenticated encryption
+- Random 12-byte nonces per operation
+- SHA-256 key derivation with salt
+- Base64 encoding (nonce || ciphertext)
+- Thread-safe in-memory key storage
+
 **Frontend** ✅:
 - Complete UI implementation (security-biometrics.tsx)
-- Biometric authentication interface
-- Secure storage operations (set, get, delete)
+- Biometric authentication interface (using plugin API)
+- Secure keychain storage operations (setData, getData, hasData, removeData)
 - Encryption/decryption demonstration
 - Real-time output logging
 - Platform support matrix
 
 **Configuration** ✅:
+- **macOS**: keychain-access-groups entitlement (fixes error -34018)
+- **Tauri Capabilities**: biometry permissions added to default.json
 - Android permissions (USE_BIOMETRIC, USE_FINGERPRINT)
 - iOS Face ID usage description
 - Biometric library dependency added
 - Plugin registration in MainActivity
 
+**Dependencies**:
+```toml
+tauri-plugin-biometry = "0.2.4"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
+```
+
+```json
+"@choochmeque/tauri-plugin-biometry-api": "^0.2.4"
+```
+
 ### Plugins Required
-📌 **Custom mobile plugin**
 
-- Android: BiometricPrompt
-- iOS: LocalAuthentication
+**Desktop** ✅:
+- `tauri-plugin-biometry` (v0.2.4) - Touch ID (macOS) & Windows Hello
 
-### Integration Steps
+**Mobile** ✅:
+- Custom Android plugin: BiometricPrompt + Android Keystore
+- Custom iOS plugin: LocalAuthentication + iOS Keychain
 
-1. **Android Biometrics**:
+**Encryption** ✅:
+- Rust: aes-gcm, base64, rand, sha2
+
+### Integration Steps ✅ **COMPLETED**
+
+1. **Desktop (macOS/Windows)** ✅:
+   ```typescript
+   import { checkStatus, authenticate, setData, getData } from '@choochmeque/tauri-plugin-biometry-api'
+
+   // Check availability
+   const status = await checkStatus()
+   // biometryType: 1=TouchID, 2=FaceID, 4=WindowsHello
+
+   // Authenticate (triggers Touch ID or Windows Hello)
+   await authenticate('Please authenticate', {
+     allowDeviceCredential: true,
+     cancelTitle: 'Cancel'
+   })
+
+   // Keychain storage
+   await setData({ domain: 'com.app', name: 'key', data: 'value' })
+   const result = await getData({ domain: 'com.app', name: 'key' })
+   ```
+
+2. **Android Biometrics** ✅:
    ```kotlin
    val biometricPrompt = BiometricPrompt(this, executor, callback)
    val promptInfo = BiometricPrompt.PromptInfo.Builder()
@@ -1329,7 +1379,7 @@ Biometric authentication (fingerprint, face) and secure crypto operations.
    biometricPrompt.authenticate(promptInfo)
    ```
 
-2. **iOS Biometrics**:
+3. **iOS Biometrics** ✅:
    ```swift
    let context = LAContext()
    context.evaluatePolicy(
@@ -1338,17 +1388,34 @@ Biometric authentication (fingerprint, face) and secure crypto operations.
    ) { success, error in }
    ```
 
-3. **Secure storage**:
-   - Android: Keystore
-   - iOS: Keychain
+4. **Encryption** ✅:
+   ```typescript
+   // Generate key
+   await invoke('generate_encryption_key', { keyName: 'myKey' })
 
-### UI for This Screen
-- **Button**: "Authenticate with biometrics"
-- **Panel**: Authentication result
-- **Panel**: Available biometric methods
-- **Button**: Generate encryption key
-- **Button**: Encrypt data
-- **Button**: Decrypt data
+   // Encrypt
+   const encrypted = await invoke('encrypt_data', {
+     keyName: 'myKey',
+     data: 'Hello World'
+   })
+
+   // Decrypt
+   const decrypted = await invoke('decrypt_data', {
+     keyName: 'myKey',
+     encryptedData: encrypted
+   })
+   ```
+
+### UI Implementation ✅ **WORKING**
+- ✅ **Button**: "Check Availability" → Shows Touch ID/Windows Hello/Fingerprint
+- ✅ **Button**: "Authenticate with Biometrics" → Triggers native prompt
+- ✅ **Panel**: Authentication result with biometry type
+- ✅ **Section**: Secure Keychain Storage (Set/Get/Check/Remove)
+- ✅ **Section**: Encryption/Decryption with AES-256-GCM
+- ✅ **Button**: Generate encryption key
+- ✅ **Button**: Encrypt data → Base64 output
+- ✅ **Button**: Decrypt data → Original plaintext
+- ✅ **Output Panel**: Real-time operation logging with timestamps
 
 ---
 
