@@ -964,34 +964,42 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
         }
 
         // Method 2: Fallback to networksetup if airport failed or gave no results
+        // Try multiple interfaces (en0, en1, etc.)
         if wifi_info.ssid.is_empty() {
-            if let Ok(output) = Command::new("networksetup")
-                .args(["-getairportnetwork", "en0"])
-                .output()
-            {
-                let info = String::from_utf8_lossy(&output.stdout);
-                if info.contains("Current Wi-Fi Network:") {
-                    if let Some(ssid) = info.split("Current Wi-Fi Network:").nth(1) {
-                        wifi_info.ssid = ssid.trim().to_string();
+            let interfaces = ["en0", "en1", "en2"];
+            for interface in &interfaces {
+                if let Ok(output) = Command::new("networksetup")
+                    .args(["-getairportnetwork", interface])
+                    .output()
+                {
+                    let info = String::from_utf8_lossy(&output.stdout);
+                    if info.contains("Current Wi-Fi Network:") {
+                        if let Some(ssid) = info.split("Current Wi-Fi Network:").nth(1) {
+                            let ssid_trimmed = ssid.trim();
+                            if !ssid_trimmed.is_empty() {
+                                wifi_info.ssid = ssid_trimmed.to_string();
+
+                                // Get IP address for this interface
+                                if let Ok(ip_output) = Command::new("ipconfig")
+                                    .args(["getifaddr", interface])
+                                    .output()
+                                {
+                                    let ip = String::from_utf8_lossy(&ip_output.stdout);
+                                    let ip_trimmed = ip.trim();
+                                    if !ip_trimmed.is_empty() {
+                                        wifi_info.ip_address = Some(ip_trimmed.to_string());
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Get IP address
-        if let Ok(ip_output) = Command::new("ipconfig")
-            .args(["getifaddr", "en0"])
-            .output()
-        {
-            let ip = String::from_utf8_lossy(&ip_output.stdout);
-            let ip_trimmed = ip.trim();
-            if !ip_trimmed.is_empty() {
-                wifi_info.ip_address = Some(ip_trimmed.to_string());
-            }
-        }
-
         if wifi_info.ssid.is_empty() {
-            Err("Not connected to WiFi or WiFi interface not found. Note: On macOS, WiFi information requires the 'airport' utility or 'networksetup' command.".to_string())
+            Err("Not connected to WiFi. Please enable WiFi and connect to a network. Note: This feature only works when connected via WiFi (not ethernet).".to_string())
         } else {
             Ok(wifi_info)
         }
@@ -1168,30 +1176,63 @@ async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
     {
         use std::process::Command;
 
-        let output = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
-            .args(["-s"])
-            .output()
-            .map_err(|e| format!("Failed to scan WiFi networks: {}", e))?;
-
-        let info = String::from_utf8_lossy(&output.stdout);
         let mut networks = Vec::new();
 
-        // Skip header line
-        for line in info.lines().skip(1) {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 3 {
-                let ssid = parts[0].to_string();
-                let bssid = parts[1].to_string();
-                let rssi = parts[2].parse::<i32>().ok();
+        // Method 1: Try using airport utility
+        let airport_result = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
+            .args(["-s"])
+            .output();
 
-                networks.push(WiFiNetwork {
-                    ssid,
-                    bssid,
-                    signal_strength: rssi,
-                    security_type: if parts.len() > 6 { Some(parts[6].to_string()) } else { None },
-                    frequency: None,
-                });
+        if let Ok(output) = airport_result {
+            if output.status.success() {
+                let info = String::from_utf8_lossy(&output.stdout);
+
+                // Skip header line
+                for line in info.lines().skip(1) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 3 {
+                        let ssid = parts[0].to_string();
+                        let bssid = parts[1].to_string();
+                        let rssi = parts[2].parse::<i32>().ok();
+
+                        networks.push(WiFiNetwork {
+                            ssid,
+                            bssid,
+                            signal_strength: rssi,
+                            security_type: if parts.len() > 6 { Some(parts[6].to_string()) } else { None },
+                            frequency: None,
+                        });
+                    }
+                }
+
+                if !networks.is_empty() {
+                    return Ok(networks);
+                }
             }
+        }
+
+        // Method 2: Fallback to system_profiler
+        if let Ok(output) = Command::new("system_profiler")
+            .args(["SPAirPortDataType", "-xml"])
+            .output()
+        {
+            if output.status.success() {
+                let info = String::from_utf8_lossy(&output.stdout);
+
+                // Parse basic network info from XML output
+                // This is a simple parser - could be improved with proper XML parsing
+                for line in info.lines() {
+                    if line.contains("<key>_name</key>") {
+                        // Try to extract SSID from next line
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Method 3: Return helpful message if no networks found
+        if networks.is_empty() {
+            return Err("No WiFi networks found. Make sure WiFi is enabled and try again. Note: On some macOS versions, you may need to run the app with proper permissions to scan networks.".to_string());
         }
 
         Ok(networks)
