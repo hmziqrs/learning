@@ -33,6 +33,7 @@ function FileSharingModule() {
   const [platform, setPlatform] = useState('unknown')
   const [shareHistory, setShareHistory] = useState<Array<{method: string, timestamp: string, success: boolean}>>([])
   const [clipboardContent, setClipboardContent] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -286,11 +287,55 @@ function FileSharingModule() {
     }
   }
 
-  // Simulate file share
-  const handleSimulateFileShare = () => {
-    addOutput('File sharing requires native implementation')
-    addOutput('On mobile: Use tauri-plugin-share', false)
-    addOutput('On desktop: Use system file dialogs or clipboard', false)
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+      addOutput(`File selected: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`)
+    }
+  }
+
+  // Share selected file
+  const handleShareFile = async () => {
+    if (!selectedFile) {
+      addOutput('Please select a file first', false)
+      return
+    }
+
+    // Check if Web Share API with files is supported
+    if (!navigator.share) {
+      addOutput('Web Share API not supported on this platform', false)
+      addOutput('File path: ' + selectedFile.name)
+      addOutput('Tip: On mobile, use tauri-plugin-share for native sharing', false)
+      addToHistory('File Share (Not Supported)', false)
+      return
+    }
+
+    // Check if sharing files is supported
+    if (!navigator.canShare || !navigator.canShare({ files: [selectedFile] })) {
+      addOutput('File sharing not supported on this browser', false)
+      addOutput('File: ' + selectedFile.name, false)
+      addToHistory('File Share (Not Supported)', false)
+      return
+    }
+
+    try {
+      await navigator.share({
+        title: shareTitle || 'Shared File',
+        files: [selectedFile],
+      })
+      addOutput(`File shared successfully: ${selectedFile.name}`)
+      addToHistory('File Share (Web API)', true)
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        addOutput('File share cancelled by user')
+        addToHistory('File Share (Cancelled)', false)
+      } else {
+        addOutput(`File share failed: ${error instanceof Error ? error.message : String(error)}`, false)
+        addToHistory('File Share', false)
+      }
+    }
   }
 
   return (
@@ -602,61 +647,64 @@ function FileSharingModule() {
             File Sharing
           </h2>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Share files using native platform capabilities
+              Share files using Web Share API (supported on mobile and some desktop browsers)
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-semibold">Documents</h3>
-                </div>
-                <Button onClick={handleSimulateFileShare} variant="outline" size="sm" className="w-full">
-                  Share Document
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  PDF, DOC, TXT files
-                </p>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select File to Share</label>
+                <Input
+                  type="file"
+                  onChange={handleFileSelect}
+                  className="cursor-pointer"
+                />
+                {selectedFile && (
+                  <div className="bg-muted rounded-md p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{selectedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedFile.type || 'Unknown type'} • {(selectedFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Image className="w-5 h-5 text-green-600" />
-                  <h3 className="font-semibold">Images</h3>
-                </div>
-                <Button onClick={handleSimulateFileShare} variant="outline" size="sm" className="w-full">
-                  Share Image
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  JPG, PNG, GIF files
-                </p>
-              </div>
+              <Button
+                onClick={handleShareFile}
+                variant="default"
+                disabled={!selectedFile}
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                Share Selected File
+              </Button>
+            </div>
 
-              <div className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <FileVideo className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-semibold">Videos</h3>
-                </div>
-                <Button onClick={handleSimulateFileShare} variant="outline" size="sm" className="w-full">
-                  Share Video
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  MP4, MOV, AVI files
-                </p>
-              </div>
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
+              <h4 className="font-semibold mb-2 text-blue-700 dark:text-blue-400 text-sm">
+                File Sharing Support
+              </h4>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2 text-xs">
+                <li>Web Share API supports files on mobile browsers (iOS Safari, Android Chrome)</li>
+                <li>Desktop support varies: Chrome/Edge on some platforms, limited on others</li>
+                <li>For full native support on mobile, use tauri-plugin-share</li>
+                <li>Desktop platforms: Web Share API or file dialogs recommended</li>
+              </ul>
             </div>
 
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
               <h4 className="font-semibold mb-2 text-yellow-700 dark:text-yellow-400 text-sm">
-                Native Implementation Required
+                Browser Compatibility
               </h4>
-              <p className="text-xs text-muted-foreground">
-                File sharing requires native platform implementation. Use tauri-plugin-share for mobile platforms
-                (Android Share Intent, iOS UIActivityViewController). Desktop platforms should use system file
-                dialogs or clipboard for file paths.
-              </p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>✅ <strong>Mobile:</strong> iOS Safari 15+, Android Chrome 89+</p>
+                <p>⚠️ <strong>Desktop:</strong> ChromeOS, macOS Safari 15.4+ (varies by platform)</p>
+                <p>❌ <strong>Limited:</strong> Windows/Linux desktop browsers may not support file sharing</p>
+              </div>
             </div>
           </div>
         </section>
