@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
-import { WebSocket as TauriWebSocket } from '@tauri-apps/plugin-websocket'
+import WebSocket from '@tauri-apps/plugin-websocket'
 
 export const Route = createFileRoute('/network-realtime')({
   component: NetworkRealtimeModule,
@@ -99,7 +99,7 @@ function NetworkRealtimeModule() {
   const [wsConnected, setWsConnected] = useState(false)
   const [wsMessage, setWsMessage] = useState('')
   const [wsMessages, setWsMessages] = useState<string[]>([])
-  const [ws, setWs] = useState<TauriWebSocket | null>(null)
+  const [ws, setWs] = useState<Awaited<ReturnType<typeof WebSocket.connect>> | null>(null)
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -164,7 +164,7 @@ function NetworkRealtimeModule() {
     addOutput(`Connecting to WebSocket: ${wsUrl}`)
 
     try {
-      const websocket = await TauriWebSocket.connect(wsUrl)
+      const websocket = await WebSocket.connect(wsUrl)
 
       // Listen for messages
       websocket.addListener((msg) => {
