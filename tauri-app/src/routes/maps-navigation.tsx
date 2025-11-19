@@ -4,6 +4,7 @@ import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState, useEffect, useRef } from 'react'
+import { getCurrentPosition, watchPosition, checkPermissions, requestPermissions, clearWatch } from '@tauri-apps/plugin-geolocation'
 
 export const Route = createFileRoute('/maps-navigation')({
   component: MapsNavigationModule,
@@ -46,45 +47,79 @@ function MapsNavigationModule() {
   }
 
   // Get current location
-  const handleGetCurrentLocation = () => {
-    if (!('geolocation' in navigator)) {
-      addOutput('Geolocation is not supported by this browser', false)
-      return
-    }
-
+  const handleGetCurrentLocation = async () => {
     addOutput('Requesting current location...')
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    try {
+      // Try Tauri plugin first (mobile)
+      const permissions = await checkPermissions()
+
+      if (permissions.location === 'prompt' || permissions.location === 'prompt-with-rationale') {
+        addOutput('Requesting location permissions...')
+        const granted = await requestPermissions(['location'])
+
+        if (granted.location !== 'granted') {
+          addOutput('Location permission denied', false)
+          return
+        }
+      }
+
+      if (permissions.location === 'granted') {
+        const position = await getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+
         const location: LatLng = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         }
 
         setCurrentLocation(location)
-        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`)
-      },
-      (error) => {
-        let errorMsg = 'Unknown error'
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg = 'Location permission denied'
-            break
-          case error.POSITION_UNAVAILABLE:
-            errorMsg = 'Location unavailable'
-            break
-          case error.TIMEOUT:
-            errorMsg = 'Location request timeout'
-            break
-        }
-        addOutput(`Failed to get location: ${errorMsg}`, false)
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Tauri Plugin)`)
       }
-    )
+    } catch (tauriError) {
+      // Fallback to web API for desktop
+      addOutput('Tauri plugin unavailable, using Web Geolocation API...')
+
+      if (!('geolocation' in navigator)) {
+        addOutput('Geolocation is not supported', false)
+        return
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location: LatLng = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          }
+
+          setCurrentLocation(location)
+          addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Web API)`)
+        },
+        (error) => {
+          let errorMsg = 'Unknown error'
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMsg = 'Location permission denied'
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorMsg = 'Location unavailable'
+              break
+            case error.TIMEOUT:
+              errorMsg = 'Location request timeout'
+              break
+          }
+          addOutput(`Failed to get location: ${errorMsg}`, false)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      )
+    }
   }
 
   // Search for address (simulated)
@@ -224,13 +259,16 @@ function MapsNavigationModule() {
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-green-600">✓ Geolocation API</strong> - Web API for current location
+                <strong className="text-green-600">✓ Geolocation Plugin</strong> - Tauri plugin for mobile (Android/iOS) with Web API fallback for desktop
               </li>
               <li>
                 <strong className="text-green-600">✓ Geocoding</strong> - Nominatim (OpenStreetMap) address search
               </li>
               <li>
                 <strong className="text-green-600">✓ Routing</strong> - OSRM for route calculation
+              </li>
+              <li>
+                <strong className="text-green-600">✓ Permission Handling</strong> - Proper mobile permission requests
               </li>
               <li>
                 <strong className="text-yellow-600">⚠ Map Display</strong> - Requires Leaflet.js integration
@@ -240,12 +278,16 @@ function MapsNavigationModule() {
               </li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Install Leaflet for interactive maps:</div>
+              <div># Tauri Geolocation Plugin installed</div>
+              <div>@tauri-apps/plugin-geolocation</div>
+              <div className="mt-1"># For interactive maps (optional):</div>
               <div>bun add leaflet @types/leaflet -D</div>
               <div>bun add leaflet-routing-machine</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              This demo uses free services: Nominatim for geocoding and OSRM for routing.
+              <strong>Platform support:</strong> Android & iOS (Tauri plugin), Desktop (Web API fallback)
+              <br />
+              Uses free services: Nominatim for geocoding and OSRM for routing.
             </p>
           </div>
         </section>

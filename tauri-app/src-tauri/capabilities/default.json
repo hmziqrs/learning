@@ -214,6 +214,11 @@
     "clipboard-manager:allow-clear",
     "websocket:default",
     "websocket:allow-connect",
-    "websocket:allow-send"
+    "websocket:allow-send",
+    "geolocation:allow-check-permissions",
+    "geolocation:allow-request-permissions",
+    "geolocation:allow-get-current-position",
+    "geolocation:allow-watch-position",
+    "geolocation:allow-clear-watch"
   ]
 }
