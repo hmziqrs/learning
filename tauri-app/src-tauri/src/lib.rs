@@ -734,6 +734,137 @@ async fn request_camera_permission() -> Result<bool, String> {
     }
 }
 
+// Haptics Module Commands
+// Platform-specific haptic feedback
+#[tauri::command]
+async fn haptic_impact(style: String) -> Result<(), String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // Mobile implementation will be handled by platform plugins
+        // Android: Uses Vibrator API with VibrationEffect
+        // iOS: Uses UIFeedbackGenerator
+        match style.as_str() {
+            "light" | "medium" | "heavy" => {
+                // TODO: Call platform-specific implementation
+                Err(format!("Haptic impact '{}' requires custom mobile plugin. See docs/haptics-module.md", style))
+            }
+            _ => Err("Invalid impact style. Must be 'light', 'medium', or 'heavy'".to_string()),
+        }
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Haptic feedback is only available on mobile platforms (iOS, Android)".to_string())
+    }
+}
+
+#[tauri::command]
+async fn haptic_notification(notification_type: String) -> Result<(), String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // Mobile implementation will be handled by platform plugins
+        match notification_type.as_str() {
+            "success" | "warning" | "error" => {
+                // TODO: Call platform-specific implementation
+                Err(format!("Haptic notification '{}' requires custom mobile plugin. See docs/haptics-module.md", notification_type))
+            }
+            _ => Err("Invalid notification type. Must be 'success', 'warning', or 'error'".to_string()),
+        }
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Haptic feedback is only available on mobile platforms (iOS, Android)".to_string())
+    }
+}
+
+#[tauri::command]
+async fn vibrate(duration: u64) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        // Android can support custom vibration durations
+        // TODO: Call platform-specific implementation
+        Err(format!("Vibration ({}ms) requires custom mobile plugin. See docs/haptics-module.md", duration))
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS doesn't support custom duration vibrations via UIFeedbackGenerator
+        // Use Core Haptics for more control, or fall back to predefined patterns
+        Err("Custom duration vibration not directly supported on iOS. Use haptic_impact or haptic_notification instead.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn vibrate_pattern(pattern: Vec<u64>) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        if pattern.is_empty() {
+            return Err("Pattern cannot be empty".to_string());
+        }
+
+        // Android supports pattern vibrations
+        // TODO: Call platform-specific implementation
+        Err(format!("Pattern vibration {:?} requires custom mobile plugin. See docs/haptics-module.md", pattern))
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS doesn't support pattern vibrations via UIFeedbackGenerator
+        // Would need Core Haptics framework for custom patterns
+        Err("Pattern vibration not supported on iOS via UIFeedbackGenerator. Use Core Haptics framework for custom patterns.".to_string())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn cancel_vibration() -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        // Android supports canceling ongoing vibrations
+        // TODO: Call platform-specific implementation
+        Err("Cancel vibration requires custom mobile plugin. See docs/haptics-module.md".to_string())
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // iOS haptic feedback is instantaneous, no need to cancel
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        Err("Vibration is only available on mobile platforms".to_string())
+    }
+}
+
+#[tauri::command]
+async fn has_vibrator() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        // On mobile platforms, assume vibrator is available
+        // TODO: Implement actual device capability check
+        // Android: Check if Vibrator service is available
+        // iOS: Check for Taptic Engine (iPhone 6s+)
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // Desktop platforms don't have vibration hardware
+        Ok(false)
+    }
+}
+
 // Network & Realtime Module
 // HTTP Client with connection pooling for better performance
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
@@ -948,6 +1079,225 @@ fn get_share_platform() -> String {
     get_platform_name()
 }
 
+// App Lifecycle & OS Integration Module
+#[derive(Debug, Serialize)]
+struct SystemInfo {
+    os: String,
+    version: String,
+    arch: String,
+    app_version: String,
+    process_id: u32,
+}
+
+#[tauri::command]
+fn get_system_info() -> SystemInfo {
+    SystemInfo {
+        os: std::env::consts::OS.to_string(),
+        version: std::env::consts::FAMILY.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        process_id: std::process::id(),
+    }
+}
+
+// System Monitoring
+use sysinfo::{System, Disks, Networks};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static APP_START_TIME: Lazy<u64> = Lazy::new(|| {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+});
+
+#[derive(Debug, Serialize)]
+struct SystemMetrics {
+    cpu_usage: f32,
+    memory_total: u64,
+    memory_used: u64,
+    memory_available: u64,
+    memory_usage_percent: f32,
+    swap_total: u64,
+    swap_used: u64,
+    disk_total: u64,
+    disk_used: u64,
+    disk_available: u64,
+    disk_usage_percent: f32,
+}
+
+#[derive(Debug, Serialize)]
+struct NetworkMetrics {
+    total_received: u64,
+    total_transmitted: u64,
+    interfaces: Vec<NetworkInterfaceMetrics>,
+}
+
+#[derive(Debug, Serialize)]
+struct NetworkInterfaceMetrics {
+    name: String,
+    received: u64,
+    transmitted: u64,
+}
+
+#[tauri::command]
+fn get_system_metrics() -> Result<SystemMetrics, String> {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Give it a moment to gather CPU data
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    sys.refresh_cpu_all();
+
+    let cpu_usage = sys.global_cpu_usage();
+    let memory_total = sys.total_memory();
+    let memory_used = sys.used_memory();
+    let memory_available = sys.available_memory();
+    let memory_usage_percent = (memory_used as f32 / memory_total as f32) * 100.0;
+
+    let swap_total = sys.total_swap();
+    let swap_used = sys.used_swap();
+
+    // Get disk usage
+    let disks = Disks::new_with_refreshed_list();
+    let mut disk_total = 0u64;
+    let mut disk_used = 0u64;
+
+    for disk in &disks {
+        disk_total += disk.total_space();
+        disk_used += disk.total_space() - disk.available_space();
+    }
+
+    let disk_available = disk_total - disk_used;
+    let disk_usage_percent = if disk_total > 0 {
+        (disk_used as f32 / disk_total as f32) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(SystemMetrics {
+        cpu_usage,
+        memory_total,
+        memory_used,
+        memory_available,
+        memory_usage_percent,
+        swap_total,
+        swap_used,
+        disk_total,
+        disk_used,
+        disk_available,
+        disk_usage_percent,
+    })
+}
+
+#[tauri::command]
+fn get_network_metrics() -> Result<NetworkMetrics, String> {
+    let networks = Networks::new_with_refreshed_list();
+
+    let mut total_received = 0u64;
+    let mut total_transmitted = 0u64;
+    let mut interfaces = Vec::new();
+
+    for (interface_name, network) in &networks {
+        let received = network.total_received();
+        let transmitted = network.total_transmitted();
+
+        total_received += received;
+        total_transmitted += transmitted;
+
+        interfaces.push(NetworkInterfaceMetrics {
+            name: interface_name.clone(),
+            received,
+            transmitted,
+        });
+    }
+
+    Ok(NetworkMetrics {
+        total_received,
+        total_transmitted,
+        interfaces,
+    })
+}
+
+#[tauri::command]
+fn get_app_uptime() -> u64 {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    now - *APP_START_TIME
+}
+
+// System Services Module
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BatteryInfo {
+    level: i32,
+    charging: bool,
+    temperature: Option<i32>,
+    power_source: String,
+    battery_state: String,
+    charging_time: Option<i64>,
+    discharging_time: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioDevice {
+    id: String,
+    name: String,
+    kind: String,
+    is_default: bool,
+    is_connected: bool,
+    device_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AudioDevicesResponse {
+    devices: Vec<AudioDevice>,
+}
+
+#[tauri::command]
+async fn get_battery_info() -> Result<BatteryInfo, String> {
+    use battery::Manager;
+
+    let manager = Manager::new().map_err(|e| format!("Failed to create battery manager: {}", e))?;
+
+    let mut batteries = manager.batteries().map_err(|e| format!("Failed to get batteries: {}", e))?;
+
+    if let Some(Ok(battery)) = batteries.next() {
+        let state_of_charge = battery.state_of_charge().value;
+        let level = (state_of_charge * 100.0) as i32;
+
+        let state = battery.state();
+        let charging = matches!(state, battery::State::Charging);
+        let battery_state = match state {
+            battery::State::Charging => "charging",
+            battery::State::Discharging => "discharging",
+            battery::State::Full => "full",
+            battery::State::Empty => "empty",
+            _ => "unknown",
+        };
+
+        let power_source = if charging { "ac" } else { "battery" };
+
+        // Try to get temperature if available
+        let temperature = battery.temperature()
+            .map(|t| (t.value - 273.15) as i32); // Convert Kelvin to Celsius
+
+        Ok(BatteryInfo {
+            level,
+            charging,
+            temperature,
+            power_source: power_source.to_string(),
+            battery_state: battery_state.to_string(),
+            charging_time: None,
+            discharging_time: None,
+        })
+    } else {
+        Err("No battery found".to_string())
+    }
+}
 
 // Network Status & WiFi Module
 #[derive(Debug, Serialize, Deserialize)]
@@ -1509,6 +1859,64 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
     {
         Err("WiFi info not supported on this platform".to_string())
     }
+}
+
+#[tauri::command]
+async fn get_audio_devices() -> Result<AudioDevicesResponse, String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+
+    let host = cpal::default_host();
+    let mut devices = Vec::new();
+
+    // Get default devices
+    let default_input = host.default_input_device();
+    let default_output = host.default_output_device();
+
+    // Get all input devices
+    if let Ok(input_devices) = host.input_devices() {
+        for (idx, device) in input_devices.enumerate() {
+            if let Ok(name) = device.name() {
+                let device_name = device.name().unwrap_or_else(|_| format!("Input Device {}", idx));
+                let is_default = default_input.as_ref()
+                    .and_then(|d| d.name().ok())
+                    .map(|n| n == name)
+                    .unwrap_or(false);
+
+                devices.push(AudioDevice {
+                    id: format!("input-{}", idx),
+                    name: device_name,
+                    kind: "audioinput".to_string(),
+                    is_default,
+                    is_connected: true,
+                    device_type: "unknown".to_string(),
+                });
+            }
+        }
+    }
+
+    // Get all output devices
+    if let Ok(output_devices) = host.output_devices() {
+        for (idx, device) in output_devices.enumerate() {
+            if let Ok(name) = device.name() {
+                let device_name = device.name().unwrap_or_else(|_| format!("Output Device {}", idx));
+                let is_default = default_output.as_ref()
+                    .and_then(|d| d.name().ok())
+                    .map(|n| n == name)
+                    .unwrap_or(false);
+
+                devices.push(AudioDevice {
+                    id: format!("output-{}", idx),
+                    name: device_name,
+                    kind: "audiooutput".to_string(),
+                    is_default,
+                    is_connected: true,
+                    device_type: "unknown".to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(AudioDevicesResponse { devices })
 }
 
 #[tauri::command]
@@ -2335,6 +2743,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
+            get_system_info,
+            get_system_metrics,
+            get_network_metrics,
+            get_app_uptime,
             export_events_to_ics,
             fetch_iap_products,
             purchase_product,
@@ -2375,6 +2787,14 @@ pub fn run() {
             share_text,
             share_files,
             get_share_platform,
+            haptic_impact,
+            haptic_notification,
+            vibrate,
+            vibrate_pattern,
+            cancel_vibration,
+            has_vibrator,
+            get_battery_info,
+            get_audio_devices,
             create_background_task,
             get_background_task,
             list_background_tasks,

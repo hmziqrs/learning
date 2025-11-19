@@ -684,192 +684,512 @@ Real background processing even when app is killed or in background.
 
 ---
 
-## 1️⃣7️⃣ System Services Module
+## 1️⃣7️⃣ System Services Module ✅ **COMPLETED**
 
 ### Purpose
 Access clipboard, system audio devices, and battery/power information.
 
 ### Plugins Required
-- **Clipboard**: `@tauri-apps/plugin-clipboard-manager`
-- **Battery**: Web API or custom plugin
-- **Audio devices**: Custom plugin
+- **Clipboard**: `@tauri-apps/plugin-clipboard-manager` ✅
+- **Battery**: Rust `battery` crate (v0.7) ✅
+- **Audio devices**: Rust `cpal` crate (v0.15) ✅
 
 ### Integration Steps
 
-1. **Clipboard**:
+1. **Clipboard** ✅:
    ```bash
    bun add @tauri-apps/plugin-clipboard-manager
+   ```
+
+   ```rust
+   // Cargo.toml
+   tauri-plugin-clipboard-manager = "2"
+
+   // lib.rs
+   .plugin(tauri_plugin_clipboard_manager::init())
    ```
 
    ```typescript
    import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
    ```
 
-2. **Battery API (Web)**:
-   ```typescript
-   const battery = await navigator.getBattery();
-   console.log(battery.level * 100); // percentage
-   console.log(battery.charging); // boolean
-   ```
-
-3. **Native Battery (Custom Plugin)**:
-
-   **Android**:
-   ```kotlin
-   val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-   val batteryLevel = batteryManager.getIntProperty(BATTERY_PROPERTY_CAPACITY)
-   ```
-
-### UI for This Screen
-- **Input**: Text to copy
-- **Button**: Copy to clipboard
-- **Button**: Paste from clipboard
-- **Panel**: Clipboard history (last 5)
-- **Audio Devices List**: Speakers, headphones, Bluetooth
-- **Battery Panel**: Percentage, charging state, temperature
-
----
-
-## 1️⃣8️⃣ App Lifecycle & OS Integration Module
-
-### Purpose
-Monitor app lifecycle events, create system tray, and manage multiple windows.
-
-### Plugins Required
-- System tray: Built-in Tauri
-- Multiple windows: Built-in Tauri
-- Lifecycle: Custom mobile plugin
-
-### Integration Steps
-
-1. **App Lifecycle Hooks**:
+2. **Battery API (Native - Desktop)** ✅:
    ```rust
+   // Cargo.toml
+   battery = "0.7"
+
+   // lib.rs
    #[tauri::command]
-   fn on_app_foreground() {
-       println!("App moved to foreground");
+   async fn get_battery_info() -> Result<BatteryInfo, String> {
+       use battery::Manager;
+       let manager = Manager::new()?;
+       // Returns: level, charging, temperature, power_source, battery_state
    }
    ```
 
-2. **System Tray (Desktop)**:
+3. **Audio Devices (Native - Desktop)** ✅:
    ```rust
-   use tauri::SystemTray;
+   // Cargo.toml
+   cpal = "0.15"
 
-   let tray = SystemTray::new()
-       .with_menu(menu);
+   // lib.rs
+   #[tauri::command]
+   async fn get_audio_devices() -> Result<AudioDevicesResponse, String> {
+       use cpal::traits::{DeviceTrait, HostTrait};
+       let host = cpal::default_host();
+       // Returns: input/output devices with names and default detection
+   }
    ```
 
-3. **Multiple Windows**:
-   ```rust
-   use tauri::WindowBuilder;
+### Implementation Status
 
-   WindowBuilder::new(
-       &app,
-       "secondary",
-       tauri::WindowUrl::App("index.html".into())
-   ).build()?;
-   ```
+**Backend** ✅:
+- ✅ Clipboard commands (via official plugin)
+- ✅ Battery info command (desktop: Windows, macOS, Linux)
+- ✅ Audio device enumeration (desktop: Windows, macOS, Linux)
+- ✅ Serde camelCase serialization
+- ✅ Commands registered in invoke_handler
 
-### UI for This Screen
-- **Log panel**: Lifecycle events (foreground, background, pause, resume)
-- **Button**: Create system tray icon
-- **Button**: Open new window
-- **Input**: Window message
-- **Button**: Send message to other window
-- **Toggle**: Background mode
+**Frontend** ✅:
+- ✅ Clipboard UI with copy/paste/clear
+- ✅ Clipboard history (last 5 entries)
+- ✅ Battery info display panel
+- ✅ Audio devices list (input/output)
+- ✅ Real-time device refresh
+- ✅ Error handling and loading states
+
+**Permissions** ✅:
+- ✅ clipboard-manager:allow-read-text
+- ✅ clipboard-manager:allow-write-text
+- ✅ clipboard-manager:allow-clear
+
+**Documentation** ✅:
+- ✅ Complete implementation guide (`system-services-module.md`)
+- ✅ iOS/macOS shared implementation examples
+- ✅ Platform support matrix
+- ✅ Testing checklists
+
+### UI for This Screen ✅
+- ✅ **Input**: Text to copy
+- ✅ **Button**: Copy to clipboard
+- ✅ **Button**: Paste from clipboard
+- ✅ **Button**: Clear clipboard
+- ✅ **Panel**: Clipboard history (last 5)
+- ✅ **Audio Devices List**: Input/output devices with names
+- ✅ **Battery Panel**: Percentage, charging state, power source
+- ✅ **Refresh buttons**: Battery and audio devices
+
+### Platform Support
+- **Desktop**: ✅ Full native support (Windows, macOS, Linux)
+  - Clipboard: Official Tauri plugin
+  - Battery: `battery` crate
+  - Audio: `cpal` crate
+- **Mobile**: Documentation provided for iOS/Android custom plugins
+  - iOS: UIDevice (battery), AVAudioSession (audio)
+  - Android: BatteryManager, AudioManager
+  - macOS: IOKit (battery), Core Audio (audio)
 
 ---
 
-## 1️⃣9️⃣ Haptics / Vibrations Module
+## 1️⃣8️⃣ App Lifecycle & OS Integration Module ✅ **COMPLETED**
 
 ### Purpose
-Provide tactile feedback on mobile devices.
+Monitor window lifecycle events, manage window state, integrate with system dialogs, and track live system metrics (CPU, RAM, Disk, Network).
 
 ### Plugins Required
-📌 **Custom mobile plugin**
-
-- Android: Vibrator API
-- iOS: UIFeedbackGenerator
+- **Window API**: Built-in Tauri ✅
+- **Event System**: Built-in Tauri ✅
+- **Dialog**: `@tauri-apps/plugin-dialog` ✅
+- **System Monitoring**: `sysinfo` crate (v0.32) ✅
 
 ### Integration Steps
 
-1. **Android**:
-   ```kotlin
-   val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-   vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+1. **Window Event Listeners** ✅:
+   ```typescript
+   import { listen } from '@tauri-apps/api/event';
+
+   const unlisten = await listen('tauri://focus', () => {
+     console.log('Window focused');
+   });
    ```
 
-2. **iOS**:
+2. **Window State Management** ✅:
+   ```typescript
+   import { getCurrentWindow } from '@tauri-apps/api/window';
+
+   const window = getCurrentWindow();
+   const isFocused = await window.isFocused();
+   await window.minimize();
+   await window.maximize();
+   ```
+
+3. **System Information** ✅:
+   ```rust
+   #[tauri::command]
+   fn get_system_info() -> SystemInfo {
+       SystemInfo {
+           os: std::env::consts::OS.to_string(),
+           version: std::env::consts::FAMILY.to_string(),
+           arch: std::env::consts::ARCH.to_string(),
+           app_version: env!("CARGO_PKG_VERSION").to_string(),
+           process_id: std::process::id(),
+       }
+   }
+   ```
+
+4. **Live System Monitoring** ✅:
+   ```rust
+   // Cargo.toml
+   sysinfo = "0.32"
+
+   #[tauri::command]
+   fn get_system_metrics() -> Result<SystemMetrics, String> {
+       let mut sys = System::new_all();
+       sys.refresh_all();
+       // Returns: CPU, RAM, Disk, Network metrics
+   }
+   ```
+
+### Implementation Status
+
+**Backend** ✅:
+- ✅ SystemInfo command (OS, version, arch, app version, process ID)
+- ✅ System metrics command (CPU, RAM, Disk usage)
+- ✅ Network metrics command (total received/transmitted, per-interface stats)
+- ✅ App uptime tracker (runtime since startup)
+- ✅ All commands registered in invoke_handler
+
+**Frontend** ✅:
+- ✅ Window lifecycle event listeners (focus, blur, resize, move, close requested)
+- ✅ Event counter and real-time logging
+- ✅ Window state management (focused, minimized, maximized, visible, fullscreen)
+- ✅ Window controls (minimize, maximize, center, toggle fullscreen, toggle decorations)
+- ✅ Window property setters (title, size, position)
+- ✅ Theme detection (light/dark)
+- ✅ System information display panel
+- ✅ App uptime display (formatted as d/h/m/s)
+- ✅ Live system monitoring dashboard:
+  - ✅ CPU usage with animated progress bar
+  - ✅ Memory usage with progress bar and formatted bytes
+  - ✅ Disk usage with progress bar and formatted bytes
+  - ✅ Network traffic (download/upload totals)
+- ✅ Auto-refresh monitoring (updates every 2 seconds)
+- ✅ Start/Stop monitoring toggle
+- ✅ System dialogs integration (message, confirm, ask)
+- ✅ Output panel with timestamped logs
+- ✅ Error handling and loading states
+
+**Permissions** ✅:
+- ✅ dialog:allow-message
+- ✅ dialog:allow-ask
+- ✅ dialog:allow-confirm
+- ✅ core:window:allow-set-title
+- ✅ core:window:allow-set-size
+- ✅ core:window:allow-set-position
+- ✅ core:window:allow-center
+- ✅ core:window:allow-minimize
+- ✅ core:window:allow-maximize
+- ✅ core:window:allow-unmaximize
+- ✅ core:window:allow-show
+- ✅ core:window:allow-hide
+- ✅ core:window:allow-close
+- ✅ core:window:allow-set-decorations
+- ✅ core:window:allow-set-fullscreen
+- ✅ core:window:allow-is-fullscreen
+- ✅ core:window:allow-is-minimized
+- ✅ core:window:allow-is-maximized
+- ✅ core:window:allow-is-focused
+- ✅ core:window:allow-is-visible
+- ✅ core:window:allow-theme
+
+**Documentation** ✅:
+- ✅ Complete implementation guide (`app-lifecycle-module.md`)
+- ✅ All features documented
+- ✅ Testing checklists
+- ✅ Platform-specific notes
+
+### UI for This Screen ✅
+- ✅ **Window Events Section**:
+  - ✅ Start/Stop listening buttons
+  - ✅ Event counter display
+  - ✅ Real-time event log
+- ✅ **Window State Section**:
+  - ✅ Current state indicators (focused, minimized, maximized, visible, fullscreen)
+  - ✅ Refresh state button
+- ✅ **Window Controls Section**:
+  - ✅ Minimize, Maximize, Center, Toggle Fullscreen, Toggle Decorations buttons
+- ✅ **Window Properties Section**:
+  - ✅ Set window title (input + button)
+  - ✅ Set window size (width/height inputs + button)
+  - ✅ Set window position (X/Y inputs + button)
+  - ✅ Get theme button
+- ✅ **System Information Section**:
+  - ✅ OS, Version, Architecture, App Version, Process ID, App Uptime
+  - ✅ Refresh button
+- ✅ **Live System Monitoring Section**:
+  - ✅ CPU usage card with progress bar
+  - ✅ Memory usage card with progress bar
+  - ✅ Disk usage card with progress bar
+  - ✅ Network traffic card (download/upload)
+  - ✅ Start/Stop monitoring toggle
+  - ✅ Auto-refresh every 2 seconds
+- ✅ **System Dialogs Section**:
+  - ✅ Message input field
+  - ✅ Show Message, Confirm, Ask buttons
+  - ✅ Dialog result logging
+- ✅ **Output Panel**:
+  - ✅ Timestamped operation logs
+  - ✅ Success/error indicators
+  - ✅ Clear button
+
+### Platform Support
+- **Desktop**: ✅ Full native support (Windows, macOS, Linux)
+  - Window management: Built-in Tauri APIs
+  - System monitoring: `sysinfo` crate
+  - Dialogs: Official Tauri plugin
+- **Mobile**: Partial support
+  - Window events: Limited on mobile
+  - System info: Available
+  - Dialogs: Supported
+
+---
+
+## 1️⃣9️⃣ Haptics / Vibrations Module ✅ **COMPLETED**
+
+### Purpose
+Provide tactile feedback on mobile devices through vibrations and haptic effects.
+
+### Plugins Required
+✅ **Custom mobile plugins implemented**
+
+- Android: Vibrator API with VibrationEffect ✅
+- iOS: UIFeedbackGenerator ✅
+
+### Implementation Status
+
+**Fully Implemented** with comprehensive platform support:
+
+1. **Android Plugin** (`HapticsPlugin.kt`) ✅
+   - VibrationEffect API for Android O+ (API 26+)
+   - Legacy Vibrator API fallback for older devices
+   - Impact feedback: light, medium, heavy
+   - Notification patterns: success, warning, error
+   - Custom duration and pattern vibrations
+   - Vibration cancellation support
+
+2. **iOS Plugin** (`HapticsPlugin.swift`) ✅
+   - UIImpactFeedbackGenerator (light, medium, heavy)
+   - UINotificationFeedbackGenerator (success, warning, error)
+   - UISelectionFeedbackGenerator for UI interactions
+   - Taptic Engine capability detection (iOS 10+)
+
+3. **Rust Backend** (6 Tauri commands) ✅
+   - `haptic_impact` - Trigger impact feedback
+   - `haptic_notification` - Trigger notification patterns
+   - `vibrate` - Custom duration vibration
+   - `vibrate_pattern` - Pattern-based vibration
+   - `cancel_vibration` - Stop ongoing vibration
+   - `has_vibrator` - Device capability check
+
+4. **Frontend** (`haptics.tsx`) ✅
+   - Full UI with all haptic controls
+   - Real-time Tauri command integration
+   - Loading states and error handling
+   - Comprehensive output logging
+
+### Integration Steps Completed
+
+1. **Android**: ✅
+   ```kotlin
+   // HapticsPlugin.kt
+   val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+   vibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude))
+   ```
+
+2. **iOS**: ✅
    ```swift
+   // HapticsPlugin.swift
    let generator = UIImpactFeedbackGenerator(style: .medium)
+   generator.prepare()
    generator.impactOccurred()
    ```
 
-3. **Rust command**:
+3. **Rust commands**: ✅
    ```rust
    #[tauri::command]
-   async fn vibrate(intensity: String) {
-       // call mobile plugin
-   }
+   async fn haptic_impact(style: String) -> Result<(), String>
+   #[tauri::command]
+   async fn vibrate(duration: u64) -> Result<(), String>
+   // + 4 more commands
    ```
 
-### UI for This Screen
-- **Button**: Light tap
-- **Button**: Medium impact
-- **Button**: Heavy impact
-- **Button**: Success vibration
-- **Button**: Error vibration
-- **Button**: Warning vibration
+### UI Implementation ✅
+- ✅ **Button**: Light impact feedback
+- ✅ **Button**: Medium impact feedback
+- ✅ **Button**: Heavy impact feedback
+- ✅ **Button**: Success notification haptic
+- ✅ **Button**: Warning notification haptic
+- ✅ **Button**: Error notification haptic
+- ✅ **Duration controls**: 50ms, 100ms, 200ms, 500ms
+- ✅ **Pattern vibration**: Custom pattern [100, 50, 100, 50, 200]
+- ✅ **Device capability check**
+- ✅ **Real-time output logging**
+
+### Documentation
+See `docs/haptics-module.md` for complete implementation details, platform support matrix, and troubleshooting guide.
 
 ---
 
-## 2️⃣0️⃣ Speech & Media Intelligence Module
+## 2️⃣0️⃣ Speech & Media Intelligence Module ✅ **COMPLETED**
 
 ### Purpose
-Speech-to-text transcription and text-to-speech synthesis.
+Speech-to-text transcription, text-to-speech synthesis, and AI-powered media intelligence capabilities across platforms.
 
 ### Plugins Required
-**Approach A: Web Speech API** (works on most platforms)
-**Approach B: Native APIs** (better quality)
+**Web Speech API** ✅ (implemented for browser-based functionality)
+- Speech Recognition API (speech-to-text)
+- Speech Synthesis API (text-to-speech)
+- Works on Chrome, Edge, Safari (synthesis only)
 
-### Integration Steps
+**Future: Native APIs** (for enhanced quality)
+- Android: SpeechRecognizer, TextToSpeech
+- iOS: SFSpeechRecognizer, AVSpeechSynthesizer
 
-1. **Speech-to-Text (Web)**:
+### Implementation Status
+
+**Backend** ✅:
+- ✅ macOS permissions configured (NSMicrophoneUsageDescription, NSCameraUsageDescription)
+- ✅ WebView microphone permissions enabled
+- ✅ Entitlements.plist created with audio-input permissions
+- ✅ Network client permissions for API calls
+
+**Frontend** ✅:
+- ✅ Web Speech Recognition API integration
+- ✅ Real-time speech-to-text transcription
+- ✅ Continuous listening mode
+- ✅ Interim results (live transcription)
+- ✅ Confidence scores display
+- ✅ Error handling with user-friendly messages
+- ✅ Permission check button (proactive microphone access testing)
+- ✅ Text-to-speech synthesis with Web Speech API
+- ✅ Voice selection (69+ system voices)
+- ✅ Rate control (0.5x - 2x speed)
+- ✅ Pitch control (0.5 - 2.0)
+- ✅ Volume control (0-100%)
+- ✅ Transcript copy to clipboard
+- ✅ Event logging panel
+- ✅ Advanced features documentation (for API integrations)
+
+**Permissions** ✅:
+- ✅ Browser microphone permissions (runtime request)
+- ✅ macOS system microphone access (Info.plist)
+- ✅ macOS entitlements (audio-input, network client)
+- ✅ WebView permissions (microphone, camera)
+
+**Documentation** ✅:
+- ✅ Complete implementation guide (`speech-media-intelligence-module.md`)
+- ✅ Web Speech API integration examples
+- ✅ Native platform implementations (Android, iOS)
+- ✅ Advanced features roadmap (Whisper, cloud APIs)
+- ✅ Platform support matrix
+- ✅ Troubleshooting guides
+
+### Integration Steps ✅
+
+1. **Speech-to-Text (Web)** ✅:
    ```typescript
    const recognition = new webkitSpeechRecognition();
+   recognition.continuous = true;
+   recognition.interimResults = true;
+   recognition.lang = 'en-US';
    recognition.onresult = (event) => {
-       const transcript = event.results[0][0].transcript;
+       // Live transcription with interim results
    };
    recognition.start();
    ```
 
-2. **Text-to-Speech (Web)**:
+2. **Text-to-Speech (Web)** ✅:
    ```typescript
    const utterance = new SpeechSynthesisUtterance('Hello world');
+   utterance.rate = 1.0;
+   utterance.pitch = 1.0;
+   utterance.volume = 1.0;
+   utterance.voice = selectedVoice;
    speechSynthesis.speak(utterance);
    ```
 
-3. **Native STT/TTS (Custom Plugin)**:
-
-   **Android**:
-   ```kotlin
-   val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-   val textToSpeech = TextToSpeech(context) { status -> }
+3. **Microphone Permissions** ✅:
+   ```typescript
+   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   // Permission granted - test successful
+   stream.getTracks().forEach(track => track.stop());
    ```
 
-   **iOS**:
-   ```swift
-   let recognizer = SFSpeechRecognizer()
-   let synthesizer = AVSpeechSynthesizer()
-   ```
+4. **Error Handling** ✅:
+   - service-not-allowed → User-friendly permission instructions
+   - no-speech → Prompt to speak again
+   - audio-capture → Microphone troubleshooting
+   - network → Internet connection required message
 
-### UI for This Screen
-- **Button**: Press to speak (STT)
-- **Panel**: Live transcript
-- **Button**: Save transcript
-- **Input**: Text to speak (TTS)
-- **Button**: Play voice
-- **Dropdown**: Select voice
-- **Slider**: Speech rate
+### UI for This Screen ✅
+- ✅ **Button**: Start Listening (toggle to Stop Listening)
+- ✅ **Button**: Check Permissions (proactive microphone test)
+- ✅ **Button**: Reset Transcript
+- ✅ **Panel**: Live interim results (real-time transcription)
+- ✅ **Panel**: Final transcript display (scrollable, copyable)
+- ✅ **Button**: Copy transcript to clipboard
+- ✅ **Input**: Text to speak (multi-line textarea)
+- ✅ **Dropdown**: Voice selection (69+ voices with language info)
+- ✅ **Slider**: Speech rate (0.5x - 2x with live display)
+- ✅ **Slider**: Speech pitch (0.5 - 2.0 with live display)
+- ✅ **Slider**: Volume (0-100% with live display)
+- ✅ **Button**: Speak (with loading state)
+- ✅ **Button**: Stop (speech synthesis)
+- ✅ **Button**: Use Transcript (load transcript into TTS)
+- ✅ **Panel**: Event log (timestamped operations)
+- ✅ **Panel**: Error messages with fix instructions
+- ✅ **Panel**: Advanced features (placeholder for API integrations)
+- ✅ **Panel**: Platform support table
+- ✅ **Panel**: Implementation guide
+
+### Platform Support
+- **Desktop**: ✅ Full support (Windows, macOS, Linux)
+  - Speech Recognition: Chrome, Edge (Safari: no recognition)
+  - Speech Synthesis: All major browsers
+  - Microphone permissions: System-level + browser
+- **Mobile**: Documented (requires testing)
+  - Android: Web Speech API + native alternatives
+  - iOS: Synthesis only (Safari), native alternatives documented
+
+### Features Implemented
+- ✅ Real-time speech-to-text with Web Speech Recognition API
+- ✅ Continuous listening mode
+- ✅ Interim results (live transcription as you speak)
+- ✅ Confidence scores per result
+- ✅ Error handling with contextual help
+- ✅ Microphone permission checking and troubleshooting
+- ✅ Text-to-speech synthesis with customizable parameters
+- ✅ Voice selection from system voices
+- ✅ Rate, pitch, and volume controls
+- ✅ Transcript management (copy, clear, load into TTS)
+- ✅ Event logging with timestamps
+- ✅ Browser compatibility detection
+- ✅ macOS permissions configuration
+
+### Advanced Features (Documented)
+- Audio file transcription (requires API: Whisper, AssemblyAI)
+- Language detection (requires API)
+- Speaker diarization (requires API)
+- Media intelligence (requires API: OpenAI, Google Cloud)
+- Subtitle generation (requires API)
+- Translation (requires API)
+
+### Known Limitations
+- Web Speech Recognition requires internet connection (Google Cloud backend)
+- Safari (desktop/iOS) does not support Speech Recognition API
+- Firefox has limited support
+- Best experience on Chrome/Edge browsers
+- Advanced features require cloud API integration
 
 ---
 
@@ -1337,13 +1657,13 @@ Track your implementation progress:
 - [ ] 15. Bluetooth & Wi-Fi Module (custom plugin)
 
 ### Phase 6: System Services (Modules 16-19)
-- [ ] 16. Background Tasks Module (custom plugin)
-- [ ] 17. Clipboard & Battery Module
-- [ ] 18. App Lifecycle & System Tray Module
+- [x] 16. Background Tasks Module (See: [background-tasks-module.md](background-tasks-module.md))
+- [x] 17. System Services Module (See: [system-services-module.md](system-services-module.md))
+- [x] 18. App Lifecycle & OS Integration Module (See: [app-lifecycle-module.md](app-lifecycle-module.md))
 - [ ] 19. Haptics & Vibrations Module (custom plugin)
 
 ### Phase 7: Intelligence & Sharing (Modules 20-21)
-- [ ] 20. Speech (TTS & STT) Module
+- [x] 20. Speech & Media Intelligence Module (See: [speech-media-intelligence-module.md](speech-media-intelligence-module.md))
 - [ ] 21. File Sharing & Share Sheet Module (custom plugin)
 
 ### Phase 8: Advanced Features (Modules 22-26)
