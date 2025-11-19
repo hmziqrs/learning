@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Share2, Copy, Mail, FileText, Image, FileVideo, Twitter, Facebook, MessageSquare } from 'lucide-react'
+import { Share2, Copy, Mail, FileText, Image, FileVideo, Twitter, Facebook, MessageSquare, Activity } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,11 +31,21 @@ function FileSharingModule() {
   const [isSupported, setIsSupported] = useState(false)
   const [nativeSupport, setNativeSupport] = useState(false)
   const [platform, setPlatform] = useState('unknown')
+  const [shareHistory, setShareHistory] = useState<Array<{method: string, timestamp: string, success: boolean}>>([])
+  const [clipboardContent, setClipboardContent] = useState('')
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
     const timestamp = new Date().toLocaleTimeString()
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
+  }
+
+  const addToHistory = (method: string, success: boolean) => {
+    setShareHistory((prev) => [...prev, {
+      method,
+      timestamp: new Date().toLocaleString(),
+      success
+    }].slice(-10)) // Keep only last 10 entries
   }
 
   // Check platform and support on mount
@@ -73,6 +83,7 @@ function FileSharingModule() {
   const handleShareText = async () => {
     if (!('share' in navigator)) {
       addOutput('Web Share API not supported. Use clipboard fallback.', false)
+      addToHistory('Web Share', false)
       handleCopyToClipboard()
       return
     }
@@ -84,11 +95,14 @@ function FileSharingModule() {
         url: shareUrl,
       })
       addOutput('Content shared successfully')
+      addToHistory('Web Share API', true)
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         addOutput('Share cancelled by user')
+        addToHistory('Web Share API (Cancelled)', false)
       } else {
         addOutput(`Share failed: ${error instanceof Error ? error.message : String(error)}`, false)
+        addToHistory('Web Share API', false)
       }
     }
   }
@@ -97,6 +111,7 @@ function FileSharingModule() {
   const handleShareUrl = async () => {
     if (!('share' in navigator)) {
       addOutput('Web Share API not supported. Copying URL to clipboard.', false)
+      addToHistory('Web Share URL', false)
       handleCopyUrl()
       return
     }
@@ -106,25 +121,40 @@ function FileSharingModule() {
         url: shareUrl,
       })
       addOutput('URL shared successfully')
+      addToHistory('Web Share URL', true)
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         addOutput('Share cancelled by user')
+        addToHistory('Web Share URL (Cancelled)', false)
       } else {
         addOutput(`Share failed: ${error instanceof Error ? error.message : String(error)}`, false)
+        addToHistory('Web Share URL', false)
       }
     }
   }
 
-  // Copy to clipboard
+  // Copy to clipboard using backend
   const handleCopyToClipboard = async () => {
     const content = `${shareTitle}\n${shareText}\n${shareUrl}`
 
     try {
+      // Try backend clipboard first
+      try {
+        await invoke('copy_to_clipboard_backend', { text: content })
+        addOutput('Content copied to clipboard (backend)')
+        addToHistory('Clipboard (Backend)', true)
+        return
+      } catch (backendError) {
+        addOutput('Backend clipboard failed, trying Web API...', false)
+      }
+
+      // Fallback to Web Clipboard API
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(content)
-        addOutput('Content copied to clipboard')
+        addOutput('Content copied to clipboard (Web API)')
+        addToHistory('Clipboard (Web API)', true)
       } else {
-        // Fallback for older browsers
+        // Legacy fallback
         const textArea = document.createElement('textarea')
         textArea.value = content
         document.body.appendChild(textArea)
@@ -132,18 +162,32 @@ function FileSharingModule() {
         document.execCommand('copy')
         document.body.removeChild(textArea)
         addOutput('Content copied to clipboard (legacy method)')
+        addToHistory('Clipboard (Legacy)', true)
       }
     } catch (error) {
       addOutput(`Failed to copy: ${error instanceof Error ? error.message : String(error)}`, false)
+      addToHistory('Clipboard', false)
     }
   }
 
   // Copy URL only
   const handleCopyUrl = async () => {
     try {
+      // Try backend clipboard first
+      try {
+        await invoke('copy_to_clipboard_backend', { text: shareUrl })
+        addOutput('URL copied to clipboard (backend)')
+        addToHistory('Copy URL (Backend)', true)
+        return
+      } catch (backendError) {
+        addOutput('Backend clipboard failed, trying Web API...', false)
+      }
+
+      // Fallback to Web Clipboard API
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl)
-        addOutput('URL copied to clipboard')
+        addOutput('URL copied to clipboard (Web API)')
+        addToHistory('Copy URL (Web API)', true)
       } else {
         const textArea = document.createElement('textarea')
         textArea.value = shareUrl
@@ -151,39 +195,95 @@ function FileSharingModule() {
         textArea.select()
         document.execCommand('copy')
         document.body.removeChild(textArea)
-        addOutput('URL copied to clipboard')
+        addOutput('URL copied to clipboard (legacy)')
+        addToHistory('Copy URL (Legacy)', true)
       }
     } catch (error) {
       addOutput(`Failed to copy URL: ${error instanceof Error ? error.message : String(error)}`, false)
+      addToHistory('Copy URL', false)
+    }
+  }
+
+  // Read from clipboard
+  const handleReadClipboard = async () => {
+    try {
+      // Try backend clipboard first
+      try {
+        const text = await invoke<string>('read_from_clipboard')
+        setClipboardContent(text)
+        addOutput(`Read from clipboard: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`)
+        addToHistory('Read Clipboard (Backend)', true)
+        return
+      } catch (backendError) {
+        addOutput('Backend clipboard read failed, trying Web API...', false)
+      }
+
+      // Fallback to Web Clipboard API
+      if (navigator.clipboard) {
+        const text = await navigator.clipboard.readText()
+        setClipboardContent(text)
+        addOutput(`Read from clipboard: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`)
+        addToHistory('Read Clipboard (Web API)', true)
+      } else {
+        addOutput('Clipboard read not supported', false)
+        addToHistory('Read Clipboard', false)
+      }
+    } catch (error) {
+      addOutput(`Failed to read clipboard: ${error instanceof Error ? error.message : String(error)}`, false)
+      addToHistory('Read Clipboard', false)
     }
   }
 
   // Share via Twitter
   const handleShareTwitter = () => {
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`
-    window.open(twitterUrl, '_blank', 'width=550,height=420')
-    addOutput('Opened Twitter share dialog')
+    try {
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`
+      window.open(twitterUrl, '_blank', 'width=550,height=420')
+      addOutput('Opened Twitter share dialog')
+      addToHistory('Twitter Share', true)
+    } catch (error) {
+      addOutput('Failed to open Twitter', false)
+      addToHistory('Twitter Share', false)
+    }
   }
 
   // Share via Facebook
   const handleShareFacebook = () => {
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`
-    window.open(facebookUrl, '_blank', 'width=550,height=420')
-    addOutput('Opened Facebook share dialog')
+    try {
+      const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`
+      window.open(facebookUrl, '_blank', 'width=550,height=420')
+      addOutput('Opened Facebook share dialog')
+      addToHistory('Facebook Share', true)
+    } catch (error) {
+      addOutput('Failed to open Facebook', false)
+      addToHistory('Facebook Share', false)
+    }
   }
 
   // Share via Email
   const handleShareEmail = () => {
-    const mailto = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`
-    window.location.href = mailto
-    addOutput('Opened email client')
+    try {
+      const mailto = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`
+      window.location.href = mailto
+      addOutput('Opened email client')
+      addToHistory('Email Share', true)
+    } catch (error) {
+      addOutput('Failed to open email client', false)
+      addToHistory('Email Share', false)
+    }
   }
 
   // Share via SMS (mobile only)
   const handleShareSMS = () => {
-    const sms = `sms:?body=${encodeURIComponent(shareText + ' ' + shareUrl)}`
-    window.location.href = sms
-    addOutput('Opened SMS app')
+    try {
+      const sms = `sms:?body=${encodeURIComponent(shareText + ' ' + shareUrl)}`
+      window.location.href = sms
+      addOutput('Opened SMS app')
+      addToHistory('SMS Share', true)
+    } catch (error) {
+      addOutput('Failed to open SMS app', false)
+      addToHistory('SMS Share', false)
+    }
   }
 
   // Simulate file share
@@ -394,6 +494,104 @@ function FileSharingModule() {
                 <li>All methods work without requiring app installation</li>
               </ul>
             </div>
+          </div>
+        </section>
+
+        {/* Clipboard Operations */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Copy className="w-5 h-5" />
+            Clipboard Operations
+          </h2>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Test clipboard read and write operations using backend and Web APIs
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleReadClipboard} variant="outline">
+                <Copy className="w-4 h-4 mr-2" />
+                Read Clipboard
+              </Button>
+
+              <Button onClick={handleCopyToClipboard} variant="outline">
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Content
+              </Button>
+
+              <Button onClick={handleCopyUrl} variant="outline">
+                <Copy className="w-4 h-4 mr-2" />
+                Copy URL Only
+              </Button>
+            </div>
+
+            {clipboardContent && (
+              <div className="bg-muted rounded-md p-4">
+                <h4 className="text-sm font-semibold mb-2">Clipboard Content:</h4>
+                <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
+                  {clipboardContent}
+                </pre>
+              </div>
+            )}
+
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-md p-4">
+              <h4 className="font-semibold mb-2 text-purple-700 dark:text-purple-400 text-sm">
+                Clipboard Features
+              </h4>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2 text-xs">
+                <li>Backend clipboard integration (tauri-plugin-clipboard-manager)</li>
+                <li>Web Clipboard API fallback</li>
+                <li>Legacy execCommand fallback for older browsers</li>
+                <li>Read and write operations</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Share History */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Share History
+          </h2>
+
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Recent share operations (last 10)
+            </p>
+
+            {shareHistory.length === 0 ? (
+              <div className="bg-muted rounded-md p-8 text-center">
+                <p className="text-muted-foreground text-sm">No share operations yet</p>
+              </div>
+            ) : (
+              <div className="bg-muted rounded-md p-4 space-y-2">
+                {shareHistory.map((entry, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between py-2 px-3 bg-background rounded text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={entry.success ? 'text-green-600' : 'text-red-600'}>
+                        {entry.success ? '✓' : '✗'}
+                      </span>
+                      <span className="font-medium">{entry.method}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{entry.timestamp}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              onClick={() => setShareHistory([])}
+              variant="outline"
+              size="sm"
+              disabled={shareHistory.length === 0}
+            >
+              Clear History
+            </Button>
           </div>
         </section>
 

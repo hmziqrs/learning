@@ -901,16 +901,24 @@ fn is_share_supported() -> Result<bool, String> {
     }
 }
 
-// Copy text to clipboard (fallback for desktop)
+// Copy text to clipboard (works on all platforms)
 #[tauri::command]
-async fn copy_to_clipboard(app: tauri::AppHandle, text: String) -> Result<(), String> {
-    // On desktop, we can use the clipboard plugin or system clipboard
-    // For now, we'll just acknowledge the operation
-    // In production, integrate with tauri-plugin-clipboard or system clipboard
-
-    // TODO: Integrate with clipboard plugin
-    // For now, return success to allow frontend to handle via Web APIs
+async fn copy_to_clipboard_backend(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    // Use clipboard plugin to write text
+    app.clipboard()
+        .write_text(text)
+        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
     Ok(())
+}
+
+// Read text from clipboard
+#[tauri::command]
+async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
+    match app.clipboard().read_text() {
+        Ok(Some(text)) => Ok(text),
+        Ok(None) => Err("Clipboard is empty".to_string()),
+        Err(e) => Err(format!("Failed to read from clipboard: {}", e)),
+    }
 }
 
 // Share text (mobile-only, native implementation)
@@ -977,6 +985,7 @@ pub fn run() {
                 .build()
         )
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,
@@ -1003,7 +1012,8 @@ pub fn run() {
             check_camera_permission,
             request_camera_permission,
             is_share_supported,
-            copy_to_clipboard,
+            copy_to_clipboard_backend,
+            read_from_clipboard,
             share_text,
             share_files,
             get_share_platform
