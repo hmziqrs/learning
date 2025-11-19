@@ -6,21 +6,23 @@ The System Info & Device Profiling Module provides comprehensive access to syste
 
 ## Current Implementation Status
 
-✅ **Status**: Partially Implemented
+✅ **Status**: Implemented (Desktop platforms)
 
 **Implemented:**
 - Basic system information (OS, architecture, version)
 - System resource metrics (CPU, memory, disk, swap)
 - Network interface metrics
-- WiFi network scanning
+- WiFi network scanning (macOS, Linux)
 - App uptime tracking
+- Detailed CPU information (cores, frequency, vendor)
+- Storage device enumeration with usage metrics
+- Comprehensive device profiling (hostname, username, device name)
+- Kernel version information
 
-**Planned:**
-- Device hardware identification
-- Detailed CPU information
+**Planned for Mobile:**
+- Mobile-specific device profiling
 - GPU information
 - Display/screen information
-- Mobile-specific device profiling
 - Thermal state monitoring
 - Power profile information
 
@@ -61,11 +63,12 @@ Custom capability configuration for system information commands.
 - [ ] GPU usage and memory
 
 ### Hardware Information
-- [ ] CPU details (name, cores, frequency)
+- [x] CPU details (name, cores, frequency, vendor)
+- [x] Storage devices list with detailed metrics
+- [x] Hostname and device name
 - [ ] GPU details (name, vendor, memory)
 - [ ] Display information (resolution, refresh rate)
-- [ ] Battery capacity and health
-- [ ] Storage devices list
+- [ ] Battery capacity and health (use get_battery_info from System Services module)
 - [ ] Available sensors list
 
 ### Network Profiling
@@ -243,6 +246,15 @@ fn get_app_uptime() -> u64
 
 #[tauri::command]
 async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String>
+
+#[tauri::command]
+fn get_cpu_info() -> Result<CPUInfo, String>
+
+#[tauri::command]
+fn get_storage_devices() -> Result<Vec<StorageDevice>, String>
+
+#[tauri::command]
+fn get_device_profile() -> Result<DeviceProfile, String>
 ```
 
 ### Planned Commands
@@ -426,11 +438,13 @@ function SystemInfoPanel() {
 - [ ] Connection quality metrics
 - [ ] IP address information
 
-### Phase 4: Hardware Profiling ⏳
-- [ ] CPU information (name, cores, frequency)
+### Phase 4: Hardware Profiling ✅
+- [x] CPU information (name, cores, frequency, vendor)
+- [x] Storage device enumeration
+- [x] Device hostname and username
+- [x] Kernel version information
 - [ ] GPU detection and information
 - [ ] Display specifications
-- [ ] Storage device enumeration
 - [ ] Sensor availability detection
 
 ### Phase 5: Mobile Device Profiling ⏳
@@ -440,12 +454,14 @@ function SystemInfoPanel() {
 - [ ] Thermal state monitoring
 - [ ] Power profile information
 
-### Phase 6: Frontend Integration ⏳
-- [ ] Create system info page/route
-- [ ] Build resource monitoring UI
-- [ ] Implement real-time metric updates
-- [ ] Add device profile display
-- [ ] Create export functionality
+### Phase 6: Frontend Integration ✅
+- [x] Create system info page/route (system-info.tsx)
+- [x] Build resource monitoring UI
+- [x] Implement real-time metric updates
+- [x] Add device profile display
+- [x] Add CPU information display
+- [x] Add storage devices display
+- [x] Create export functionality (copy to clipboard)
 
 ## Troubleshooting
 
@@ -480,7 +496,9 @@ function SystemInfoPanel() {
 | Disk Usage | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Network Metrics | ✅ | ✅ | ✅ | ✅ | ✅ |
 | WiFi Scanning | ⏳ | ⏳ | ⏳ | ✅ | ✅ |
-| CPU Details | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| CPU Details | ⏳ | ⏳ | ✅ | ✅ | ✅ |
+| Storage Devices | ⏳ | ⏳ | ✅ | ✅ | ✅ |
+| Device Profile | ⏳ | ⏳ | ✅ | ✅ | ✅ |
 | GPU Info | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | Display Info | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | Device Model | ⏳ | ⏳ | ❌ | ✅ | ❌ |

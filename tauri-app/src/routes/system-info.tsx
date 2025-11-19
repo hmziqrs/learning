@@ -51,6 +51,38 @@ interface WiFiNetwork {
   security: string
 }
 
+interface CPUInfo {
+  name: string
+  vendor: string
+  brand: string
+  physical_cores: number
+  logical_cores: number
+  frequency: number
+}
+
+interface StorageDevice {
+  name: string
+  mount_point: string
+  total_space: number
+  available_space: number
+  used_space: number
+  file_system: string
+  is_removable: boolean
+}
+
+interface DeviceProfile {
+  hostname: string
+  username: string
+  device_name: string
+  os_name: string
+  os_version: string
+  architecture: string
+  cpu: CPUInfo
+  total_memory: number
+  storage_devices: StorageDevice[]
+  kernel_version: string
+}
+
 function SystemInfoModule() {
   const [output, setOutput] = useState<string[]>([])
   const [loading, setLoading] = useState<string | null>(null)
@@ -60,6 +92,9 @@ function SystemInfoModule() {
   const [wifiNetworks, setWifiNetworks] = useState<WiFiNetwork[]>([])
   const [uptime, setUptime] = useState<number>(0)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [cpuInfo, setCpuInfo] = useState<CPUInfo | null>(null)
+  const [storageDevices, setStorageDevices] = useState<StorageDevice[]>([])
+  const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null)
 
   useEffect(() => {
     loadSystemInfo()
@@ -162,17 +197,50 @@ function SystemInfoModule() {
     addOutput(autoRefresh ? 'Auto-refresh stopped' : 'Auto-refresh started')
   }
 
-  const copyToClipboard = () => {
-    if (!systemInfo || !systemMetrics) {
-      addOutput('No data to copy', false)
-      return
+  const loadCpuInfo = async () => {
+    try {
+      const info = await invoke<CPUInfo>('get_cpu_info')
+      setCpuInfo(info)
+      addOutput('CPU information loaded')
+    } catch (error) {
+      addOutput(`Error loading CPU info: ${error}`, false)
     }
+  }
 
+  const loadStorageDevices = async () => {
+    try {
+      const devices = await invoke<StorageDevice[]>('get_storage_devices')
+      setStorageDevices(devices)
+      addOutput(`Loaded ${devices.length} storage device(s)`)
+    } catch (error) {
+      addOutput(`Error loading storage devices: ${error}`, false)
+    }
+  }
+
+  const loadDeviceProfile = async () => {
+    setLoading('profile')
+    try {
+      const profile = await invoke<DeviceProfile>('get_device_profile')
+      setDeviceProfile(profile)
+      setCpuInfo(profile.cpu)
+      setStorageDevices(profile.storage_devices)
+      addOutput('Device profile loaded')
+    } catch (error) {
+      addOutput(`Error loading device profile: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const copyToClipboard = () => {
     const data = {
       system: systemInfo,
       metrics: systemMetrics,
       network: networkMetrics,
       uptime: uptime,
+      cpu: cpuInfo,
+      storage: storageDevices,
+      deviceProfile: deviceProfile,
     }
 
     navigator.clipboard.writeText(JSON.stringify(data, null, 2))
@@ -194,6 +262,13 @@ function SystemInfoModule() {
             variant="default"
           >
             Refresh All
+          </Button>
+          <Button
+            onClick={loadDeviceProfile}
+            disabled={loading === 'profile'}
+            variant="default"
+          >
+            Load Device Profile
           </Button>
           <Button
             onClick={toggleAutoRefresh}
@@ -331,6 +406,103 @@ function SystemInfoModule() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Device Profile */}
+        {deviceProfile && (
+          <div className="space-y-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Device Profile
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <InfoCard label="Hostname" value={deviceProfile.hostname} icon="🖥️" />
+              <InfoCard label="Device Name" value={deviceProfile.device_name} icon="📱" />
+              <InfoCard label="Username" value={deviceProfile.username} icon="👤" />
+              <InfoCard label="OS Name" value={deviceProfile.os_name} icon="💻" />
+              <InfoCard label="OS Version" value={deviceProfile.os_version} icon="📋" />
+              <InfoCard label="Kernel Version" value={deviceProfile.kernel_version} icon="⚙️" />
+              <InfoCard label="Architecture" value={deviceProfile.architecture} icon="🏗️" />
+              <InfoCard label="Total Memory" value={formatBytes(deviceProfile.total_memory)} icon="💾" />
+            </div>
+          </div>
+        )}
+
+        {/* CPU Information */}
+        {cpuInfo && (
+          <div className="space-y-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Cpu className="h-5 w-5" />
+              CPU Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <InfoCard label="CPU Model" value={cpuInfo.brand} icon="🔧" />
+              <InfoCard label="Vendor" value={cpuInfo.vendor} icon="🏢" />
+              <InfoCard label="Physical Cores" value={cpuInfo.physical_cores.toString()} icon="⚡" />
+              <InfoCard label="Logical Cores" value={cpuInfo.logical_cores.toString()} icon="🔢" />
+              <InfoCard label="Frequency" value={`${cpuInfo.frequency} MHz`} icon="⏱️" />
+            </div>
+          </div>
+        )}
+
+        {/* Storage Devices */}
+        {storageDevices.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="font-semibold flex items-center gap-2">
+              <HardDrive className="h-5 w-5" />
+              Storage Devices ({storageDevices.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {storageDevices.map((device, idx) => (
+                <div key={idx} className="p-4 bg-muted rounded-md">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <HardDrive className={`h-4 w-4 ${device.is_removable ? 'text-blue-500' : 'text-gray-500'}`} />
+                      {device.name || device.mount_point}
+                    </h4>
+                    {device.is_removable && (
+                      <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">Removable</span>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Mount Point</span>
+                      <span className="font-mono text-xs">{device.mount_point}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">File System</span>
+                      <span>{device.file_system}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Capacity</span>
+                      <span className="font-semibold">{formatBytes(device.total_space)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Used</span>
+                      <span>{formatBytes(device.used_space)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Available</span>
+                      <span className="text-green-600 dark:text-green-400 font-semibold">
+                        {formatBytes(device.available_space)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
+                      <div
+                        className="bg-purple-500 h-2 rounded-full"
+                        style={{
+                          width: `${Math.min((device.used_space / device.total_space) * 100, 100)}%`
+                        }}
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground text-center">
+                      {((device.used_space / device.total_space) * 100).toFixed(1)}% used
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
