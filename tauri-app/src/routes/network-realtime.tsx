@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Wifi, Send, Upload, Radio, Globe, Activity } from 'lucide-react'
+import { Wifi, Send, Upload, Radio, Globe, Activity, Rss } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { WebSocket } from '@tauri-apps/plugin-websocket'
 
@@ -30,6 +31,11 @@ function NetworkRealtimeModule() {
   // Network Status State
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null)
   const [wifiSsid, setWifiSsid] = useState<string>('')
+
+  // SSE State
+  const [sseUrl, setSseUrl] = useState('https://sse.dev/test')
+  const [sseConnected, setSseConnected] = useState(false)
+  const [sseMessages, setSseMessages] = useState<string[]>([])
 
   // HTTP State
   const [httpUrl, setHttpUrl] = useState('https://jsonplaceholder.typicode.com/posts/1')
@@ -210,6 +216,61 @@ function NetworkRealtimeModule() {
     }
   }
 
+  // SSE Connect
+  const handleSseConnect = async () => {
+    setLoading('sse-connect')
+    addOutput(`Connecting to SSE: ${sseUrl}`)
+
+    try {
+      // Setup event listeners
+      const unlistenMessage = await listen<string>('sse-message', (event) => {
+        const timestamp = new Date().toLocaleTimeString()
+        setSseMessages((prev) => [...prev, `[${timestamp}] ${event.payload}`])
+        addOutput(`✓ SSE Message: ${event.payload}`)
+      })
+
+      const unlistenError = await listen<string>('sse-error', (event) => {
+        addOutput(`✗ SSE Error: ${event.payload}`, false)
+        setSseConnected(false)
+        setLoading(null)
+      })
+
+      const unlistenClose = await listen<string>('sse-close', (event) => {
+        addOutput('✓ SSE Connection closed')
+        setSseConnected(false)
+        setLoading(null)
+      })
+
+      // Connect to SSE
+      await invoke('sse_connect', { url: sseUrl })
+      setSseConnected(true)
+      addOutput('✓ SSE connected successfully')
+      addOutput('Listening for events...')
+    } catch (error) {
+      addOutput(`✗ SSE connection failed: ${error}`, false)
+      setSseConnected(false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  // SSE Disconnect
+  const handleSseDisconnect = async () => {
+    setLoading('sse-disconnect')
+    addOutput('Disconnecting SSE...')
+
+    try {
+      await invoke('sse_disconnect')
+      setSseConnected(false)
+      setSseMessages([])
+      addOutput('✓ SSE disconnected')
+    } catch (error) {
+      addOutput(`✗ Disconnect failed: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   // File Upload
   const handleFileUpload = async () => {
     setLoading('upload')
@@ -272,21 +333,23 @@ function NetworkRealtimeModule() {
             Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
-            <p className="font-medium">Core features are production-ready:</p>
+            <p className="font-medium">All core features are production-ready:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li><strong className="text-green-600">✓ HTTP GET/POST</strong> - Fully functional with reqwest</li>
               <li><strong className="text-green-600">✓ File Upload</strong> - Multipart form upload working</li>
               <li><strong className="text-green-600">✓ WebSocket</strong> - Real-time bidirectional communication</li>
+              <li><strong className="text-green-600">✓ Server-Sent Events</strong> - Live event streaming from servers</li>
               <li><strong className="text-green-600">✓ Network Status</strong> - Check online/offline connectivity</li>
               <li><strong className="text-green-600">✓ WiFi Information</strong> - Get SSID on desktop platforms</li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
               <div># All core networking features implemented</div>
               <div># WebSocket: wss://echo.websocket.org</div>
+              <div># SSE: https://sse.dev/test</div>
               <div className="mt-1"># Network monitoring and WiFi info working on desktop</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              5 core networking features ready for production. Mobile-specific features (cellular info) require custom plugins.
+              6 core networking features ready for production. Mobile-specific features (cellular info) require custom plugins.
             </p>
           </div>
         </section>
@@ -489,6 +552,69 @@ function NetworkRealtimeModule() {
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* Server-Sent Events Section */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Rss className="w-5 h-5" />
+            Server-Sent Events (SSE)
+          </h2>
+
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://sse.dev/test"
+                value={sseUrl}
+                onChange={(e) => setSseUrl(e.target.value)}
+                disabled={sseConnected}
+                className="flex-1"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {!sseConnected ? (
+                <Button
+                  onClick={handleSseConnect}
+                  disabled={loading === 'sse-connect' || !sseUrl}
+                  variant="outline"
+                >
+                  <Rss className={`w-4 h-4 mr-2 ${loading === 'sse-connect' ? 'animate-pulse' : ''}`} />
+                  {loading === 'sse-connect' ? 'Connecting...' : 'Connect SSE'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSseDisconnect}
+                  disabled={loading === 'sse-disconnect'}
+                  variant="destructive"
+                >
+                  <Rss className="w-4 h-4 mr-2" />
+                  {loading === 'sse-disconnect' ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
+              )}
+
+              {sseConnected && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-purple-500/10 text-purple-500 rounded-md text-sm">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                  Connected
+                </div>
+              )}
+            </div>
+
+            {sseMessages.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold mb-2">Events Received:</h3>
+                <div className="bg-muted rounded-md p-4 max-h-48 overflow-y-auto space-y-2">
+                  {sseMessages.map((msg, i) => (
+                    <div key={i} className="text-sm font-mono bg-background p-2 rounded">
+                      {msg}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

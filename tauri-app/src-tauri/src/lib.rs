@@ -810,6 +810,92 @@ async fn get_wifi_info() -> Result<String, String> {
     }
 }
 
+// SSE Module
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+struct SseState {
+    active: Arc<Mutex<bool>>,
+}
+
+#[tauri::command]
+async fn sse_connect(url: String, window: tauri::Window) -> Result<(), String> {
+    use futures_util::StreamExt;
+
+    let active = Arc::new(Mutex::new(true));
+    let state = SseState {
+        active: active.clone(),
+    };
+
+    // Store state in window for potential cleanup
+    window.manage(state);
+
+    tokio::spawn(async move {
+        let client = HTTP_CLIENT.clone();
+
+        match client.get(&url).send().await {
+            Ok(response) => {
+                let mut stream = response.bytes_stream();
+                let mut buffer = String::new();
+
+                while let Some(chunk) = stream.next().await {
+                    // Check if connection should be closed
+                    if !*active.lock().unwrap() {
+                        break;
+                    }
+
+                    match chunk {
+                        Ok(bytes) => {
+                            let text = String::from_utf8_lossy(&bytes);
+                            buffer.push_str(&text);
+
+                            // Process complete events (ending with double newline)
+                            while let Some(pos) = buffer.find("\n\n") {
+                                let event = buffer[..pos].to_string();
+                                buffer = buffer[pos + 2..].to_string();
+
+                                // Parse and emit the event
+                                if !event.is_empty() {
+                                    // Extract data from SSE format
+                                    let data = event
+                                        .lines()
+                                        .filter(|line| line.starts_with("data:"))
+                                        .map(|line| line.trim_start_matches("data:").trim())
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+
+                                    if !data.is_empty() {
+                                        let _ = window.emit("sse-message", data);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let _ = window.emit("sse-error", format!("Stream error: {}", e));
+                            break;
+                        }
+                    }
+                }
+
+                let _ = window.emit("sse-close", "Connection closed");
+            }
+            Err(e) => {
+                let _ = window.emit("sse-error", format!("Connection failed: {}", e));
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
+    if let Some(state) = window.try_state::<SseState>() {
+        *state.active.lock().unwrap() = false;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -841,7 +927,9 @@ pub fn run() {
             request_contacts_permission,
             get_contacts,
             check_network_status,
-            get_wifi_info
+            get_wifi_info,
+            sse_connect,
+            sse_disconnect
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
