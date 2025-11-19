@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { FileText, Printer, File, Files, Upload, Download, Eye } from 'lucide-react'
+import { FileText, Printer, File, Files, Upload, Download, Eye, X } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { save, open } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
 import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -41,6 +42,7 @@ function PrintingPdfModule() {
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [currentPdfPath, setCurrentPdfPath] = useState<string | null>(null)
   const [mergeFiles, setMergeFiles] = useState<string[]>([])
+  const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addOutput = (message: string, success: boolean = true) => {
@@ -49,96 +51,96 @@ function PrintingPdfModule() {
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
   }
 
-  // Generate PDF using jsPDF
+  // Generate PDF using jsPDF with html2canvas
   const handleGeneratePdfJs = async () => {
     if (isLoading) return
     setIsLoading(true)
     addOutput('Generating PDF with jsPDF...')
 
     try {
-      // Create new PDF document
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      })
-
-      // Set document properties
-      doc.setProperties({
-        title: pdfTitle,
-        author: pdfAuthor,
-        subject: 'Generated PDF',
-        creator: 'Tauri PDF Module',
-      })
-
       // Create a clean element for PDF rendering
       const element = document.createElement('div')
       element.innerHTML = pdfContent
-
-      // Apply inline styles that work with jsPDF
-      element.style.cssText = `
-        width: 180mm;
-        padding: 10mm;
-        font-family: Arial, sans-serif;
-        background: white;
-        color: black;
-      `
-
-      // Append to body temporarily (needed for jsPDF to render)
+      
+      // Apply styles to match A4 paper
+      element.style.width = '210mm'
+      element.style.padding = '20mm'
+      element.style.backgroundColor = 'white'
+      element.style.color = 'black'
+      element.style.fontFamily = 'Arial, sans-serif'
       element.style.position = 'absolute'
       element.style.left = '-9999px'
+      element.style.top = '0'
+      
       document.body.appendChild(element)
 
       try {
-        await doc.html(element, {
-          callback: async (doc) => {
-            // Remove temporary element
-            document.body.removeChild(element)
-
-            // Get PDF as blob
-            const pdfBlob = doc.output('blob')
-
-            // Ask user where to save
-            const filePath = await save({
-              defaultPath: `${pdfTitle}.pdf`,
-              filters: [{ name: 'PDF', extensions: ['pdf'] }],
-            })
-
-            if (filePath) {
-              // Convert blob to array buffer
-              const arrayBuffer = await pdfBlob.arrayBuffer()
-              const uint8Array = new Uint8Array(arrayBuffer)
-
-              // Write file using Tauri
-              await writeFile(filePath, uint8Array)
-
-              addOutput(`PDF generated and saved to: ${filePath}`)
-              setCurrentPdfPath(filePath)
-
-              // Create object URL for preview
-              const url = URL.createObjectURL(pdfBlob)
-              setPdfUrl(url)
-              setPageNumber(1)
-            } else {
-              addOutput('PDF generation cancelled', false)
-            }
-
-            setIsLoading(false)
-          },
-          x: 10,
-          y: 10,
-          width: 180,
-          windowWidth: 800,
+        // Use html2canvas to capture the element
+        const canvas = await html2canvas(element, {
+          scale: 2, // Higher scale for better quality
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
         })
-      } catch (err) {
-        // Make sure to remove element even if error occurs
+
+        // Create PDF
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+        })
+
+        doc.setProperties({
+          title: pdfTitle,
+          author: pdfAuthor,
+          subject: 'Generated PDF',
+          creator: 'Tauri PDF Module',
+        })
+
+        // Add image to PDF
+        const imgData = canvas.toDataURL('image/jpeg', 0.95)
+        const imgProps = doc.getImageProperties(imgData)
+        const pdfWidth = doc.internal.pageSize.getWidth()
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
+        
+        doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
+
+        // Get PDF as blob
+        const pdfBlob = doc.output('blob')
+
+        // Ask user where to save
+        const filePath = await save({
+          defaultPath: `${pdfTitle}.pdf`,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        })
+
+        if (filePath) {
+          // Convert blob to array buffer
+          const arrayBuffer = await pdfBlob.arrayBuffer()
+          const uint8Array = new Uint8Array(arrayBuffer)
+
+          // Write file using Tauri
+          await writeFile(filePath, uint8Array)
+
+          addOutput(`PDF generated and saved to: ${filePath}`)
+          setCurrentPdfPath(filePath)
+
+          // Create object URL for preview
+          const url = URL.createObjectURL(pdfBlob)
+          setPdfUrl(url)
+          setPageNumber(1)
+        } else {
+          addOutput('PDF generation cancelled', false)
+        }
+      } finally {
         if (document.body.contains(element)) {
           document.body.removeChild(element)
         }
-        throw err
       }
     } catch (error) {
       addOutput(`Failed to generate PDF: ${error}`, false)
+      console.error(error)
+    } finally {
       setIsLoading(false)
     }
   }
@@ -204,9 +206,14 @@ function PrintingPdfModule() {
     addOutput('Opening browser print dialog...')
 
     try {
-      const printWindow = window.open('', '', 'width=800,height=600')
-      if (printWindow) {
-        printWindow.document.write(`
+      // Create a hidden iframe for printing
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      document.body.appendChild(iframe)
+      
+      const printDocument = iframe.contentWindow?.document
+      if (printDocument) {
+        printDocument.write(`
           <!DOCTYPE html>
           <html>
             <head>
@@ -225,15 +232,18 @@ function PrintingPdfModule() {
             </body>
           </html>
         `)
-        printWindow.document.close()
-        printWindow.focus()
-
+        printDocument.close()
+        
         setTimeout(() => {
-          printWindow.print()
-          addOutput('Print dialog opened - select "Save as PDF"')
+          iframe.contentWindow?.focus()
+          iframe.contentWindow?.print()
+          addOutput('Print dialog opened')
+          
+          // Cleanup after a delay
+          setTimeout(() => {
+            document.body.removeChild(iframe)
+          }, 1000)
         }, 250)
-      } else {
-        addOutput('Failed to open print window - popup may be blocked', false)
       }
     } catch (error) {
       addOutput(`Failed: ${error}`, false)
@@ -362,135 +372,8 @@ function PrintingPdfModule() {
 
   // Preview current content
   const handlePreviewPdf = () => {
-    try {
-      const previewWindow = window.open('', '_blank', 'width=900,height=800')
-      if (previewWindow) {
-        // Escape HTML content to prevent XSS and sanitize
-        const sanitizedContent = pdfContent
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-
-        // Create the preview HTML
-        const previewHtml = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>${pdfTitle.replace(/[<>]/g, '')} - Preview</title>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                * {
-                  margin: 0;
-                  padding: 0;
-                  box-sizing: border-box;
-                }
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-                  background: #f5f5f5;
-                  padding: 20px;
-                  line-height: 1.6;
-                }
-                .container {
-                  max-width: 800px;
-                  margin: 0 auto;
-                  background: white;
-                  padding: 40px;
-                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                  border-radius: 8px;
-                  min-height: 1000px;
-                }
-                .title {
-                  font-size: 24px;
-                  font-weight: bold;
-                  color: #333;
-                  margin-bottom: 20px;
-                  padding-bottom: 10px;
-                  border-bottom: 2px solid #eee;
-                }
-                .content {
-                  color: #444;
-                  white-space: pre-wrap;
-                  word-wrap: break-word;
-                }
-                h1, h2, h3, h4, h5, h6 {
-                  color: #333;
-                  margin: 20px 0 10px 0;
-                }
-                h1 { font-size: 2em; }
-                h2 { font-size: 1.5em; }
-                h3 { font-size: 1.3em; }
-                p {
-                  margin: 10px 0;
-                  line-height: 1.8;
-                }
-                ul, ol {
-                  margin: 10px 0;
-                  padding-left: 30px;
-                }
-                li {
-                  margin: 5px 0;
-                }
-                strong, b {
-                  font-weight: bold;
-                  color: #222;
-                }
-                em, i {
-                  font-style: italic;
-                }
-                code {
-                  background: #f4f4f4;
-                  padding: 2px 6px;
-                  border-radius: 3px;
-                  font-family: 'Courier New', monospace;
-                  font-size: 0.9em;
-                }
-                @media print {
-                  body {
-                    background: white;
-                    padding: 0;
-                  }
-                  .container {
-                    box-shadow: none;
-                    padding: 20px;
-                  }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="title">${pdfTitle.replace(/[<>]/g, '')}</div>
-                <div class="content" id="htmlContent"></div>
-              </div>
-              <script>
-                // Safely render HTML content
-                try {
-                  const content = document.getElementById('htmlContent');
-                  const parser = new DOMParser();
-                  const doc = parser.parseFromString(\`${pdfContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`, 'text/html');
-
-                  // Copy nodes from parsed document
-                  while (doc.body.firstChild) {
-                    content.appendChild(doc.body.firstChild);
-                  }
-                } catch (error) {
-                  console.error('Error rendering content:', error);
-                  document.getElementById('htmlContent').innerHTML = '<p style="color: red;">Error rendering HTML content. Please check your HTML syntax.</p>';
-                }
-              </script>
-            </body>
-          </html>
-        `
-
-        previewWindow.document.write(previewHtml)
-        previewWindow.document.close()
-        addOutput('Preview opened in new window')
-      } else {
-        addOutput('Failed to open preview - popup may be blocked', false)
-      }
-    } catch (error) {
-      addOutput(`Preview failed: ${error}`, false)
-    }
+    setShowPreview(true)
+    addOutput('Opened preview modal')
   }
 
   return (
@@ -815,6 +698,36 @@ function PrintingPdfModule() {
           </div>
         </section>
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+              <h3 className="font-semibold text-lg">Document Preview</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-auto p-8 bg-gray-100">
+              <div 
+                className="bg-white shadow-lg mx-auto min-h-[297mm] w-[210mm] p-[20mm] text-black origin-top transform scale-75 md:scale-100 transition-transform"
+                dangerouslySetInnerHTML={{ __html: pdfContent }} 
+              />
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowPreview(false)}>Close</Button>
+              <Button onClick={() => {
+                setShowPreview(false)
+                handleGeneratePdfJs()
+              }}>
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ModulePageLayout>
   )
 }
