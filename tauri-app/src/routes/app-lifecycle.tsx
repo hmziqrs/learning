@@ -3,7 +3,7 @@ import { Activity, Check, X, Monitor, Info, MessageSquare } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
-import { getCurrent } from '@tauri-apps/api/window'
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { message, ask, confirm } from '@tauri-apps/plugin-dialog'
@@ -45,7 +45,7 @@ function AppLifecycle() {
   // Dialog controls
   const [dialogMessage, setDialogMessage] = useState('Hello from Tauri!')
 
-  const window = getCurrent()
+  const window = getCurrentWindow()
   const unlisteners: UnlistenFn[] = []
 
   useEffect(() => {
@@ -235,7 +235,7 @@ function AppLifecycle() {
 
     setLoading('size')
     try {
-      await window.setSize({ type: 'Logical', width, height })
+      await window.setSize(new LogicalSize(width, height))
       addOutput(`Window size set to ${width}x${height}`)
     } catch (error) {
       addOutput(`Error setting size: ${error}`, false)
