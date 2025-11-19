@@ -3,6 +3,7 @@ import { Timer, Play, XCircle, RefreshCw, Plus, Trash2 } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 export const Route = createFileRoute('/background-tasks')({
   component: BackgroundTasks,
@@ -15,10 +16,10 @@ interface BackgroundTask {
   type: 'one-time' | 'periodic' | 'triggered'
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   priority: 'high' | 'normal' | 'low'
-  createdAt: Date
-  scheduledFor?: Date
-  lastRun?: Date
-  nextRun?: Date
+  created_at: number
+  scheduled_for?: number
+  last_run?: number
+  next_run?: number
   result?: TaskResult
 }
 
@@ -26,8 +27,35 @@ interface TaskResult {
   success: boolean
   data?: any
   error?: string
-  executedAt: Date
-  duration: number
+  executed_at: number
+  duration_ms: number
+}
+
+interface CreateTaskOptions {
+  name: string
+  description?: string
+  schedule: {
+    type: 'one-time' | 'periodic' | 'triggered'
+    start_time?: number
+    interval_ms?: number
+    end_time?: number
+  }
+  priority?: 'high' | 'normal' | 'low'
+  constraints?: {
+    requires_network?: boolean
+    requires_wifi?: boolean
+    requires_charging?: boolean
+    requires_battery_not_low?: boolean
+    requires_device_idle?: boolean
+    requires_storage_not_low?: boolean
+  }
+  retry_policy?: {
+    max_retries: number
+    backoff_multiplier?: number
+    initial_backoff_ms?: number
+    max_backoff_ms?: number
+  }
+  data?: any
 }
 
 function BackgroundTasks() {
@@ -38,7 +66,28 @@ function BackgroundTasks() {
   // Demo task form state
   const [taskName, setTaskName] = useState('Demo Task')
   const [taskDescription, setTaskDescription] = useState('A simple demo background task')
-  const [delaySeconds, setDelaySeconds] = useState('5')
+  const [delaySeconds, setDelaySeconds] = useState('2')
+
+  useEffect(() => {
+    // Load tasks on mount
+    loadTasks()
+
+    // Poll for task updates every 2 seconds
+    const interval = setInterval(() => {
+      loadTasks()
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadTasks = async () => {
+    try {
+      const taskList = await invoke<BackgroundTask[]>('list_background_tasks')
+      setTasks(taskList)
+    } catch (error) {
+      console.error('Failed to load tasks:', error)
+    }
+  }
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -46,31 +95,40 @@ function BackgroundTasks() {
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
   }
 
-  const handleCreateDemoTask = () => {
+  const handleCreateDemoTask = async () => {
     const delay = parseInt(delaySeconds)
     if (isNaN(delay) || delay < 1) {
       addOutput('Please enter a valid delay (minimum 1 second)', false)
       return
     }
 
-    // Create a demo task (frontend-only simulation)
-    const newTask: BackgroundTask = {
-      id: `task-${Date.now()}`,
-      name: taskName,
-      description: taskDescription,
-      type: 'one-time',
-      status: 'pending',
-      priority: 'normal',
-      createdAt: new Date(),
-      scheduledFor: new Date(Date.now() + delay * 1000),
+    setLoading('create')
+
+    try {
+      const options: CreateTaskOptions = {
+        name: taskName,
+        description: taskDescription,
+        schedule: {
+          type: 'one-time',
+          start_time: Date.now() + delay * 1000,
+        },
+        priority: 'normal',
+      }
+
+      const taskId = await invoke<string>('create_background_task', { options })
+      addOutput(`Created task "${taskName}" (ID: ${taskId})`)
+
+      // Load updated tasks
+      await loadTasks()
+
+      // Reset form
+      setTaskName('Demo Task')
+      setTaskDescription('A simple demo background task')
+    } catch (error) {
+      addOutput(`Failed to create task: ${error}`, false)
+    } finally {
+      setLoading(null)
     }
-
-    setTasks((prev) => [...prev, newTask])
-    addOutput(`Created task "${taskName}" (ID: ${newTask.id})`)
-
-    // Reset form
-    setTaskName('Demo Task')
-    setTaskDescription('A simple demo background task')
   }
 
   const handleExecuteTask = async (taskId: string) => {
@@ -88,68 +146,23 @@ function BackgroundTasks() {
     }
 
     setLoading(taskId)
-
-    // Update task status to running
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? { ...t, status: 'running' as const, lastRun: new Date() }
-          : t
-      )
-    )
-
     addOutput(`Executing task "${task.name}"...`)
 
     try {
-      // Simulate task execution
-      const startTime = Date.now()
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      const duration = Date.now() - startTime
-
-      // Randomly succeed or fail for demo purposes
-      const success = Math.random() > 0.2 // 80% success rate
-
-      const result: TaskResult = {
-        success,
-        data: success ? { message: 'Task completed successfully', executedAt: new Date() } : undefined,
-        error: success ? undefined : 'Simulated task failure',
-        executedAt: new Date(),
-        duration,
-      }
-
-      // Update task with result
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                status: success ? ('completed' as const) : ('failed' as const),
-                result,
-              }
-            : t
-        )
-      )
-
-      if (success) {
-        addOutput(`Task "${task.name}" completed successfully (${duration}ms)`)
-      } else {
-        addOutput(`Task "${task.name}" failed: ${result.error}`, false)
-      }
+      const delay = parseInt(delaySeconds)
+      await invoke('execute_demo_task', {
+        id: taskId,
+        delaySeconds: delay,
+      })
+      addOutput(`Task "${task.name}" started`)
     } catch (error) {
       addOutput(`Error executing task: ${error}`, false)
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? { ...t, status: 'failed' as const }
-            : t
-        )
-      )
     } finally {
       setLoading(null)
     }
   }
 
-  const handleCancelTask = (taskId: string) => {
+  const handleCancelTask = async (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
 
@@ -163,27 +176,34 @@ function BackgroundTasks() {
       return
     }
 
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? { ...t, status: 'cancelled' as const }
-          : t
-      )
-    )
-
-    addOutput(`Cancelled task "${task.name}"`)
+    try {
+      await invoke('cancel_background_task', { id: taskId })
+      addOutput(`Cancelled task "${task.name}"`)
+      await loadTasks()
+    } catch (error) {
+      addOutput(`Error cancelling task: ${error}`, false)
+    }
   }
 
-  const handleClearCompleted = () => {
-    const completedCount = tasks.filter(
+  const handleClearCompleted = async () => {
+    const completedTasks = tasks.filter(
       (t) => t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
-    ).length
-
-    setTasks((prev) =>
-      prev.filter((t) => t.status !== 'completed' && t.status !== 'failed' && t.status !== 'cancelled')
     )
 
-    addOutput(`Cleared ${completedCount} completed/failed/cancelled task(s)`)
+    if (completedTasks.length === 0) {
+      addOutput('No completed tasks to clear', false)
+      return
+    }
+
+    try {
+      for (const task of completedTasks) {
+        await invoke('delete_background_task', { id: task.id })
+      }
+      addOutput(`Cleared ${completedTasks.length} completed/failed/cancelled task(s)`)
+      await loadTasks()
+    } catch (error) {
+      addOutput(`Error clearing tasks: ${error}`, false)
+    }
   }
 
   const getStatusColor = (status: BackgroundTask['status']) => {
@@ -216,10 +236,15 @@ function BackgroundTasks() {
     }
   }
 
+  const formatTimestamp = (timestamp?: number) => {
+    if (!timestamp) return 'N/A'
+    return new Date(timestamp).toLocaleString()
+  }
+
   return (
     <ModulePageLayout
       title="Background Tasks Module"
-      description="Schedule and manage background tasks with execution monitoring"
+      description="Schedule and manage background tasks with Rust backend integration"
       icon={Timer}
     >
       <div className="space-y-6">
@@ -259,12 +284,19 @@ function BackgroundTasks() {
                 className="w-full px-3 py-2 border rounded-md"
                 value={delaySeconds}
                 onChange={(e) => setDelaySeconds(e.target.value)}
-                placeholder="5"
+                placeholder="2"
                 min="1"
               />
             </div>
-            <Button onClick={handleCreateDemoTask}>
-              <Plus className="h-4 w-4 mr-2" />
+            <Button
+              onClick={handleCreateDemoTask}
+              disabled={loading === 'create'}
+            >
+              {loading === 'create' ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
               Create Task
             </Button>
           </div>
@@ -305,7 +337,7 @@ function BackgroundTasks() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-medium">{task.name}</h4>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(
@@ -328,20 +360,23 @@ function BackgroundTasks() {
                         </p>
                       )}
                       <div className="text-xs text-muted-foreground mt-2 space-y-1">
-                        <div>ID: {task.id}</div>
-                        <div>Created: {task.createdAt.toLocaleString()}</div>
-                        {task.scheduledFor && (
-                          <div>Scheduled for: {task.scheduledFor.toLocaleString()}</div>
+                        <div className="font-mono">ID: {task.id}</div>
+                        <div>Created: {formatTimestamp(task.created_at)}</div>
+                        {task.scheduled_for && (
+                          <div>Scheduled for: {formatTimestamp(task.scheduled_for)}</div>
                         )}
-                        {task.lastRun && (
-                          <div>Last run: {task.lastRun.toLocaleString()}</div>
+                        {task.last_run && (
+                          <div>Last run: {formatTimestamp(task.last_run)}</div>
                         )}
                         {task.result && (
                           <div className={task.result.success ? 'text-green-600' : 'text-red-600'}>
-                            Result: {task.result.success ? 'Success' : `Failed - ${task.result.error}`}
+                            <div>
+                              Result: {task.result.success ? 'Success' : `Failed - ${task.result.error}`}
+                              {' '}({task.result.duration_ms}ms)
+                            </div>
                             {task.result.success && task.result.data && (
-                              <div className="ml-2 text-xs">
-                                {JSON.stringify(task.result.data)}
+                              <div className="mt-1 text-xs bg-green-50 dark:bg-green-950 p-2 rounded">
+                                {JSON.stringify(task.result.data, null, 2)}
                               </div>
                             )}
                           </div>
@@ -358,6 +393,7 @@ function BackgroundTasks() {
                           task.status === 'running' ||
                           task.status === 'cancelled'
                         }
+                        title="Execute task"
                       >
                         {loading === task.id ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
@@ -375,6 +411,7 @@ function BackgroundTasks() {
                           task.status === 'failed' ||
                           task.status === 'cancelled'
                         }
+                        title="Cancel task"
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>
@@ -414,14 +451,14 @@ function BackgroundTasks() {
         </div>
 
         {/* Info Box */}
-        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-          <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-            Implementation Note
+        <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-4">
+          <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
+            Implementation Status
           </h4>
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            This is a frontend-only demo of the Background Tasks module. For full
-            implementation with Rust backend integration, persistent storage, and
-            platform-specific background execution, refer to the module documentation.
+          <p className="text-sm text-green-800 dark:text-green-200">
+            This module is now integrated with the Rust backend! Tasks are managed
+            server-side with real async execution. The task list auto-updates every 2
+            seconds to show current status.
           </p>
         </div>
       </div>

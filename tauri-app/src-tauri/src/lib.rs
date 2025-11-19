@@ -1,8 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod background_tasks;
+
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
+use background_tasks::*;
 
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -868,9 +872,97 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// Background Tasks Module - State Management
+struct AppState {
+    task_manager: Mutex<TaskManager>,
+}
+
+// Background Tasks Module - Commands
+#[tauri::command]
+async fn create_background_task(
+    state: tauri::State<'_, AppState>,
+    options: CreateTaskOptions,
+) -> Result<String, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.create_task(options)
+}
+
+#[tauri::command]
+async fn get_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Option<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.get_task(&id)
+}
+
+#[tauri::command]
+async fn list_background_tasks(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.list_tasks()
+}
+
+#[tauri::command]
+async fn cancel_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.cancel_task(&id)
+}
+
+#[tauri::command]
+async fn delete_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.delete_task(&id)
+}
+
+#[tauri::command]
+async fn execute_demo_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    delay_seconds: u64,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    let tasks_clone = task_manager.clone_tasks();
+
+    // Spawn the task execution in the background
+    tokio::spawn(async move {
+        let _ = execute_demo_task(tasks_clone, id, delay_seconds).await;
+    });
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(AppState {
+            task_manager: Mutex::new(TaskManager::new()),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
@@ -906,7 +998,13 @@ pub fn run() {
             set_zoom,
             get_cameras,
             check_camera_permission,
-            request_camera_permission
+            request_camera_permission,
+            create_background_task,
+            get_background_task,
+            list_background_tasks,
+            cancel_background_task,
+            delete_background_task,
+            execute_demo_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
