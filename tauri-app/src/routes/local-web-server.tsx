@@ -35,7 +35,7 @@ function LocalWebServerModule() {
   const [output, setOutput] = useState<string[]>([])
   const [servers, setServers] = useState<ServerInfo[]>([])
   const [port, setPort] = useState<string>('3000')
-  const [staticDir, setStaticDir] = useState<string>('./public')
+  const [staticDir, setStaticDir] = useState<string>('../public')
   const [enableDirectoryListing, setEnableDirectoryListing] = useState(false)
   const [enableLogging, setEnableLogging] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
@@ -123,7 +123,7 @@ function LocalWebServerModule() {
   const handleCreateTestDirectory = async () => {
     if (isLoading) return
     setIsLoading(true)
-    const testDirPath = './test-server'
+    const testDirPath = '../test-server'
     addOutput(`Creating test directory at ${testDirPath}...`)
 
     try {
@@ -245,7 +245,7 @@ function LocalWebServerModule() {
                 size="sm"
                 className="border-blue-300 dark:border-blue-700"
               >
-                Create Test Directory (./test-server)
+                Create Test Directory (../test-server)
               </Button>
             </div>
 

@@ -24,8 +24,6 @@ import {
   Server,
   Shield,
   Info,
-  Shield,
-  Server,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -201,20 +199,6 @@ const modules = [
     path: '/system-info',
     color: 'text-gray-500',
   },
-  {
-    name: 'Security & Biometrics',
-    description: 'Biometric authentication and secure cryptographic operations',
-    icon: Shield,
-    path: '/security-biometrics',
-    color: 'text-red-500',
-  },
-  {
-    name: 'Local Web Server',
-    description: 'Start and manage local HTTP servers for serving static files and testing',
-    icon: Server,
-    path: '/local-web-server',
-    color: 'text-orange-600',
-  },
 ]
 
 function Index() {
@@ -222,7 +206,7 @@ function Index() {
     <div className="space-y-8">
       {/* Hero Section */}
       <div className="text-center space-y-4 py-8">
-        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+        <h1 className="text-5xl font-bold bg-linear-to-r from-primary to-purple-600 bg-clip-text text-transparent">
           Tauri Capability Playground
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerConfig {
     pub port: Option<u16>,
     pub host: Option<String>,
@@ -29,6 +30,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerInfo {
     pub id: String,
     pub url: String,
