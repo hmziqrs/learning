@@ -997,54 +997,156 @@ Provide tactile feedback on mobile devices.
 
 ---
 
-## 2️⃣0️⃣ Speech & Media Intelligence Module
+## 2️⃣0️⃣ Speech & Media Intelligence Module ✅ **COMPLETED**
 
 ### Purpose
-Speech-to-text transcription and text-to-speech synthesis.
+Speech-to-text transcription, text-to-speech synthesis, and AI-powered media intelligence capabilities across platforms.
 
 ### Plugins Required
-**Approach A: Web Speech API** (works on most platforms)
-**Approach B: Native APIs** (better quality)
+**Web Speech API** ✅ (implemented for browser-based functionality)
+- Speech Recognition API (speech-to-text)
+- Speech Synthesis API (text-to-speech)
+- Works on Chrome, Edge, Safari (synthesis only)
 
-### Integration Steps
+**Future: Native APIs** (for enhanced quality)
+- Android: SpeechRecognizer, TextToSpeech
+- iOS: SFSpeechRecognizer, AVSpeechSynthesizer
 
-1. **Speech-to-Text (Web)**:
+### Implementation Status
+
+**Backend** ✅:
+- ✅ macOS permissions configured (NSMicrophoneUsageDescription, NSCameraUsageDescription)
+- ✅ WebView microphone permissions enabled
+- ✅ Entitlements.plist created with audio-input permissions
+- ✅ Network client permissions for API calls
+
+**Frontend** ✅:
+- ✅ Web Speech Recognition API integration
+- ✅ Real-time speech-to-text transcription
+- ✅ Continuous listening mode
+- ✅ Interim results (live transcription)
+- ✅ Confidence scores display
+- ✅ Error handling with user-friendly messages
+- ✅ Permission check button (proactive microphone access testing)
+- ✅ Text-to-speech synthesis with Web Speech API
+- ✅ Voice selection (69+ system voices)
+- ✅ Rate control (0.5x - 2x speed)
+- ✅ Pitch control (0.5 - 2.0)
+- ✅ Volume control (0-100%)
+- ✅ Transcript copy to clipboard
+- ✅ Event logging panel
+- ✅ Advanced features documentation (for API integrations)
+
+**Permissions** ✅:
+- ✅ Browser microphone permissions (runtime request)
+- ✅ macOS system microphone access (Info.plist)
+- ✅ macOS entitlements (audio-input, network client)
+- ✅ WebView permissions (microphone, camera)
+
+**Documentation** ✅:
+- ✅ Complete implementation guide (`speech-media-intelligence-module.md`)
+- ✅ Web Speech API integration examples
+- ✅ Native platform implementations (Android, iOS)
+- ✅ Advanced features roadmap (Whisper, cloud APIs)
+- ✅ Platform support matrix
+- ✅ Troubleshooting guides
+
+### Integration Steps ✅
+
+1. **Speech-to-Text (Web)** ✅:
    ```typescript
    const recognition = new webkitSpeechRecognition();
+   recognition.continuous = true;
+   recognition.interimResults = true;
+   recognition.lang = 'en-US';
    recognition.onresult = (event) => {
-       const transcript = event.results[0][0].transcript;
+       // Live transcription with interim results
    };
    recognition.start();
    ```
 
-2. **Text-to-Speech (Web)**:
+2. **Text-to-Speech (Web)** ✅:
    ```typescript
    const utterance = new SpeechSynthesisUtterance('Hello world');
+   utterance.rate = 1.0;
+   utterance.pitch = 1.0;
+   utterance.volume = 1.0;
+   utterance.voice = selectedVoice;
    speechSynthesis.speak(utterance);
    ```
 
-3. **Native STT/TTS (Custom Plugin)**:
-
-   **Android**:
-   ```kotlin
-   val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
-   val textToSpeech = TextToSpeech(context) { status -> }
+3. **Microphone Permissions** ✅:
+   ```typescript
+   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+   // Permission granted - test successful
+   stream.getTracks().forEach(track => track.stop());
    ```
 
-   **iOS**:
-   ```swift
-   let recognizer = SFSpeechRecognizer()
-   let synthesizer = AVSpeechSynthesizer()
-   ```
+4. **Error Handling** ✅:
+   - service-not-allowed → User-friendly permission instructions
+   - no-speech → Prompt to speak again
+   - audio-capture → Microphone troubleshooting
+   - network → Internet connection required message
 
-### UI for This Screen
-- **Button**: Press to speak (STT)
-- **Panel**: Live transcript
-- **Button**: Save transcript
-- **Input**: Text to speak (TTS)
-- **Button**: Play voice
-- **Dropdown**: Select voice
-- **Slider**: Speech rate
+### UI for This Screen ✅
+- ✅ **Button**: Start Listening (toggle to Stop Listening)
+- ✅ **Button**: Check Permissions (proactive microphone test)
+- ✅ **Button**: Reset Transcript
+- ✅ **Panel**: Live interim results (real-time transcription)
+- ✅ **Panel**: Final transcript display (scrollable, copyable)
+- ✅ **Button**: Copy transcript to clipboard
+- ✅ **Input**: Text to speak (multi-line textarea)
+- ✅ **Dropdown**: Voice selection (69+ voices with language info)
+- ✅ **Slider**: Speech rate (0.5x - 2x with live display)
+- ✅ **Slider**: Speech pitch (0.5 - 2.0 with live display)
+- ✅ **Slider**: Volume (0-100% with live display)
+- ✅ **Button**: Speak (with loading state)
+- ✅ **Button**: Stop (speech synthesis)
+- ✅ **Button**: Use Transcript (load transcript into TTS)
+- ✅ **Panel**: Event log (timestamped operations)
+- ✅ **Panel**: Error messages with fix instructions
+- ✅ **Panel**: Advanced features (placeholder for API integrations)
+- ✅ **Panel**: Platform support table
+- ✅ **Panel**: Implementation guide
+
+### Platform Support
+- **Desktop**: ✅ Full support (Windows, macOS, Linux)
+  - Speech Recognition: Chrome, Edge (Safari: no recognition)
+  - Speech Synthesis: All major browsers
+  - Microphone permissions: System-level + browser
+- **Mobile**: Documented (requires testing)
+  - Android: Web Speech API + native alternatives
+  - iOS: Synthesis only (Safari), native alternatives documented
+
+### Features Implemented
+- ✅ Real-time speech-to-text with Web Speech Recognition API
+- ✅ Continuous listening mode
+- ✅ Interim results (live transcription as you speak)
+- ✅ Confidence scores per result
+- ✅ Error handling with contextual help
+- ✅ Microphone permission checking and troubleshooting
+- ✅ Text-to-speech synthesis with customizable parameters
+- ✅ Voice selection from system voices
+- ✅ Rate, pitch, and volume controls
+- ✅ Transcript management (copy, clear, load into TTS)
+- ✅ Event logging with timestamps
+- ✅ Browser compatibility detection
+- ✅ macOS permissions configuration
+
+### Advanced Features (Documented)
+- Audio file transcription (requires API: Whisper, AssemblyAI)
+- Language detection (requires API)
+- Speaker diarization (requires API)
+- Media intelligence (requires API: OpenAI, Google Cloud)
+- Subtitle generation (requires API)
+- Translation (requires API)
+
+### Known Limitations
+- Web Speech Recognition requires internet connection (Google Cloud backend)
+- Safari (desktop/iOS) does not support Speech Recognition API
+- Firefox has limited support
+- Best experience on Chrome/Edge browsers
+- Advanced features require cloud API integration
 
 ---
 
@@ -1518,7 +1620,7 @@ Track your implementation progress:
 - [ ] 19. Haptics & Vibrations Module (custom plugin)
 
 ### Phase 7: Intelligence & Sharing (Modules 20-21)
-- [ ] 20. Speech (TTS & STT) Module
+- [x] 20. Speech & Media Intelligence Module (See: [speech-media-intelligence-module.md](speech-media-intelligence-module.md))
 - [ ] 21. File Sharing & Share Sheet Module (custom plugin)
 
 ### Phase 8: Advanced Features (Modules 22-26)

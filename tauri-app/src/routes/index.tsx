@@ -15,6 +15,7 @@ import {
   Camera,
   Activity,
   Smartphone,
+  Mic,
   Monitor,
   Clipboard,
   Timer,
@@ -129,6 +130,13 @@ const modules = [
     icon: Smartphone,
     path: '/haptics',
     color: 'text-fuchsia-500',
+  },
+  {
+    name: 'Speech & Media Intelligence',
+    description: 'Speech recognition, text-to-speech, transcription, and AI-powered media analysis',
+    icon: Mic,
+    path: '/speech-media-intelligence',
+    color: 'text-pink-500',
   },
   {
     name: 'App Lifecycle & OS Integration',

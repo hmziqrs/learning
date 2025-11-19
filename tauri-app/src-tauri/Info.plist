@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>This app needs microphone access for speech recognition and voice commands.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>This app needs camera access for taking photos and recording videos.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>This app needs location access for GPS and location-based features.</string>
+</dict>
+</plist>
