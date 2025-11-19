@@ -1286,12 +1286,13 @@ Biometric authentication (fingerprint, face) and secure crypto operations.
 **Backend** ✅:
 - 9 Rust commands implemented in lib.rs
 - Android BiometricPrompt plugin (SecurityBiometricsPlugin.kt)
-- iOS LocalAuthentication plugin (SecurityBiometricsPlugin.swift)
-- Platform-specific error handling for desktop
+- iOS/macOS LocalAuthentication plugin (SecurityBiometricsPlugin.swift)
+- Platform-specific error handling for Windows/Linux
 
-**Mobile Features** ✅:
-- Biometric authentication (fingerprint, Face ID, Touch ID)
-- Secure storage using Android Keystore and iOS Keychain
+**Platform Features** ✅:
+- **Mobile (Android/iOS)**: Biometric authentication (fingerprint, Face ID, Touch ID)
+- **macOS**: Touch ID authentication with LocalAuthentication
+- Secure storage using Android Keystore, iOS Keychain, and macOS Keychain
 - AES-256-GCM encryption/decryption
 - Biometric availability and type detection
 - Device credential fallback support

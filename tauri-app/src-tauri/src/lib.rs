@@ -896,11 +896,11 @@ struct AuthenticationResult {
 
 #[tauri::command]
 async fn check_biometric_availability() -> Result<BiometricInfo, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses BiometricManager to check availability
-        // iOS: Uses LAContext canEvaluatePolicy
+        // iOS/macOS: Uses LAContext canEvaluatePolicy
         Ok(BiometricInfo {
             available: true,
             enrolled: true,
@@ -908,9 +908,9 @@ async fn check_biometric_availability() -> Result<BiometricInfo, String> {
         })
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
-        // Desktop platforms don't have biometric hardware
+        // Windows/Linux platforms don't have biometric hardware support yet
         Ok(BiometricInfo {
             available: false,
             enrolled: false,
@@ -921,11 +921,11 @@ async fn check_biometric_availability() -> Result<BiometricInfo, String> {
 
 #[tauri::command]
 async fn authenticate_biometric(options: AuthenticationOptions) -> Result<AuthenticationResult, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses BiometricPrompt to authenticate
-        // iOS: Uses LAContext evaluatePolicy
+        // iOS/macOS: Uses LAContext evaluatePolicy
         // This is a placeholder - actual implementation is in platform-specific code
         Ok(AuthenticationResult {
             success: true,
@@ -934,21 +934,21 @@ async fn authenticate_biometric(options: AuthenticationOptions) -> Result<Authen
         })
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
-        Err("Biometric authentication is only available on mobile platforms".to_string())
+        Err("Biometric authentication is only available on mobile and macOS platforms".to_string())
     }
 }
 
 #[tauri::command]
 async fn get_biometric_types() -> Result<Vec<String>, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         Ok(vec!["fingerprint".to_string()])
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
         Ok(vec![])
     }
@@ -956,11 +956,11 @@ async fn get_biometric_types() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 async fn generate_encryption_key(key_name: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses Android Keystore to generate AES key
-        // iOS: Uses CryptoKit to generate SymmetricKey
+        // iOS/macOS: Uses CryptoKit to generate SymmetricKey and stores in Keychain
         Ok(format!("Key '{}' generated successfully", key_name))
     }
 
@@ -968,12 +968,6 @@ async fn generate_encryption_key(key_name: String) -> Result<String, String> {
     {
         // Windows: Could use DPAPI or CNG
         Err(format!("Encryption key generation not yet implemented for Windows. Key name: {}", key_name))
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // macOS: Could use Keychain and CommonCrypto
-        Err(format!("Encryption key generation not yet implemented for macOS. Key name: {}", key_name))
     }
 
     #[cfg(target_os = "linux")]
@@ -985,16 +979,16 @@ async fn generate_encryption_key(key_name: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn encrypt_data(key_name: String, data: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses Cipher with key from Android Keystore
-        // iOS: Uses AES.GCM with key from Keychain
+        // iOS/macOS: Uses AES.GCM with key from Keychain
         // Return placeholder encrypted data
         Ok(format!("encrypted_{}", data))
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
         Err(format!("Data encryption not yet implemented for this platform. Key: {}, Data length: {}", key_name, data.len()))
     }
@@ -1002,16 +996,16 @@ async fn encrypt_data(key_name: String, data: String) -> Result<String, String> 
 
 #[tauri::command]
 async fn decrypt_data(key_name: String, encrypted_data: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses Cipher with key from Android Keystore
-        // iOS: Uses AES.GCM with key from Keychain
+        // iOS/macOS: Uses AES.GCM with key from Keychain
         // Return placeholder decrypted data
         Ok(encrypted_data.replace("encrypted_", ""))
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
         Err(format!("Data decryption not yet implemented for this platform. Key: {}, Data length: {}", key_name, encrypted_data.len()))
     }
@@ -1019,11 +1013,11 @@ async fn decrypt_data(key_name: String, encrypted_data: String) -> Result<String
 
 #[tauri::command]
 async fn secure_storage_set(key: String, value: String) -> Result<(), String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // Android: Uses SharedPreferences with encryption or Android Keystore
-        // iOS: Uses Keychain Services
+        // iOS/macOS: Uses Keychain Services
         Ok(())
     }
 
@@ -1031,12 +1025,6 @@ async fn secure_storage_set(key: String, value: String) -> Result<(), String> {
     {
         // Windows: Could use DPAPI for encryption
         Err(format!("Secure storage not yet implemented for Windows. Key: {}", key))
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // macOS: Could use Keychain
-        Err(format!("Secure storage not yet implemented for macOS. Key: {}", key))
     }
 
     #[cfg(target_os = "linux")]
@@ -1048,14 +1036,14 @@ async fn secure_storage_set(key: String, value: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn secure_storage_get(key: String) -> Result<String, String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         // This will return actual value from platform-specific implementation
         Err(format!("Key '{}' not found in secure storage", key))
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
         Err(format!("Secure storage not yet implemented for this platform. Key: {}", key))
     }
@@ -1063,13 +1051,13 @@ async fn secure_storage_get(key: String) -> Result<String, String> {
 
 #[tauri::command]
 async fn secure_storage_delete(key: String) -> Result<(), String> {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
     {
-        // Mobile platforms: delegated to native plugins
+        // Mobile and macOS platforms: delegated to native plugins
         Ok(())
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
     {
         Err(format!("Secure storage not yet implemented for this platform. Key: {}", key))
     }

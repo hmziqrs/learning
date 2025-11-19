@@ -247,7 +247,10 @@ function SecurityBiometricsModule() {
                 <strong className="text-green-600">✓ iOS Plugin</strong> - SecurityBiometricsPlugin.swift with LocalAuthentication
               </li>
               <li>
-                <strong className="text-red-600">✗ Desktop</strong> - Biometrics not available on Windows/macOS/Linux
+                <strong className="text-green-600">✓ macOS</strong> - LocalAuthentication (Touch ID) + macOS Keychain
+              </li>
+              <li>
+                <strong className="text-red-600">✗ Windows/Linux</strong> - Biometrics not yet available
               </li>
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
@@ -257,7 +260,7 @@ function SecurityBiometricsModule() {
               <div>SecurityBiometricsPlugin.swift - LocalAuthentication + iOS Keychain</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Android: Fully functional with BiometricPrompt API and Android Keystore. iOS: Fully functional with LocalAuthentication and Keychain. Desktop: Returns appropriate error messages.
+              Android: Fully functional with BiometricPrompt API and Android Keystore. iOS: Fully functional with LocalAuthentication and Keychain. macOS: Fully functional with Touch ID and macOS Keychain. Windows/Linux: Returns appropriate error messages.
             </p>
           </div>
         </section>

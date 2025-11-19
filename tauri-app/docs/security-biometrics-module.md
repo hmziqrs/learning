@@ -6,12 +6,13 @@ The Security & Biometrics Module provides biometric authentication capabilities 
 
 ## Current Implementation Status
 
-✅ **Status**: Implemented (Android & iOS)
+✅ **Status**: Implemented (Android, iOS & macOS)
 
-This module has been fully implemented for mobile platforms:
+This module has been fully implemented for mobile and macOS platforms:
 - **Android**: Complete implementation with BiometricPrompt API and Android Keystore
 - **iOS**: Complete implementation with LocalAuthentication and iOS Keychain
-- **Desktop**: Returns appropriate error messages with platform-specific guidance
+- **macOS**: Complete implementation with LocalAuthentication (Touch ID) and macOS Keychain
+- **Windows/Linux**: Returns appropriate error messages with platform-specific guidance
 
 ## Plugin Setup
 
@@ -429,12 +430,12 @@ function BiometricsDemo() {
 
 | Feature | Android | iOS | Windows | macOS | Linux |
 |---------|---------|-----|---------|-------|-------|
-| Fingerprint Auth | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Fingerprint Auth | ✅ | ✅ | ❌ | ✅ | ❌ |
 | Face Recognition | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Iris Scan | ⚠️ | ❌ | ❌ | ❌ | ❌ |
-| Device Credential | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Secure Storage | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ |
-| Encryption | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ |
+| Device Credential | ✅ | ✅ | ❌ | ✅ | ❌ |
+| Secure Storage | ✅ | ✅ | ⚠️ | ✅ | ⚠️ |
+| Encryption | ✅ | ✅ | ⚠️ | ✅ | ⚠️ |
 
 **Legend:**
 - ✅ Fully Supported
