@@ -15,6 +15,7 @@ import {
   Camera,
   Activity,
   Clipboard,
+  Timer,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -86,8 +87,8 @@ const modules = [
     color: 'text-indigo-500',
   },
   {
-    name: 'Network & Realtime',
-    description: 'Test HTTP requests, WebSocket connections, and file uploads',
+    name: 'Networking & Radio Access',
+    description: 'HTTP/WebSocket communication, network monitoring, and radio hardware info',
     icon: Wifi,
     path: '/network-realtime',
     color: 'text-violet-500',
@@ -126,6 +127,13 @@ const modules = [
     icon: Clipboard,
     path: '/system-services',
     color: 'text-slate-500',
+  },
+  {
+    name: 'Background Tasks',
+    description: 'Schedule and manage background tasks with execution monitoring',
+    icon: Timer,
+    path: '/background-tasks',
+    color: 'text-fuchsia-500',
   },
 ]
 
