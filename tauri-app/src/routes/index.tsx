@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Smartphone,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'Haptics / Vibrations',
+    description: 'Provide tactile feedback through vibrations and haptic effects on mobile devices',
+    icon: Smartphone,
+    path: '/haptics',
+    color: 'text-fuchsia-500',
   },
 ]
 
