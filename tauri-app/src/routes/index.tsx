@@ -20,9 +20,12 @@ import {
   Monitor,
   Clipboard,
   Timer,
+  Printer,
   Server,
   Shield,
   Info,
+  Shield,
+  Server,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -171,6 +174,13 @@ const modules = [
     color: 'text-sky-500',
   },
   {
+    name: 'Printing & PDF',
+    description: 'Generate PDFs, print documents, and handle document operations',
+    icon: Printer,
+    path: '/printing-pdf',
+    color: 'text-orange-500',
+  },
+  {
     name: 'Local Web Server',
     description: 'Start and manage local HTTP servers for serving static files and testing',
     icon: Server,
@@ -190,6 +200,20 @@ const modules = [
     icon: Info,
     path: '/system-info',
     color: 'text-gray-500',
+  },
+  {
+    name: 'Security & Biometrics',
+    description: 'Biometric authentication and secure cryptographic operations',
+    icon: Shield,
+    path: '/security-biometrics',
+    color: 'text-red-500',
+  },
+  {
+    name: 'Local Web Server',
+    description: 'Start and manage local HTTP servers for serving static files and testing',
+    icon: Server,
+    path: '/local-web-server',
+    color: 'text-orange-600',
   },
 ]
 

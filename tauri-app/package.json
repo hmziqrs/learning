@@ -44,9 +44,13 @@
     "@tauri-apps/plugin-websocket": "^2.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
     "lucide-react": "^0.553.0",
+    "pdfjs-dist": "^5.4.394",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-pdf": "^10.2.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17"
   },

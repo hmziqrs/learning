@@ -182,6 +182,7 @@ impl TaskManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<(), String> {
         let mut tasks = self
             .tasks
@@ -196,6 +197,7 @@ impl TaskManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn update_task_result(
         &self,
         id: &str,
