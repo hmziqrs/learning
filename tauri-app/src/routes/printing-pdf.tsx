@@ -1,20 +1,47 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { FileText, Printer, File, Files } from 'lucide-react'
+import { FileText, Printer, File, Files, Upload, Download, Eye } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { save, open } from '@tauri-apps/plugin-dialog'
+import { readFile, writeFile } from '@tauri-apps/plugin-fs'
+import jsPDF from 'jspdf'
+import { Document, Page, pdfjs } from 'react-pdf'
+import 'react-pdf/dist/Page/AnnotationLayer.css'
+import 'react-pdf/dist/Page/TextLayer.css'
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
 export const Route = createFileRoute('/printing-pdf')({
   component: PrintingPdfModule,
 })
 
+interface PdfMetadata {
+  title: string
+  author: string
+  subject: string
+  creator: string
+  producer: string
+  pageCount: number
+  fileSize: number
+}
+
 function PrintingPdfModule() {
   const [output, setOutput] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [pdfContent, setPdfContent] = useState('<h1>Sample Document</h1><p>This is a test PDF document.</p>')
+  const [pdfContent, setPdfContent] = useState('<h1>Sample Document</h1><p>This is a test PDF document with some content.</p><p>You can edit this HTML to customize your PDF.</p>')
   const [pdfTitle, setPdfTitle] = useState('Test Document')
+  const [pdfAuthor, setPdfAuthor] = useState('Tauri App')
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [numPages, setNumPages] = useState<number>(0)
+  const [pageNumber, setPageNumber] = useState<number>(1)
+  const [currentPdfPath, setCurrentPdfPath] = useState<string | null>(null)
+  const [mergeFiles, setMergeFiles] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addOutput = (message: string, success: boolean = true) => {
     const icon = success ? '✓' : '✗'
@@ -22,14 +49,140 @@ function PrintingPdfModule() {
     setOutput((prev) => [...prev, `[${timestamp}] ${icon} ${message}`])
   }
 
+  // Generate PDF using jsPDF
+  const handleGeneratePdfJs = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    addOutput('Generating PDF with jsPDF...')
+
+    try {
+      // Create new PDF document
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      })
+
+      // Set document properties
+      doc.setProperties({
+        title: pdfTitle,
+        author: pdfAuthor,
+        subject: 'Generated PDF',
+        creator: 'Tauri PDF Module',
+      })
+
+      // Parse HTML content and add to PDF
+      // For better HTML rendering, we'll use html method
+      const element = document.createElement('div')
+      element.innerHTML = pdfContent
+      element.style.width = '180mm'
+      element.style.padding = '10mm'
+      element.style.fontFamily = 'Arial, sans-serif'
+
+      await doc.html(element, {
+        callback: async (doc) => {
+          // Get PDF as blob
+          const pdfBlob = doc.output('blob')
+
+          // Ask user where to save
+          const filePath = await save({
+            defaultPath: `${pdfTitle}.pdf`,
+            filters: [{ name: 'PDF', extensions: ['pdf'] }],
+          })
+
+          if (filePath) {
+            // Convert blob to array buffer
+            const arrayBuffer = await pdfBlob.arrayBuffer()
+            const uint8Array = new Uint8Array(arrayBuffer)
+
+            // Write file using Tauri
+            await writeFile(filePath, uint8Array)
+
+            addOutput(`PDF generated and saved to: ${filePath}`)
+            setCurrentPdfPath(filePath)
+
+            // Create object URL for preview
+            const url = URL.createObjectURL(pdfBlob)
+            setPdfUrl(url)
+            setPageNumber(1)
+          } else {
+            addOutput('PDF generation cancelled', false)
+          }
+
+          setIsLoading(false)
+        },
+        x: 10,
+        y: 10,
+        width: 180,
+        windowWidth: 800,
+      })
+    } catch (error) {
+      addOutput(`Failed to generate PDF: ${error}`, false)
+      setIsLoading(false)
+    }
+  }
+
+  // Generate simple text PDF
+  const handleGenerateSimplePdf = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    addOutput('Generating simple text PDF...')
+
+    try {
+      const doc = new jsPDF()
+
+      doc.setProperties({
+        title: pdfTitle,
+        author: pdfAuthor,
+        subject: 'Simple PDF',
+      })
+
+      // Add title
+      doc.setFontSize(20)
+      doc.text(pdfTitle, 20, 20)
+
+      // Add content (strip HTML tags for simple version)
+      doc.setFontSize(12)
+      const textContent = pdfContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      const splitText = doc.splitTextToSize(textContent, 170)
+      doc.text(splitText, 20, 40)
+
+      // Get PDF as blob
+      const pdfBlob = doc.output('blob')
+
+      // Ask user where to save
+      const filePath = await save({
+        defaultPath: `${pdfTitle}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+
+      if (filePath) {
+        const arrayBuffer = await pdfBlob.arrayBuffer()
+        const uint8Array = new Uint8Array(arrayBuffer)
+        await writeFile(filePath, uint8Array)
+
+        addOutput(`Simple PDF saved to: ${filePath}`)
+        setCurrentPdfPath(filePath)
+
+        // Create preview
+        const url = URL.createObjectURL(pdfBlob)
+        setPdfUrl(url)
+        setPageNumber(1)
+      }
+    } catch (error) {
+      addOutput(`Failed: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Generate PDF using browser print
   const handleGeneratePdfBrowser = async () => {
     if (isLoading) return
     setIsLoading(true)
-    addOutput('Generating PDF using browser print API...')
+    addOutput('Opening browser print dialog...')
 
     try {
-      // Create a temporary window with the content
       const printWindow = window.open('', '', 'width=800,height=600')
       if (printWindow) {
         printWindow.document.write(`
@@ -38,9 +191,12 @@ function PrintingPdfModule() {
             <head>
               <title>${pdfTitle}</title>
               <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                h1 { color: #333; }
-                p { line-height: 1.6; }
+                body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+                h1 { color: #333; margin-bottom: 20px; }
+                p { line-height: 1.6; margin-bottom: 10px; }
+                @media print {
+                  body { padding: 20px; }
+                }
               </style>
             </head>
             <body>
@@ -51,10 +207,9 @@ function PrintingPdfModule() {
         printWindow.document.close()
         printWindow.focus()
 
-        // Wait for content to load, then trigger print
         setTimeout(() => {
           printWindow.print()
-          addOutput('Browser print dialog opened successfully')
+          addOutput('Print dialog opened - select "Save as PDF"')
         }, 250)
       } else {
         addOutput('Failed to open print window - popup may be blocked', false)
@@ -66,93 +221,160 @@ function PrintingPdfModule() {
     }
   }
 
-  // Print current page
-  const handlePrintCurrentPage = async () => {
+  // Load and display PDF
+  const handleLoadPdf = async () => {
     if (isLoading) return
     setIsLoading(true)
-    addOutput('Opening print dialog for current page...')
+    addOutput('Opening file picker...')
 
     try {
-      window.print()
-      addOutput('Print dialog opened successfully')
-    } catch (error) {
-      addOutput(`Failed: ${error}`, false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      const filePath = await open({
+        multiple: false,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
 
-  // Generate PDF with jsPDF (requires installation)
-  const handleGeneratePdfJs = async () => {
-    if (isLoading) return
-    setIsLoading(true)
-    addOutput('Note: jsPDF library required for this feature')
-    addOutput('Install with: bun add jspdf')
+      if (filePath) {
+        addOutput(`Loading PDF: ${filePath}`)
 
-    try {
-      // This will only work if jsPDF is installed
-      // const { jsPDF } = await import('jspdf')
-      // const doc = new jsPDF()
-      // doc.text(pdfContent, 10, 10)
-      // doc.save(`${pdfTitle}.pdf`)
+        // Read file
+        const fileData = await readFile(filePath)
 
-      addOutput('jsPDF functionality will be available after library installation', false)
-    } catch (error) {
-      addOutput(`Failed: ${error}`, false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+        // Create blob and object URL
+        const blob = new Blob([fileData], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
 
-  // Preview PDF content
-  const handlePreviewPdf = () => {
-    if (isLoading) return
-    setIsLoading(true)
-    addOutput('Generating PDF preview...')
+        setPdfUrl(url)
+        setCurrentPdfPath(filePath)
+        setPageNumber(1)
 
-    try {
-      // Create preview in new tab
-      const previewWindow = window.open('', '_blank')
-      if (previewWindow) {
-        previewWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>${pdfTitle} - Preview</title>
-              <style>
-                body {
-                  font-family: Arial, sans-serif;
-                  max-width: 800px;
-                  margin: 0 auto;
-                  padding: 40px 20px;
-                  background: #f5f5f5;
-                }
-                .page {
-                  background: white;
-                  padding: 40px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                  min-height: 1000px;
-                }
-                h1 { color: #333; margin-top: 0; }
-                p { line-height: 1.6; color: #666; }
-              </style>
-            </head>
-            <body>
-              <div class="page">
-                ${pdfContent}
-              </div>
-            </body>
-          </html>
-        `)
-        previewWindow.document.close()
-        addOutput('PDF preview opened in new tab')
-      } else {
-        addOutput('Failed to open preview window - popup may be blocked', false)
+        addOutput(`PDF loaded successfully`)
       }
     } catch (error) {
-      addOutput(`Failed: ${error}`, false)
+      addOutput(`Failed to load PDF: ${error}`, false)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Get PDF info using Rust backend
+  const handleGetPdfInfo = async () => {
+    if (!currentPdfPath) {
+      addOutput('Please load a PDF first', false)
+      return
+    }
+
+    if (isLoading) return
+    setIsLoading(true)
+    addOutput('Getting PDF metadata...')
+
+    try {
+      const info = await invoke<PdfMetadata>('get_pdf_info', {
+        filePath: currentPdfPath
+      })
+
+      addOutput(`Title: ${info.title}`)
+      addOutput(`Author: ${info.author}`)
+      addOutput(`Pages: ${info.pageCount}`)
+      addOutput(`Size: ${(info.fileSize / 1024).toFixed(2)} KB`)
+    } catch (error) {
+      addOutput(`Command not implemented yet: ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Merge PDFs
+  const handleMergePdfs = async () => {
+    if (mergeFiles.length < 2) {
+      addOutput('Please select at least 2 PDF files to merge', false)
+      return
+    }
+
+    if (isLoading) return
+    setIsLoading(true)
+    addOutput(`Merging ${mergeFiles.length} PDF files...`)
+
+    try {
+      const outputPath = await save({
+        defaultPath: 'merged.pdf',
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+
+      if (outputPath) {
+        await invoke('merge_pdfs', {
+          inputPaths: mergeFiles,
+          outputPath,
+        })
+
+        addOutput(`PDFs merged successfully: ${outputPath}`)
+        setMergeFiles([])
+      }
+    } catch (error) {
+      addOutput(`Merge failed (command not implemented): ${error}`, false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Add file to merge list
+  const handleAddMergeFile = async () => {
+    try {
+      const filePath = await open({
+        multiple: false,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+
+      if (filePath) {
+        setMergeFiles((prev) => [...prev, filePath])
+        addOutput(`Added to merge list: ${filePath}`)
+      }
+    } catch (error) {
+      addOutput(`Failed to add file: ${error}`, false)
+    }
+  }
+
+  // PDF document loaded callback
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages)
+    addOutput(`PDF loaded with ${numPages} pages`)
+  }
+
+  // Preview current content
+  const handlePreviewPdf = () => {
+    const previewWindow = window.open('', '_blank')
+    if (previewWindow) {
+      previewWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${pdfTitle} - Preview</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px 20px;
+                background: #f5f5f5;
+              }
+              .page {
+                background: white;
+                padding: 40px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                min-height: 1000px;
+              }
+              h1 { color: #333; margin-top: 0; }
+              p { line-height: 1.6; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="page">
+              ${pdfContent}
+            </div>
+          </body>
+        </html>
+      `)
+      previewWindow.document.close()
+      addOutput('Preview opened in new tab')
     }
   }
 
@@ -164,38 +386,27 @@ function PrintingPdfModule() {
     >
       <div className="space-y-6">
         {/* Status Notice */}
-        <section className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-6">
+        <section className="rounded-lg border border-green-500/50 bg-green-500/10 p-6">
           <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            <span className="text-blue-500">ℹ️</span>
+            <span className="text-green-500">✓</span>
             Implementation Status
           </h3>
           <div className="space-y-2 text-sm">
-            <p className="font-medium">Current implementation:</p>
+            <p className="font-medium">Fully implemented features:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-green-600">✓ Browser Print API</strong> - Native window.print() available
+                <strong className="text-green-600">✓ jsPDF Integration</strong> - Client-side PDF generation
               </li>
               <li>
-                <strong className="text-yellow-600">⚠ jsPDF</strong> - Requires installation: bun add jspdf
+                <strong className="text-green-600">✓ react-pdf Viewer</strong> - PDF viewing and navigation
               </li>
               <li>
-                <strong className="text-yellow-600">⚠ react-pdf</strong> - Requires installation: bun add react-pdf
+                <strong className="text-green-600">✓ Browser Print API</strong> - Native print dialogs
               </li>
               <li>
-                <strong className="text-red-600">✗ Rust Backend</strong> - Advanced PDF operations pending implementation
+                <strong className="text-yellow-600">⚠ Rust Backend</strong> - Advanced operations require implementation
               </li>
             </ul>
-            <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Browser-Based Implementation (Available):</div>
-              <div>window.print() - System print dialog</div>
-              <div>HTML to PDF - Browser print to PDF</div>
-              <div className="mt-2"># Advanced Features (Requires Setup):</div>
-              <div>jsPDF - Client-side PDF generation</div>
-              <div>Rust printpdf - Server-side PDF operations</div>
-            </div>
-            <p className="text-muted-foreground mt-2">
-              Basic printing available now. Advanced PDF operations require additional dependencies.
-            </p>
           </div>
         </section>
 
@@ -203,21 +414,34 @@ function PrintingPdfModule() {
         <section className="rounded-lg border p-6 space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <File className="w-5 h-5" />
-            PDF Content
+            PDF Content Editor
           </h2>
 
           <div className="space-y-3">
-            <div className="space-y-2">
-              <label htmlFor="pdf-title" className="text-sm font-medium">
-                Document Title
-              </label>
-              <Input
-                id="pdf-title"
-                value={pdfTitle}
-                onChange={(e) => setPdfTitle(e.target.value)}
-                placeholder="Enter document title"
-                className="w-full"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label htmlFor="pdf-title" className="text-sm font-medium">
+                  Document Title
+                </label>
+                <Input
+                  id="pdf-title"
+                  value={pdfTitle}
+                  onChange={(e) => setPdfTitle(e.target.value)}
+                  placeholder="Enter document title"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="pdf-author" className="text-sm font-medium">
+                  Author
+                </label>
+                <Input
+                  id="pdf-author"
+                  value={pdfAuthor}
+                  onChange={(e) => setPdfAuthor(e.target.value)}
+                  placeholder="Enter author name"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -233,30 +457,73 @@ function PrintingPdfModule() {
                 rows={8}
               />
               <p className="text-xs text-muted-foreground">
-                Supports HTML tags: h1-h6, p, strong, em, ul, ol, li, etc.
+                Supports HTML tags: h1-h6, p, strong, em, ul, ol, li, div, etc.
               </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handlePreviewPdf} variant="outline" size="sm">
+                <Eye className="w-4 h-4 mr-2" />
+                Preview
+              </Button>
             </div>
           </div>
         </section>
 
-        {/* Browser-Based PDF Operations */}
+        {/* PDF Generation */}
         <section className="rounded-lg border p-6 space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Printer className="w-5 h-5" />
-            Browser Print & PDF
+            <FileText className="w-5 h-5" />
+            Generate PDF
           </h2>
 
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Use browser's built-in print functionality to generate PDFs or print documents
+              Create PDF documents from your content using different methods
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="border rounded-lg p-4 space-y-3">
                 <div>
-                  <h3 className="font-semibold mb-1">Generate PDF</h3>
+                  <h3 className="font-semibold mb-1">HTML to PDF</h3>
                   <p className="text-xs text-muted-foreground">
-                    Opens print dialog with your content (save as PDF)
+                    Full HTML rendering with styles
+                  </p>
+                </div>
+                <Button
+                  onClick={handleGeneratePdfJs}
+                  variant="outline"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Generate (jsPDF)
+                </Button>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div>
+                  <h3 className="font-semibold mb-1">Simple Text PDF</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Plain text without HTML
+                  </p>
+                </div>
+                <Button
+                  onClick={handleGenerateSimplePdf}
+                  variant="outline"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Simple PDF
+                </Button>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div>
+                  <h3 className="font-semibold mb-1">Browser Print</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Use system print dialog
                   </p>
                 </div>
                 <Button
@@ -265,65 +532,94 @@ function PrintingPdfModule() {
                   className="w-full"
                   disabled={isLoading}
                 >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Generate PDF
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-3">
-                <div>
-                  <h3 className="font-semibold mb-1">Print Current Page</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Opens print dialog for this page
-                  </p>
-                </div>
-                <Button
-                  onClick={handlePrintCurrentPage}
-                  variant="outline"
-                  className="w-full"
-                  disabled={isLoading}
-                >
                   <Printer className="w-4 h-4 mr-2" />
-                  Print Page
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-3">
-                <div>
-                  <h3 className="font-semibold mb-1">Preview PDF</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Preview how the PDF will look
-                  </p>
-                </div>
-                <Button
-                  onClick={handlePreviewPdf}
-                  variant="outline"
-                  className="w-full"
-                  disabled={isLoading}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Preview
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-3 border-yellow-500/30 bg-yellow-500/5">
-                <div>
-                  <h3 className="font-semibold mb-1">jsPDF Library</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Requires installation of jsPDF
-                  </p>
-                </div>
-                <Button
-                  onClick={handleGeneratePdfJs}
-                  variant="outline"
-                  className="w-full border-yellow-500/50"
-                  disabled={isLoading}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Generate with jsPDF
+                  Print Dialog
                 </Button>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* PDF Viewer */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Eye className="w-5 h-5" />
+            PDF Viewer
+          </h2>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleLoadPdf} variant="outline" disabled={isLoading}>
+                <Upload className="w-4 h-4 mr-2" />
+                Load PDF
+              </Button>
+
+              {currentPdfPath && (
+                <Button onClick={handleGetPdfInfo} variant="outline" disabled={isLoading}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Get Info
+                </Button>
+              )}
+            </div>
+
+            {pdfUrl && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
+                      disabled={pageNumber <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm">
+                      Page {pageNumber} of {numPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPageNumber((prev) => Math.min(numPages, prev + 1))}
+                      disabled={pageNumber >= numPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4 bg-muted/30 overflow-auto max-h-[600px]">
+                  <Document
+                    file={pdfUrl}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    loading={
+                      <div className="flex items-center justify-center p-8">
+                        <p className="text-muted-foreground">Loading PDF...</p>
+                      </div>
+                    }
+                    error={
+                      <div className="flex items-center justify-center p-8">
+                        <p className="text-red-500">Failed to load PDF</p>
+                      </div>
+                    }
+                  >
+                    <Page
+                      pageNumber={pageNumber}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={true}
+                      className="mx-auto"
+                    />
+                  </Document>
+                </div>
+              </div>
+            )}
+
+            {!pdfUrl && (
+              <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No PDF loaded. Generate or load a PDF to preview it here.</p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -334,71 +630,50 @@ function PrintingPdfModule() {
             Advanced PDF Operations
           </h2>
 
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Advanced features require Rust backend implementation
-            </p>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Merge PDFs</h3>
+              <p className="text-xs text-muted-foreground">
+                Combine multiple PDF files into one (requires Rust backend)
+              </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">Merge PDFs</h3>
-                <p className="text-xs text-muted-foreground">
-                  Combine multiple PDF files into one
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleAddMergeFile} variant="outline" size="sm">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Add PDF to Merge
                 </Button>
+
+                {mergeFiles.length > 0 && (
+                  <Button onClick={handleMergePdfs} variant="outline" size="sm">
+                    <Files className="w-4 h-4 mr-2" />
+                    Merge {mergeFiles.length} Files
+                  </Button>
+                )}
               </div>
 
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">Split PDF</h3>
-                <p className="text-xs text-muted-foreground">
-                  Divide PDF into separate files
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
-                </Button>
-              </div>
+              {mergeFiles.length > 0 && (
+                <div className="bg-muted rounded-md p-3 text-xs font-mono space-y-1">
+                  {mergeFiles.map((file, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span>{file}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMergeFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">Extract Text</h3>
-                <p className="text-xs text-muted-foreground">
-                  Get text content from PDF pages
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">Add Watermark</h3>
-                <p className="text-xs text-muted-foreground">
-                  Apply watermark to PDF pages
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">PDF Info</h3>
-                <p className="text-xs text-muted-foreground">
-                  Get metadata and properties
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
-                </Button>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-2 opacity-50">
-                <h3 className="font-semibold text-sm">Encrypt PDF</h3>
-                <p className="text-xs text-muted-foreground">
-                  Password protect PDF files
-                </p>
-                <Button variant="outline" className="w-full" disabled>
-                  Coming Soon
-                </Button>
-              </div>
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                <strong>Note:</strong> Advanced operations (merge, split, extract text, encryption) require Rust backend implementation.
+                These features will invoke Tauri commands when the backend is ready.
+              </p>
             </div>
           </div>
         </section>
@@ -414,7 +689,7 @@ function PrintingPdfModule() {
 
           <div className="bg-muted rounded-md p-4 h-64 overflow-y-auto font-mono text-sm">
             {output.length === 0 ? (
-              <p className="text-muted-foreground">No output yet. Try generating or printing a PDF...</p>
+              <p className="text-muted-foreground">No output yet. Try generating or loading a PDF...</p>
             ) : (
               output.map((line, i) => (
                 <div key={i} className="mb-1">
@@ -422,146 +697,6 @@ function PrintingPdfModule() {
                 </div>
               ))
             )}
-          </div>
-        </section>
-
-        {/* Implementation Guide */}
-        <section className="rounded-lg border border-blue-500/50 bg-blue-500/5 p-6">
-          <h3 className="text-lg font-semibold mb-3">Implementation Guide</h3>
-          <div className="space-y-4 text-sm">
-            <div className="space-y-2">
-              <h4 className="font-semibold">Browser-Based (Available Now)</h4>
-              <p className="text-muted-foreground">
-                Use native browser APIs for basic PDF generation and printing
-              </p>
-              <div className="bg-muted/50 rounded-md p-3 font-mono text-xs space-y-1">
-                <div>// Print current page or custom content</div>
-                <div>window.print()</div>
-                <div className="mt-2">// Print custom content in new window</div>
-                <div>const printWin = window.open('', '', 'width=800')</div>
-                <div>printWin.document.write(htmlContent)</div>
-                <div>printWin.print()</div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold">jsPDF Library (Requires Installation)</h4>
-              <p className="text-muted-foreground">
-                Client-side PDF generation with more control
-              </p>
-              <div className="bg-muted/50 rounded-md p-3 font-mono text-xs space-y-1">
-                <div># Install jsPDF</div>
-                <div>bun add jspdf</div>
-                <div className="mt-2">// Generate PDF</div>
-                <div>import jsPDF from 'jspdf'</div>
-                <div>const doc = new jsPDF()</div>
-                <div>doc.text('Hello world', 10, 10)</div>
-                <div>doc.save('document.pdf')</div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold">Rust Backend (Future Implementation)</h4>
-              <p className="text-muted-foreground">
-                Server-side PDF operations with printpdf/lopdf crates
-              </p>
-              <div className="bg-muted/50 rounded-md p-3 font-mono text-xs space-y-1">
-                <div>// Add to Cargo.toml</div>
-                <div>printpdf = "0.7"</div>
-                <div>lopdf = "0.32"</div>
-                <div className="mt-2">// Tauri command</div>
-                <div>#[tauri::command]</div>
-                <div>async fn generate_pdf(content: String) -&gt; Result&lt;String&gt;</div>
-              </div>
-            </div>
-
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
-              <h4 className="font-semibold mb-2 text-yellow-700 dark:text-yellow-400">
-                Permissions & Considerations
-              </h4>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2 text-xs">
-                <li>Browser print may be blocked by popup blockers</li>
-                <li>File system access requires Tauri dialog permissions</li>
-                <li>Large PDFs may require streaming for performance</li>
-                <li>PDF encryption requires careful key management</li>
-                <li>Consider privacy when handling document content</li>
-                <li>Test print layouts on different paper sizes</li>
-                <li>Verify PDF/A compliance for archival documents</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        {/* Platform Support */}
-        <section className="rounded-lg border border-purple-500/50 bg-purple-500/5 p-6">
-          <h3 className="text-lg font-semibold mb-3">Platform Support</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-4">Feature</th>
-                  <th className="text-center py-2 px-4">Windows</th>
-                  <th className="text-center py-2 px-4">macOS</th>
-                  <th className="text-center py-2 px-4">Linux</th>
-                  <th className="text-center py-2 px-4">Mobile</th>
-                </tr>
-              </thead>
-              <tbody className="text-muted-foreground">
-                <tr className="border-b">
-                  <td className="py-2 px-4">Browser Print</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 px-4">Generate PDF</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 px-4">System Print Dialog</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">✅</td>
-                  <td className="text-center py-2 px-4">⚠️*</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 px-4">PDF Viewer</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 px-4">Merge PDFs</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                </tr>
-                <tr className="border-b">
-                  <td className="py-2 px-4">Extract Text</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                </tr>
-                <tr>
-                  <td className="py-2 px-4">PDF Encryption</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                  <td className="text-center py-2 px-4">⏳</td>
-                </tr>
-              </tbody>
-            </table>
-            <div className="text-xs text-muted-foreground mt-2 space-y-1">
-              <p>* Mobile uses share functionality for printing</p>
-              <p>⏳ Planned feature, requires implementation</p>
-            </div>
           </div>
         </section>
       </div>
