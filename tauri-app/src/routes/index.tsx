@@ -12,6 +12,9 @@ import {
   Wifi,
   Images,
   Users,
+  Camera,
+  Activity,
+  Timer,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -102,6 +105,27 @@ const modules = [
     icon: Images,
     path: '/gallery',
     color: 'text-rose-500',
+  },
+  {
+    name: 'Camera',
+    description: 'Capture photos and record videos directly from device cameras',
+    icon: Camera,
+    path: '/camera',
+    color: 'text-red-500',
+  },
+  {
+    name: 'Sensors & Hardware',
+    description: 'Access device sensors for motion tracking, compass, and GPS location',
+    icon: Activity,
+    path: '/sensors',
+    color: 'text-amber-500',
+  },
+  {
+    name: 'Background Tasks',
+    description: 'Schedule and manage background tasks with execution monitoring',
+    icon: Timer,
+    path: '/background-tasks',
+    color: 'text-fuchsia-500',
   },
 ]
 

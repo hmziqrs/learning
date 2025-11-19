@@ -4680,6 +4680,7 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-plugin-websocket",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

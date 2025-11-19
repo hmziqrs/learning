@@ -1,9 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod background_tasks;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
+use background_tasks::*;
 
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -337,6 +340,37 @@ fn get_platform_name() -> String {
     return "unknown".to_string();
 }
 
+// Camera Module Structs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CapturedPhoto {
+    id: String,
+    file_path: String,
+    width: u32,
+    height: u32,
+    size: u64,
+    format: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RecordedVideo {
+    id: String,
+    file_path: String,
+    duration: f64,
+    width: u32,
+    height: u32,
+    size: u64,
+    format: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CameraConfig {
+    camera_id: String,
+    facing_mode: String,
+    flash_mode: String,
+}
+
 // Contacts Module Structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PhoneNumber {
@@ -571,6 +605,132 @@ fn generate_mock_contacts() -> Vec<Contact> {
             photo_uri: None,
         },
     ]
+}
+
+// Camera Module Commands
+// These are mock implementations for development
+// In production, these would integrate with platform-specific camera APIs:
+// - Windows: MediaFoundation API
+// - macOS: AVFoundation framework
+// - Linux: V4L2 (Video4Linux2)
+// - Android: CameraX API
+// - iOS: AVFoundation framework
+
+#[tauri::command]
+async fn initialize_camera(_config: CameraConfig) -> Result<String, String> {
+    // TODO: Implement platform-specific camera initialization
+    // For now, return error message indicating custom plugin required
+    Err("Camera functionality requires custom platform plugin development. See docs/camera-module.md for implementation details.".to_string())
+}
+
+#[tauri::command]
+async fn capture_photo() -> Result<CapturedPhoto, String> {
+    // TODO: Implement platform-specific photo capture
+    // This would:
+    // 1. Access camera device
+    // 2. Capture current frame
+    // 3. Save to temporary file
+    // 4. Return photo metadata
+    Err("Photo capture requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn start_video_recording() -> Result<String, String> {
+    // TODO: Implement platform-specific video recording
+    // This would:
+    // 1. Access camera and microphone
+    // 2. Start video encoder
+    // 3. Begin recording to file
+    Err("Video recording requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn stop_video_recording() -> Result<RecordedVideo, String> {
+    // TODO: Implement platform-specific video recording stop
+    // This would:
+    // 1. Stop video encoder
+    // 2. Finalize video file
+    // 3. Return video metadata
+    Err("Video recording requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn switch_camera() -> Result<String, String> {
+    // TODO: Implement camera switching (front/back)
+    // This would:
+    // 1. Release current camera
+    // 2. Initialize new camera
+    // 3. Update preview stream
+    Err("Camera switching requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn set_flash_mode(mode: String) -> Result<(), String> {
+    // Validate mode
+    if !["on", "off", "auto"].contains(&mode.as_str()) {
+        return Err("Invalid flash mode. Must be 'on', 'off', or 'auto'".to_string());
+    }
+
+    // TODO: Implement platform-specific flash control
+    // This would set the camera flash mode on the device
+    Err("Flash control requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn set_zoom(ratio: f32) -> Result<(), String> {
+    // Validate ratio
+    if !(0.0..=1.0).contains(&ratio) {
+        return Err("Zoom ratio must be between 0.0 and 1.0".to_string());
+    }
+
+    // TODO: Implement platform-specific zoom control
+    // This would set the camera zoom level
+    Err("Zoom control requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+async fn get_cameras() -> Result<Vec<String>, String> {
+    // TODO: Implement platform-specific camera enumeration
+    // This would:
+    // 1. Query available camera devices
+    // 2. Return list of camera IDs/names
+    Err("Camera enumeration requires custom platform plugin. See docs/camera-module.md".to_string())
+}
+
+#[tauri::command]
+fn check_camera_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // TODO: Implement actual permission check via platform APIs
+        // For now, return false to trigger permission request flow
+        Ok(false)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        // Desktop platforms don't typically have permission systems for camera
+        // But we still need the custom plugin
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+async fn request_camera_permission() -> Result<bool, String> {
+    #[cfg(any(target_os = "android", target_os = "ios", target_os = "macos"))]
+    {
+        // Simulate permission request delay
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // TODO: Implement actual permission request via platform APIs
+        // For now, return true to simulate granted permission
+        Ok(true)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+    {
+        // Desktop platforms don't require permission requests for camera
+        Ok(true)
+    }
 }
 
 // Network & Realtime Module
@@ -1838,6 +1998,87 @@ async fn sse_connect(url: String, window: tauri::Window) -> Result<(), String> {
                 let _ = window.emit("sse-error", format!("Connection failed: {}", e));
             }
         }
+
+// Background Tasks Module - State Management
+struct AppState {
+    task_manager: Mutex<TaskManager>,
+}
+
+// Background Tasks Module - Commands
+#[tauri::command]
+async fn create_background_task(
+    state: tauri::State<'_, AppState>,
+    options: CreateTaskOptions,
+) -> Result<String, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.create_task(options)
+}
+
+#[tauri::command]
+async fn get_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<Option<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.get_task(&id)
+}
+
+#[tauri::command]
+async fn list_background_tasks(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<BackgroundTask>, String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.list_tasks()
+}
+
+#[tauri::command]
+async fn cancel_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.cancel_task(&id)
+}
+
+#[tauri::command]
+async fn delete_background_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    task_manager.delete_task(&id)
+}
+
+#[tauri::command]
+async fn execute_demo_task(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    delay_seconds: u64,
+) -> Result<(), String> {
+    let task_manager = state
+        .task_manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    let tasks_clone = task_manager.clone_tasks();
+
+    // Spawn the task execution in the background
+    tokio::spawn(async move {
+        let _ = run_task_async(tasks_clone, id, delay_seconds).await;
     });
 
     Ok(())
@@ -1854,6 +2095,9 @@ async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(AppState {
+            task_manager: Mutex::new(TaskManager::new()),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
@@ -1892,7 +2136,23 @@ pub fn run() {
             estimate_bandwidth,
             run_speed_test,
             sse_connect,
-            sse_disconnect
+            sse_disconnect,
+            initialize_camera,
+            capture_photo,
+            start_video_recording,
+            stop_video_recording,
+            switch_camera,
+            set_flash_mode,
+            set_zoom,
+            get_cameras,
+            check_camera_permission,
+            request_camera_permission,
+            create_background_task,
+            get_background_task,
+            list_background_tasks,
+            cancel_background_task,
+            delete_background_task,
+            execute_demo_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
