@@ -28,6 +28,7 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-store = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-websocket = { version = "2", features = ["native-tls"], default-features = false }
+tauri-plugin-biometry = "0.2.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["time", "sync", "macros", "rt-multi-thread", "net"] }
@@ -46,4 +47,8 @@ tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
 mime_guess = "2.0"
 tracing = "0.1"
 whoami = "1.5"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
 
