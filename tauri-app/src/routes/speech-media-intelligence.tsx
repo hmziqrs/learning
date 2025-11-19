@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tantml:router'
+import { createFileRoute } from '@tanstack/react-router'
 import { Mic, Volume2, FileAudio, Languages, Users, Sparkles } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
