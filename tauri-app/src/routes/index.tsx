@@ -15,6 +15,9 @@ import {
   Camera,
   Activity,
   Smartphone,
+  Monitor,
+  Clipboard,
+  Timer,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -86,8 +89,8 @@ const modules = [
     color: 'text-indigo-500',
   },
   {
-    name: 'Network & Realtime',
-    description: 'Test HTTP requests, WebSocket connections, and file uploads',
+    name: 'Networking & Radio Access',
+    description: 'HTTP/WebSocket communication, network monitoring, and radio hardware info',
     icon: Wifi,
     path: '/network-realtime',
     color: 'text-violet-500',
@@ -126,6 +129,27 @@ const modules = [
     icon: Smartphone,
     path: '/haptics',
     color: 'text-fuchsia-500',
+  },
+  {
+    name: 'App Lifecycle & OS Integration',
+    description: 'Monitor window events, manage app state, and integrate with system dialogs',
+    icon: Monitor,
+    path: '/app-lifecycle',
+    color: 'text-lime-500',
+  },
+  {
+    name: 'System Services',
+    description: 'Access clipboard, battery info, and system audio devices',
+    icon: Clipboard,
+    path: '/system-services',
+    color: 'text-slate-500',
+  },
+  {
+    name: 'Background Tasks',
+    description: 'Schedule and manage background tasks with execution monitoring',
+    icon: Timer,
+    path: '/background-tasks',
+    color: 'text-sky-500',
   },
 ]
 
