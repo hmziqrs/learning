@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState, useEffect, useRef } from 'react'
 import { getCurrentPosition, watchPosition, checkPermissions, requestPermissions, clearWatch } from '@tauri-apps/plugin-geolocation'
+import { invoke } from '@tauri-apps/api/core'
 
 export const Route = createFileRoute('/maps-navigation')({
   component: MapsNavigationModule,
@@ -51,7 +52,38 @@ function MapsNavigationModule() {
     addOutput('Requesting current location...')
 
     try {
-      // Try Tauri plugin first (mobile)
+      // Try native API first (desktop: macOS/Windows/Linux)
+      const isNativeAvailable = await invoke<boolean>('is_native_geolocation_available')
+
+      if (isNativeAvailable) {
+        addOutput('Using native geolocation API...')
+
+        const position = await invoke<{
+          latitude: number
+          longitude: number
+          altitude: number | null
+          accuracy: number
+          altitude_accuracy: number | null
+          heading: number | null
+          speed: number | null
+          timestamp: number
+        }>('get_native_position')
+
+        const location: LatLng = {
+          lat: position.latitude,
+          lng: position.longitude,
+        }
+
+        setCurrentLocation(location)
+        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Native API - CoreLocation/WinRT/GeoClue)`)
+        return
+      }
+    } catch (nativeError: any) {
+      addOutput(`Native API unavailable: ${nativeError?.message || 'Unknown error'}`)
+    }
+
+    try {
+      // Try Tauri plugin (mobile: Android/iOS)
       const permissions = await checkPermissions()
 
       if (permissions.location === 'prompt' || permissions.location === 'prompt-with-rationale') {
@@ -77,49 +109,52 @@ function MapsNavigationModule() {
         }
 
         setCurrentLocation(location)
-        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Tauri Plugin)`)
-      }
-    } catch (tauriError) {
-      // Fallback to web API for desktop
-      addOutput('Tauri plugin unavailable, using Web Geolocation API...')
-
-      if (!('geolocation' in navigator)) {
-        addOutput('Geolocation is not supported', false)
+        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Tauri Plugin - Mobile)`)
         return
       }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location: LatLng = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          }
-
-          setCurrentLocation(location)
-          addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Web API)`)
-        },
-        (error) => {
-          let errorMsg = 'Unknown error'
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMsg = 'Location permission denied'
-              break
-            case error.POSITION_UNAVAILABLE:
-              errorMsg = 'Location unavailable'
-              break
-            case error.TIMEOUT:
-              errorMsg = 'Location request timeout'
-              break
-          }
-          addOutput(`Failed to get location: ${errorMsg}`, false)
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        }
-      )
+    } catch (pluginError: any) {
+      addOutput(`Tauri plugin unavailable: ${pluginError?.message || 'Unknown error'}`)
     }
+
+    // Final fallback to Web API
+    addOutput('Falling back to Web Geolocation API...')
+
+    if (!('geolocation' in navigator)) {
+      addOutput('Geolocation is not supported', false)
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location: LatLng = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }
+
+        setCurrentLocation(location)
+        addOutput(`Current location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} (Web API Fallback)`)
+      },
+      (error) => {
+        let errorMsg = 'Unknown error'
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = 'Location permission denied'
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = 'Location unavailable'
+            break
+          case error.TIMEOUT:
+            errorMsg = 'Location request timeout'
+            break
+        }
+        addOutput(`Failed to get location: ${errorMsg}`, false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    )
   }
 
   // Search for address (simulated)
@@ -259,7 +294,19 @@ function MapsNavigationModule() {
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-green-600">✓ Geolocation Plugin</strong> - Tauri plugin for mobile (Android/iOS) with Web API fallback for desktop
+                <strong className="text-green-600">✓ Native Geolocation</strong> - Platform-specific APIs for all desktop and mobile platforms
+              </li>
+              <li>
+                <strong className="text-green-600">✓ macOS CoreLocation</strong> - Native GPS/location via CoreLocation framework
+              </li>
+              <li>
+                <strong className="text-green-600">✓ Windows WinRT</strong> - Native location via Windows.Devices.Geolocation
+              </li>
+              <li>
+                <strong className="text-green-600">✓ Linux GeoClue</strong> - Native location via GeoClue2 D-Bus service
+              </li>
+              <li>
+                <strong className="text-green-600">✓ Mobile (Android/iOS)</strong> - Tauri geolocation plugin
               </li>
               <li>
                 <strong className="text-green-600">✓ Geocoding</strong> - Nominatim (OpenStreetMap) address search
@@ -268,7 +315,7 @@ function MapsNavigationModule() {
                 <strong className="text-green-600">✓ Routing</strong> - OSRM for route calculation
               </li>
               <li>
-                <strong className="text-green-600">✓ Permission Handling</strong> - Proper mobile permission requests
+                <strong className="text-green-600">✓ Fallback Chain</strong> - Native → Plugin → Web API
               </li>
               <li>
                 <strong className="text-yellow-600">⚠ Map Display</strong> - Requires Leaflet.js integration
@@ -277,16 +324,19 @@ function MapsNavigationModule() {
                 <strong className="text-yellow-600">⚠ Turn-by-Turn Navigation</strong> - Requires location tracking
               </li>
             </ul>
-            <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
-              <div># Tauri Geolocation Plugin installed</div>
-              <div>@tauri-apps/plugin-geolocation</div>
-              <div className="mt-1"># For interactive maps (optional):</div>
-              <div>bun add leaflet @types/leaflet -D</div>
-              <div>bun add leaflet-routing-machine</div>
+            <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2 space-y-1">
+              <div className="font-semibold text-green-600">✓ Production-Ready Geolocation</div>
+              <div className="mt-2">Platform-Specific Native APIs:</div>
+              <div className="ml-2">• macOS: CoreLocation (objc2-core-location)</div>
+              <div className="ml-2">• Windows: WinRT Geolocator</div>
+              <div className="ml-2">• Linux: GeoClue2 D-Bus</div>
+              <div className="ml-2">• Mobile: Tauri Plugin</div>
+              <div className="mt-2">For interactive maps (optional):</div>
+              <div className="ml-2">bun add leaflet @types/leaflet -D</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              <strong>Platform support:</strong> Android & iOS (Tauri plugin), Desktop (Web API fallback)
-              <br />
+              <strong>Platform support:</strong> All platforms use native APIs for GPS/location<br />
+              <strong>Fallback chain:</strong> Native API → Tauri Plugin → Web API<br />
               Uses free services: Nominatim for geocoding and OSRM for routing.
             </p>
           </div>

@@ -43,3 +43,21 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 sysinfo = "0.32"
 whoami = "1.5"
 
+# Platform-specific geolocation dependencies
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
+objc2-core-location = { version = "0.2", features = ["CLLocationManager", "CLLocation", "CLLocationManagerDelegate"] }
+objc2-foundation = { version = "0.2", features = ["NSString", "NSError"] }
+block2 = "0.5"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Devices_Geolocation",
+    "Foundation",
+    "Security_Authorization_AppCapabilityAccess"
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "4.0"
+async-trait = "0.1"
+

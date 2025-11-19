@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod background_tasks;
+mod geolocation;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use background_tasks::*;
+use geolocation::{GeolocationPosition, GeolocationError};
 
 // Helper function to deserialize SQLite integer (0/1) to boolean
 fn deserialize_bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -2900,6 +2902,17 @@ async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
     Ok(())
 }
 
+// Geolocation Commands
+#[tauri::command]
+async fn get_native_position() -> Result<GeolocationPosition, GeolocationError> {
+    geolocation::get_current_position().await
+}
+
+#[tauri::command]
+fn is_native_geolocation_available() -> bool {
+    geolocation::is_native_available()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2983,7 +2996,9 @@ pub fn run() {
             execute_demo_task,
             get_cpu_info,
             get_storage_devices,
-            get_device_profile
+            get_device_profile,
+            get_native_position,
+            is_native_geolocation_available
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
