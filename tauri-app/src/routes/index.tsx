@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Share2,
   Smartphone,
   Mic,
   Monitor,
@@ -124,6 +125,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'File Sharing & Social',
+    description: 'Share files, text, and links with other apps using native share dialogs',
+    icon: Share2,
+    path: '/file-sharing',
+    color: 'text-lime-500',
   },
   {
     name: 'Haptics / Vibrations',
