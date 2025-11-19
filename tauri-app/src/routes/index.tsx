@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Clipboard,
   Timer,
 } from 'lucide-react';
 
@@ -119,6 +120,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'System Services',
+    description: 'Access clipboard, battery info, and system audio devices',
+    icon: Clipboard,
+    path: '/system-services',
+    color: 'text-slate-500',
   },
   {
     name: 'Background Tasks',
