@@ -230,7 +230,7 @@ fn get_current_timestamp() -> u64 {
 }
 
 // Execute a demo task with simulated work
-pub async fn execute_demo_task(
+pub async fn run_task_async(
     task_manager: Arc<Mutex<HashMap<String, BackgroundTask>>>,
     task_id: String,
     delay_seconds: u64,

@@ -951,7 +951,7 @@ async fn execute_demo_task(
 
     // Spawn the task execution in the background
     tokio::spawn(async move {
-        let _ = execute_demo_task(tasks_clone, id, delay_seconds).await;
+        let _ = run_task_async(tasks_clone, id, delay_seconds).await;
     });
 
     Ok(())
