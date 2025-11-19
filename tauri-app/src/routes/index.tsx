@@ -14,12 +14,14 @@ import {
   Users,
   Camera,
   Activity,
+  Share2,
   Smartphone,
   Mic,
   Monitor,
   Clipboard,
   Timer,
   Server,
+  Info,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -126,6 +128,13 @@ const modules = [
     color: 'text-amber-500',
   },
   {
+    name: 'File Sharing & Social',
+    description: 'Share files, text, and links with other apps using native share dialogs',
+    icon: Share2,
+    path: '/file-sharing',
+    color: 'text-lime-500',
+  },
+  {
     name: 'Haptics / Vibrations',
     description: 'Provide tactile feedback through vibrations and haptic effects on mobile devices',
     icon: Smartphone,
@@ -166,6 +175,13 @@ const modules = [
     icon: Server,
     path: '/local-web-server',
     color: 'text-orange-600',
+  },
+  {
+    name: 'System Info & Device Profiling',
+    description: 'Comprehensive system information, hardware details, and device metrics profiling',
+    icon: Info,
+    path: '/system-info',
+    color: 'text-gray-500',
   },
 ]
 

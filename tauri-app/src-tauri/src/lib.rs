@@ -3,6 +3,7 @@ mod background_tasks;
 mod web_server;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
@@ -1005,6 +1006,81 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
     })
 }
 
+// File Sharing & Social Integration Module
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ShareRequest {
+    title: Option<String>,
+    text: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ShareResult {
+    success: bool,
+    error: Option<String>,
+}
+
+// Check if native backend sharing is supported
+// Returns false - native sharing not implemented in backend
+// Use Web Share API from frontend instead
+#[tauri::command]
+fn is_share_supported() -> Result<bool, String> {
+    // Native backend sharing not implemented
+    // Users should use Web Share API (navigator.share) from frontend
+    Ok(false)
+}
+
+// Copy text to clipboard (works on all platforms)
+#[tauri::command]
+async fn copy_to_clipboard_backend(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    // Use clipboard plugin to write text
+    app.clipboard()
+        .write_text(text)
+        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
+    Ok(())
+}
+
+// Read text from clipboard
+#[tauri::command]
+async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
+    app.clipboard()
+        .read_text()
+        .map_err(|e| format!("Failed to read from clipboard: {}", e))
+}
+
+// Share text - Use Web Share API from frontend
+// Note: tauri-plugin-share only supports file sharing, not text sharing
+// Text sharing should be done via Web Share API (navigator.share) or clipboard
+#[tauri::command]
+async fn share_text(_app: tauri::AppHandle, _request: ShareRequest) -> Result<ShareResult, String> {
+    // Native text sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native text sharing not implemented. Use Web Share API (navigator.share) or clipboard fallback.".to_string())
+}
+
+// Share files - Use Web Share API from frontend
+// Note: Native file sharing requires platform-specific implementation
+#[tauri::command]
+async fn share_files(_app: tauri::AppHandle, files: Vec<String>, _title: Option<String>) -> Result<ShareResult, String> {
+    // Validate file paths
+    for file_path in &files {
+        if !std::path::Path::new(file_path).exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+    }
+
+    // Native file sharing requires platform-specific implementation
+    // For now, direct users to use Web Share API from the frontend
+    Err("Native file sharing not implemented. Use Web Share API (navigator.share with files) or file dialogs.".to_string())
+}
+
+// Get current platform information
+#[tauri::command]
+fn get_share_platform() -> String {
+    get_platform_name()
+}
+
 // App Lifecycle & OS Integration Module
 #[derive(Debug, Serialize)]
 struct SystemInfo {
@@ -1152,6 +1228,185 @@ fn get_app_uptime() -> u64 {
         .unwrap()
         .as_secs();
     now - *APP_START_TIME
+}
+
+// Extended System Info & Device Profiling
+#[derive(Debug, Serialize)]
+struct CPUInfo {
+    name: String,
+    vendor: String,
+    brand: String,
+    physical_cores: usize,
+    logical_cores: usize,
+    frequency: u64, // MHz
+}
+
+#[derive(Debug, Serialize)]
+struct StorageDevice {
+    name: String,
+    mount_point: String,
+    total_space: u64,
+    available_space: u64,
+    used_space: u64,
+    file_system: String,
+    is_removable: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DeviceProfile {
+    hostname: String,
+    username: String,
+    device_name: String,
+    os_name: String,
+    os_version: String,
+    architecture: String,
+    cpu: CPUInfo,
+    total_memory: u64,
+    storage_devices: Vec<StorageDevice>,
+    kernel_version: String,
+}
+
+#[tauri::command]
+fn get_cpu_info() -> Result<CPUInfo, String> {
+    let mut sys = System::new_all();
+    sys.refresh_cpu_all();
+
+    let cpus = sys.cpus();
+    let physical_cores = sys.physical_core_count().unwrap_or(0);
+    let logical_cores = cpus.len();
+
+    let cpu_name = if !cpus.is_empty() {
+        cpus[0].brand().to_string()
+    } else {
+        "Unknown CPU".to_string()
+    };
+
+    let cpu_vendor = if !cpus.is_empty() {
+        cpus[0].vendor_id().to_string()
+    } else {
+        "Unknown Vendor".to_string()
+    };
+
+    let frequency = if !cpus.is_empty() {
+        cpus[0].frequency()
+    } else {
+        0
+    };
+
+    Ok(CPUInfo {
+        name: cpu_name.clone(),
+        vendor: cpu_vendor,
+        brand: cpu_name,
+        physical_cores,
+        logical_cores,
+        frequency,
+    })
+}
+
+#[tauri::command]
+fn get_storage_devices() -> Result<Vec<StorageDevice>, String> {
+    let disks = Disks::new_with_refreshed_list();
+    let mut devices = Vec::new();
+
+    for disk in &disks {
+        let total_space = disk.total_space();
+        let available_space = disk.available_space();
+        let used_space = total_space - available_space;
+
+        devices.push(StorageDevice {
+            name: disk.name().to_string_lossy().to_string(),
+            mount_point: disk.mount_point().to_string_lossy().to_string(),
+            total_space,
+            available_space,
+            used_space,
+            file_system: disk.file_system().to_string_lossy().to_string(),
+            is_removable: disk.is_removable(),
+        });
+    }
+
+    Ok(devices)
+}
+
+#[tauri::command]
+fn get_device_profile() -> Result<DeviceProfile, String> {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Get CPU info
+    let cpus = sys.cpus();
+    let physical_cores = sys.physical_core_count().unwrap_or(0);
+    let logical_cores = cpus.len();
+
+    let cpu_name = if !cpus.is_empty() {
+        cpus[0].brand().to_string()
+    } else {
+        "Unknown CPU".to_string()
+    };
+
+    let cpu_vendor = if !cpus.is_empty() {
+        cpus[0].vendor_id().to_string()
+    } else {
+        "Unknown Vendor".to_string()
+    };
+
+    let frequency = if !cpus.is_empty() {
+        cpus[0].frequency()
+    } else {
+        0
+    };
+
+    let cpu = CPUInfo {
+        name: cpu_name.clone(),
+        vendor: cpu_vendor,
+        brand: cpu_name,
+        physical_cores,
+        logical_cores,
+        frequency,
+    };
+
+    // Get storage devices
+    let disks = Disks::new_with_refreshed_list();
+    let mut storage_devices = Vec::new();
+
+    for disk in &disks {
+        let total_space = disk.total_space();
+        let available_space = disk.available_space();
+        let used_space = total_space - available_space;
+
+        storage_devices.push(StorageDevice {
+            name: disk.name().to_string_lossy().to_string(),
+            mount_point: disk.mount_point().to_string_lossy().to_string(),
+            total_space,
+            available_space,
+            used_space,
+            file_system: disk.file_system().to_string_lossy().to_string(),
+            is_removable: disk.is_removable(),
+        });
+    }
+
+    // Get system info
+    let hostname = System::host_name().unwrap_or_else(|| "Unknown".to_string());
+    let os_name = System::name().unwrap_or_else(|| std::env::consts::OS.to_string());
+    let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
+    let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
+    let total_memory = sys.total_memory();
+
+    // Get username and device name using whoami
+    let username = whoami::username();
+    let device_name = whoami::devicename();
+
+    Ok(DeviceProfile {
+        hostname,
+        username,
+        device_name,
+        os_name,
+        os_version,
+        architecture: std::env::consts::ARCH.to_string(),
+        cpu,
+        total_memory,
+        storage_devices,
+        kernel_version,
+    })
 }
 
 // System Services Module
@@ -2758,6 +3013,12 @@ pub fn run() {
             get_cameras,
             check_camera_permission,
             request_camera_permission,
+            is_share_supported,
+            copy_to_clipboard_backend,
+            read_from_clipboard,
+            share_text,
+            share_files,
+            get_share_platform,
             haptic_impact,
             haptic_notification,
             vibrate,
@@ -2777,7 +3038,10 @@ pub fn run() {
             get_server_info,
             list_servers,
             is_port_available,
-            stop_all_servers
+            stop_all_servers,
+            get_cpu_info,
+            get_storage_devices,
+            get_device_profile
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
