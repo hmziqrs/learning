@@ -6,18 +6,74 @@ Capture photos and record videos directly from device cameras with real-time pre
 
 ## Current Implementation Status
 
-⚠️ **Planned** - Requires custom plugin development for all platforms
+⚠️ **Planned** - Custom plugin development recommended. Community plugins available but in early stages.
 
-## Plugin Setup
+## Available Community Plugins
 
-### Desktop Camera Access
+As of Tauri v2 (October 2024), camera access is **not included in official Tauri plugins**. However, several community plugins exist:
 
-No official Tauri plugin exists for camera access. Custom implementation required using:
-- **Windows**: DirectShow / MediaFoundation API
-- **macOS**: AVFoundation framework
-- **Linux**: V4L2 (Video4Linux2)
+### Android: tauri-plugin-camera (charlesschaefer)
+**Best option for Android development**
 
-### Mobile Custom Plugin
+```bash
+cargo add tauri-plugin-camera
+npm i tauri-plugin-camera
+```
+
+**Features:**
+- `takePicture()` - Capture photo (returns base64 with dimensions)
+- `recordVideo()` - Record video (returns base64 with dimensions)
+
+**Initialization:**
+```rust
+.plugin(tauri_plugin_camera::init())
+```
+
+**Usage:**
+```typescript
+import { takePicture, recordVideo } from 'tauri-plugin-camera';
+const { imageData, width, height } = await takePicture();
+```
+
+**GitHub:** https://github.com/charlesschaefer/tauri-plugin-camera
+
+### Mobile: tauri-plugin-camera (nanderstabel)
+**Experimental - Android & iOS**
+
+```toml
+tauri-plugin-camera = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "feat/camera" }
+```
+
+**Features:**
+- `getPhoto()` - Capture photo or select from gallery
+
+**Status:** Early development, mobile-only
+
+### Desktop: CrabCamera
+**Professional desktop solution**
+
+- Cross-platform (Windows, macOS, Linux)
+- WebRTC streaming
+- Advanced hardware controls
+
+**Note:** Check crates.io for latest version and documentation
+
+## Custom Plugin Development
+
+If community plugins don't meet your needs, custom implementation required using:
+
+### Desktop APIs
+
+**Windows:**
+- DirectShow / MediaFoundation API
+
+**macOS:**
+- AVFoundation framework
+
+**Linux:**
+- V4L2 (Video4Linux2)
+
+### Mobile APIs
 
 **Android:**
 - CameraX API (recommended)
@@ -1031,6 +1087,58 @@ async fn initialize_camera() -> Result<String, String> {
 - [ ] Loading states
 - [ ] Recording indicator
 - [ ] Storage indicator
+
+## Plugin Recommendations
+
+### Quick Decision Guide
+
+**For Android-only apps:**
+→ Use `tauri-plugin-camera` by charlesschaefer
+- Mature Android implementation
+- Simple API (`takePicture`, `recordVideo`)
+- Returns base64 data directly
+
+**For cross-platform mobile (Android + iOS):**
+→ Consider `tauri-plugin-camera` by nanderstabel
+- Experimental but supports both platforms
+- Note: Early development stage
+- May require custom modifications
+
+**For desktop apps (Windows/macOS/Linux):**
+→ Use CrabCamera or custom implementation
+- CrabCamera for advanced features
+- Custom implementation for full control
+- Consider WebRTC for preview streaming
+
+**For full cross-platform (Desktop + Mobile):**
+→ Hybrid approach recommended
+- Separate plugins for desktop and mobile
+- Unified TypeScript interface
+- Platform detection in frontend
+
+### Implementation Priority
+
+1. **Start simple**: Begin with one platform
+2. **Test thoroughly**: Community plugins are early stage
+3. **Plan for fallbacks**: Handle unsupported platforms gracefully
+4. **Monitor development**: Check plugin updates regularly
+
+### Alternative Approaches
+
+**Option 1: Web APIs (Limited)**
+- Use HTML5 `getUserMedia()` for basic camera access
+- Works in desktop webview
+- Limited control and platform support
+
+**Option 2: Hybrid Solution**
+- Use native camera for capture
+- Process images in Rust backend
+- Display in React frontend
+
+**Option 3: Custom Plugin**
+- Full control over all features
+- Platform-specific implementations
+- More development effort required
 
 ---
 
