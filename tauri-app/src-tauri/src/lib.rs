@@ -1841,6 +1841,9 @@ async fn get_audio_devices() -> Result<AudioDevicesResponse, String> {
     }
 
     Ok(AudioDevicesResponse { devices })
+}
+
+#[tauri::command]
 async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
     #[cfg(target_os = "macos")]
     {
