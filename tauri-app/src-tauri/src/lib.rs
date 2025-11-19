@@ -1241,7 +1241,7 @@ fn get_storage_devices() -> Result<Vec<StorageDevice>, String> {
             total_space,
             available_space,
             used_space,
-            file_system: String::from_utf8_lossy(disk.file_system()).to_string(),
+            file_system: disk.file_system().to_string_lossy().to_string(),
             is_removable: disk.is_removable(),
         });
     }
@@ -1301,7 +1301,7 @@ fn get_device_profile() -> Result<DeviceProfile, String> {
             total_space,
             available_space,
             used_space,
-            file_system: String::from_utf8_lossy(disk.file_system()).to_string(),
+            file_system: disk.file_system().to_string_lossy().to_string(),
             is_removable: disk.is_removable(),
         });
     }
