@@ -189,6 +189,9 @@
     "store:allow-clear",
     "store:allow-has",
     "store:allow-save",
-    "store:allow-load"
+    "store:allow-load",
+    "websocket:default",
+    "websocket:allow-connect",
+    "websocket:allow-send"
   ]
 }
