@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod background_tasks;
+mod web_server;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use background_tasks::*;
+use web_server::*;
 
 // Crypto imports for encryption/decryption
 use aes_gcm::{
@@ -3038,6 +3040,7 @@ async fn sse_connect(url: String, window: tauri::Window) -> Result<(), String> {
 // Background Tasks Module - State Management
 struct AppState {
     task_manager: Mutex<TaskManager>,
+    server_manager: tokio::sync::Mutex<ServerManager>,
 }
 
 // Background Tasks Module - Commands
@@ -3120,6 +3123,60 @@ async fn execute_demo_task(
     Ok(())
 }
 
+// Web Server Module - Commands
+#[tauri::command]
+async fn start_server(
+    state: tauri::State<'_, AppState>,
+    config: ServerConfig,
+) -> Result<ServerInfo, String> {
+    let server_manager = state.server_manager.lock().await;
+    server_manager.start_server(config).await
+}
+
+#[tauri::command]
+async fn stop_server(
+    state: tauri::State<'_, AppState>,
+    server_id: String,
+) -> Result<(), String> {
+    let server_manager = state.server_manager.lock().await;
+    server_manager.stop_server(&server_id).await
+}
+
+#[tauri::command]
+async fn get_server_info(
+    state: tauri::State<'_, AppState>,
+    server_id: String,
+) -> Result<ServerInfo, String> {
+    let server_manager = state.server_manager.lock().await;
+    server_manager.get_server_info(&server_id).await
+}
+
+#[tauri::command]
+async fn list_servers(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<ServerInfo>, String> {
+    let server_manager = state.server_manager.lock().await;
+    Ok(server_manager.list_servers().await)
+}
+
+#[tauri::command]
+fn is_port_available(port: u16) -> Result<bool, String> {
+    Ok(web_server::is_port_available(port))
+}
+
+#[tauri::command]
+async fn stop_all_servers(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let server_manager = state.server_manager.lock().await;
+    server_manager.stop_all_servers().await
+}
+
+#[tauri::command]
+fn create_test_directory(path: String) -> Result<String, String> {
+    web_server::create_test_directory(&path)
+}
+
 #[tauri::command]
 async fn sse_disconnect(window: tauri::Window) -> Result<(), String> {
     if let Some(state) = window.try_state::<SseState>() {
@@ -3133,6 +3190,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             task_manager: Mutex::new(TaskManager::new()),
+            server_manager: tokio::sync::Mutex::new(ServerManager::new()),
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -3218,6 +3276,13 @@ pub fn run() {
             cancel_background_task,
             delete_background_task,
             execute_demo_task,
+            start_server,
+            stop_server,
+            get_server_info,
+            list_servers,
+            is_port_available,
+            stop_all_servers,
+            create_test_directory,
             get_cpu_info,
             get_storage_devices,
             get_device_profile

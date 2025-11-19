@@ -31,7 +31,7 @@ tauri-plugin-websocket = { version = "2", features = ["native-tls"], default-fea
 tauri-plugin-biometry = "0.2.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["time", "sync", "macros"] }
+tokio = { version = "1", features = ["time", "sync", "macros", "rt-multi-thread", "net"] }
 chrono = "0.4"
 reqwest = { version = "0.11", features = ["json", "multipart", "stream", "native-tls"], default-features = false }
 futures-util = "0.3"
@@ -41,6 +41,11 @@ cpal = "0.15"
 network-interface = "2.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 sysinfo = "0.32"
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+mime_guess = "2.0"
+tracing = "0.1"
 whoami = "1.5"
 aes-gcm = "0.10"
 base64 = "0.22"
