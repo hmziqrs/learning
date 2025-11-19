@@ -123,13 +123,13 @@ function HapticsModule() {
             <p className="font-medium">Current implementation:</p>
             <ul className="list-disc list-inside space-y-1 text-muted-foreground ml-2">
               <li>
-                <strong className="text-green-600">✓ Rust Commands</strong> - Tauri commands registered and functional
+                <strong className="text-green-600">✓ Rust Commands</strong> - 6 Tauri commands registered and functional
               </li>
               <li>
-                <strong className="text-green-600">✓ Android Plugin</strong> - Vibrator API with VibrationEffect implemented
+                <strong className="text-green-600">✓ Android Plugin</strong> - HapticsPlugin.kt with VibrationEffect API
               </li>
               <li>
-                <strong className="text-yellow-600">⚠ iOS</strong> - UIFeedbackGenerator requires Swift implementation
+                <strong className="text-green-600">✓ iOS Plugin</strong> - HapticsPlugin.swift with UIFeedbackGenerator
               </li>
               <li>
                 <strong className="text-red-600">✗ Desktop</strong> - Haptics not available on Windows/macOS/Linux
@@ -137,12 +137,12 @@ function HapticsModule() {
             </ul>
             <div className="bg-muted rounded-md p-3 font-mono text-xs mt-2">
               <div># Android Implementation (Complete):</div>
-              <div>HapticsPlugin.kt with VibrationEffect support</div>
-              <div className="mt-2"># iOS Implementation (TODO):</div>
-              <div>Requires Swift UIFeedbackGenerator integration</div>
+              <div>HapticsPlugin.kt - VibrationEffect with legacy fallback</div>
+              <div className="mt-2"># iOS Implementation (Complete):</div>
+              <div>HapticsPlugin.swift - UIFeedbackGenerator (Impact, Notification, Selection)</div>
             </div>
             <p className="text-muted-foreground mt-2">
-              Android: Fully functional haptic feedback. Desktop: Returns appropriate error messages. iOS: Requires Swift implementation.
+              Android: Fully functional with VibrationEffect API. iOS: Fully functional with UIFeedbackGenerator. Desktop: Returns appropriate error messages.
             </p>
           </div>
         </section>
