@@ -32,6 +32,38 @@ Comprehensive networking and radio access module providing HTTP/WebSocket commun
 
 **Total: 15/16 features fully implemented and working on desktop platforms**
 
+## Platform Requirements
+
+### Development & Testing Platform
+**Primary Development Platform:** macOS (tested and verified)
+
+### Platform-Specific Dependencies
+
+#### macOS (✅ Fully Supported - No Additional Setup)
+- **WiFi Commands:** Built-in airport utility (`/System/Library/PrivateFrameworks/Apple80211.framework`)
+- **Network Tools:** Built-in `ipconfig` and system networking tools
+- **Status:** All 15 networking features work out of the box
+
+#### Linux (✅ Supported - Requires Package Installation)
+Required packages for WiFi features:
+```bash
+# Ubuntu/Debian
+sudo apt-get install wireless-tools network-manager
+
+# Fedora/RHEL/CentOS
+sudo dnf install wireless-tools NetworkManager
+
+# Arch Linux
+sudo pacman -S wireless_tools networkmanager
+```
+
+**Note:** Without these packages, WiFi-related features will show helpful error messages with installation instructions.
+
+#### Windows (✅ Fully Supported - No Additional Setup)
+- **WiFi Commands:** Built-in `netsh` utility
+- **Network Tools:** Built-in Windows networking commands
+- **Status:** All 15 networking features work out of the box
+
 ## Plugin Setup
 
 ### WebSocket Support
@@ -1137,6 +1169,91 @@ async fn cached_http_get(url: String, cache_duration: u64) -> Result<String, Str
 - ⚠️ Limited support or requires additional setup
 - ❌ Not applicable
 - \* Requires custom plugin and platform-specific permissions
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. WebSocket Permission Denied
+**Error:** `websocket.connect not allowed. Permissions associated with this command: websocket:allow-connect`
+
+**Solution:** Add WebSocket permissions to `src-tauri/capabilities/default.json`:
+```json
+{
+  "permissions": [
+    "websocket:default",
+    "websocket:allow-connect",
+    "websocket:allow-send"
+  ]
+}
+```
+
+#### 2. WiFi Tools Not Found (Linux)
+**Error:** `No such file or directory (os error 2)` or `WiFi tools not found`
+
+**Solution:** Install required packages:
+```bash
+# Ubuntu/Debian
+sudo apt-get install wireless-tools network-manager
+
+# Fedora/RHEL
+sudo dnf install wireless-tools NetworkManager
+```
+
+#### 3. Upload Parameter Mismatch
+**Error:** `invalid args 'filePath' for command 'upload_file_with_progress'`
+
+**Solution:** Use camelCase for parameters in JavaScript/TypeScript (Tauri converts snake_case to camelCase):
+```typescript
+// Correct ✅
+await invoke('upload_file_with_progress', {
+  filePath: '/path/to/file',  // camelCase
+  uploadId: 'upload_123'       // camelCase
+})
+
+// Wrong ❌
+await invoke('upload_file_with_progress', {
+  file_path: '/path/to/file',  // snake_case won't work
+  upload_id: 'upload_123'      // snake_case won't work
+})
+```
+
+#### 4. WebSocket Import Error
+**Error:** `SyntaxError: Importing binding name 'WebSocket' is not found`
+
+**Solution:** Use default import instead of named import:
+```typescript
+// Correct ✅
+import WebSocket from '@tauri-apps/plugin-websocket'
+
+// Wrong ❌
+import { WebSocket } from '@tauri-apps/plugin-websocket'
+```
+
+#### 5. Cargo Check Errors
+**Error:** `no method named 'emit' found` or similar trait method errors
+
+**Solution:** Import required traits:
+```rust
+use tauri::{Emitter, Manager};
+```
+
+### Platform-Specific Notes
+
+**macOS:**
+- All features work out of the box
+- Uses built-in `airport` utility for WiFi operations
+- No additional dependencies required
+
+**Linux:**
+- Requires `wireless-tools` and `NetworkManager` for WiFi features
+- Error messages will guide installation if packages are missing
+- Use `nmcli` and `iwgetid` commands for WiFi operations
+
+**Windows:**
+- All features work out of the box
+- Uses built-in `netsh` utility for WiFi operations
+- No additional dependencies required
 
 ---
 
