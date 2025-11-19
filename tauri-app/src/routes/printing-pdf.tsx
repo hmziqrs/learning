@@ -129,9 +129,6 @@ function PrintingPdfModule() {
           y: 10,
           width: 180,
           windowWidth: 800,
-          html2canvas: {
-            scale: 0.5,
-          },
         })
       } catch (err) {
         // Make sure to remove element even if error occurs
