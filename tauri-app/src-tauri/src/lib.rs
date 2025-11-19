@@ -870,6 +870,7 @@ async fn upload_file(url: String, file_path: String) -> Result<HttpResponse, Str
 
 // System Services Module
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct BatteryInfo {
     level: i32,
     charging: bool,
@@ -881,6 +882,7 @@ struct BatteryInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AudioDevice {
     id: String,
     name: String,

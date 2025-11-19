@@ -326,7 +326,7 @@ function SystemServices() {
               <div className="p-4 bg-muted rounded-md border">
                 <div className="text-sm text-muted-foreground mb-1">Status</div>
                 <div className="text-lg font-medium capitalize">
-                  {batteryInfo.batteryState.replace('_', ' ')}
+                  {batteryInfo.batteryState?.replace('_', ' ') || 'Unknown'}
                 </div>
               </div>
 
