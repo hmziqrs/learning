@@ -2,6 +2,7 @@
 mod background_tasks;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use std::time::Duration;
 use serde::{Deserialize, Serialize, Deserializer};
 use once_cell::sync::Lazy;
@@ -918,16 +919,14 @@ async fn copy_to_clipboard_backend(app: tauri::AppHandle, text: String) -> Resul
 // Read text from clipboard
 #[tauri::command]
 async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
-    match app.clipboard().read_text() {
-        Ok(Some(text)) => Ok(text),
-        Ok(None) => Err("Clipboard is empty".to_string()),
-        Err(e) => Err(format!("Failed to read from clipboard: {}", e)),
-    }
+    app.clipboard()
+        .read_text()
+        .map_err(|e| format!("Failed to read from clipboard: {}", e))
 }
 
 // Share text (mobile-only, native implementation)
 #[tauri::command]
-async fn share_text(request: ShareRequest) -> Result<ShareResult, String> {
+async fn share_text(_request: ShareRequest) -> Result<ShareResult, String> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         // TODO: Implement native share sheet
@@ -946,7 +945,7 @@ async fn share_text(request: ShareRequest) -> Result<ShareResult, String> {
 
 // Share files (mobile-only, native implementation)
 #[tauri::command]
-async fn share_files(files: Vec<String>, title: Option<String>) -> Result<ShareResult, String> {
+async fn share_files(files: Vec<String>, _title: Option<String>) -> Result<ShareResult, String> {
     // Validate file paths
     for file_path in &files {
         if !std::path::Path::new(file_path).exists() {
