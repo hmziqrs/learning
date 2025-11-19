@@ -19,6 +19,7 @@ import {
   Monitor,
   Clipboard,
   Timer,
+  Server,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -158,6 +159,13 @@ const modules = [
     icon: Timer,
     path: '/background-tasks',
     color: 'text-sky-500',
+  },
+  {
+    name: 'Local Web Server',
+    description: 'Start and manage local HTTP servers for serving static files and testing',
+    icon: Server,
+    path: '/local-web-server',
+    color: 'text-orange-600',
   },
 ]
 
