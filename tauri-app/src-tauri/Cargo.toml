@@ -42,6 +42,7 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 sysinfo = "0.32"
 axum = "0.7"
 tower = "0.5"
-tower-http = { version = "0.6", features = ["fs", "cors"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
 mime_guess = "2.0"
+tracing = "0.1"
 
