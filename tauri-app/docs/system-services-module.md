@@ -273,9 +273,12 @@ class SystemServicesPlugin(private val activity: Activity) {
 }
 ```
 
-#### iOS: UIDevice Battery
+#### iOS/macOS: Battery Monitoring
+
+**iOS Implementation** (UIDevice):
 
 ```swift
+#if os(iOS)
 import UIKit
 
 class SystemServicesPlugin: NSObject {
@@ -339,6 +342,54 @@ class SystemServicesPlugin: NSObject {
         emitEvent("battery-changed", data: getBatteryData())
     }
 }
+#endif
+```
+
+**macOS Implementation** (IOKit - Different API):
+
+```swift
+#if os(macOS)
+import IOKit.ps
+
+class SystemServicesPlugin: NSObject {
+
+    @objc func getBatteryInfo(_ invoke: Invoke) {
+        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef],
+              let source = sources.first else {
+            invoke.reject("No battery found")
+            return
+        }
+
+        guard let info = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
+            invoke.reject("Failed to get battery info")
+            return
+        }
+
+        let capacity = info[kIOPSCurrentCapacityKey] as? Int ?? 0
+        let maxCapacity = info[kIOPSMaxCapacityKey] as? Int ?? 100
+        let level = (capacity * 100) / maxCapacity
+        let isCharging = info[kIOPSIsChargingKey] as? Bool ?? false
+        let powerSource = info[kIOPSPowerSourceStateKey] as? String
+
+        let result: [String: Any] = [
+            "level": level,
+            "charging": isCharging,
+            "batteryState": isCharging ? "charging" : "discharging",
+            "powerSource": powerSource == kIOPSACPowerValue ? "ac" : "battery",
+            "temperature": NSNull() // macOS doesn't expose battery temperature via public APIs
+        ]
+
+        invoke.resolve(result)
+    }
+
+    @objc func startBatteryMonitoring(_ invoke: Invoke) {
+        // macOS requires polling or low-level IOKit notifications
+        // For simplicity, indicate monitoring is not fully supported
+        invoke.resolve(["success": false, "message": "Real-time monitoring requires polling on macOS"])
+    }
+}
+#endif
 ```
 
 ### Audio Devices Commands (Custom Plugin Required)
@@ -379,14 +430,16 @@ private fun getDeviceType(type: Int): String {
 }
 ```
 
-#### iOS: AVAudioSession
+#### iOS/macOS: AVAudioSession (Shared Implementation)
+
+**Works on both iOS and macOS** - AVFoundation is available on both platforms:
 
 ```swift
 import AVFoundation
 
 @objc func getAudioDevices(_ invoke: Invoke) {
+    #if os(iOS)
     let session = AVAudioSession.sharedInstance()
-
     var devices: [[String: Any]] = []
 
     // Current route
@@ -417,9 +470,46 @@ import AVFoundation
     }
 
     invoke.resolve(["devices": devices])
+
+    #elseif os(macOS)
+    // macOS uses Core Audio / AVAudioEngine
+    var devices: [[String: Any]] = []
+
+    // Get audio devices using AVAudioEngine
+    let engine = AVAudioEngine()
+
+    // Input devices
+    if let inputNode = engine.inputNode as AVAudioNode? {
+        let device: [String: Any] = [
+            "id": "default-input",
+            "name": "Default Input",
+            "kind": "audioinput",
+            "type": "built-in",
+            "isConnected": true,
+            "isDefault": true
+        ]
+        devices.append(device)
+    }
+
+    // Output devices
+    if let outputNode = engine.outputNode as AVAudioNode? {
+        let device: [String: Any] = [
+            "id": "default-output",
+            "name": "Default Output",
+            "kind": "audiooutput",
+            "type": "built-in",
+            "isConnected": true,
+            "isDefault": true
+        ]
+        devices.append(device)
+    }
+
+    invoke.resolve(["devices": devices])
+    #endif
 }
 
 private func getPortType(_ portType: AVAudioSession.Port) -> String {
+    #if os(iOS)
     switch portType {
     case .builtInSpeaker:
         return "built-in"
@@ -432,6 +522,9 @@ private func getPortType(_ portType: AVAudioSession.Port) -> String {
     default:
         return "unknown"
     }
+    #else
+    return "unknown"
+    #endif
 }
 ```
 
@@ -917,22 +1010,24 @@ function SystemServicesPage() {
 | **Clipboard** |
 | Text Copy/Paste | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Battery & Power** |
-| Battery Level | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Charging Status | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
+| Battery Level | 🔶* | ✅** | 🔶* | ✅ | ✅ |
+| Charging Status | 🔶* | ✅** | 🔶* | ✅ | ✅ |
 | Battery Temperature | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Power Source Detection | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Battery Monitoring | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
+| Power Source Detection | 🔶* | ✅** | 🔶* | ✅ | ✅ |
+| Battery Monitoring | 🔶* | 🔶*** | 🔶* | ✅ | ✅ |
 | **Audio Devices** |
-| Device Enumeration | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Default Device Detection | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Device Type Detection | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
-| Connection Events | 🔶* | 🔶* | 🔶* | ✅ | ✅ |
+| Device Enumeration | 🔶* | ✅** | 🔶* | ✅ | ✅ |
+| Default Device Detection | 🔶* | ✅** | 🔶* | ✅ | ✅ |
+| Device Type Detection | 🔶* | 🔶** | 🔶* | ✅ | ✅ |
+| Connection Events | 🔶* | 🔶** | 🔶* | ✅ | ✅ |
 
 **Notes:**
-- ✅ = Fully supported
+- ✅ = Fully supported via native APIs
 - 🔶 = Partial support (Web API) or custom plugin required
 - ❌ = Not available via public APIs
-- \* Desktop battery/audio features require platform-specific implementations or rely on limited Web APIs
+- \* Desktop (Windows/Linux) features require platform-specific implementations or rely on limited Web APIs
+- \*\* macOS supports via IOKit (battery) and AVFoundation/Core Audio (audio devices)
+- \*\*\* macOS battery monitoring requires polling, no real-time events like iOS
 
 ---
 
