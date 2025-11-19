@@ -857,22 +857,39 @@ async fn detect_connection_type() -> String {
 async fn is_wifi_active_macos() -> bool {
     use std::process::Command;
 
-    if let Ok(output) = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
-        .args(["-I"])
-        .output()
-    {
-        let info = String::from_utf8_lossy(&output.stdout);
-        // If we can get SSID, WiFi is active
-        for line in info.lines() {
-            if line.trim().contains("SSID:") && !line.contains("BSSID") {
-                if let Some(ssid) = line.split(':').nth(1) {
-                    if !ssid.trim().is_empty() {
-                        return true;
+    // Try multiple possible airport utility locations
+    let airport_paths = [
+        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+        "/usr/sbin/airport",
+    ];
+
+    for path in &airport_paths {
+        if let Ok(output) = Command::new(path).args(["-I"]).output() {
+            let info = String::from_utf8_lossy(&output.stdout);
+            // If we can get SSID, WiFi is active
+            for line in info.lines() {
+                if line.trim().contains("SSID:") && !line.contains("BSSID") {
+                    if let Some(ssid) = line.split(':').nth(1) {
+                        if !ssid.trim().is_empty() {
+                            return true;
+                        }
                     }
                 }
             }
         }
     }
+
+    // Fallback: try networksetup to check WiFi status
+    if let Ok(output) = Command::new("networksetup")
+        .args(["-getairportpower", "en0"])
+        .output()
+    {
+        let info = String::from_utf8_lossy(&output.stdout);
+        if info.contains("On") {
+            return true;
+        }
+    }
+
     false
 }
 
@@ -929,12 +946,21 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
             security_type: None,
         };
 
-        // Method 1: Try using airport utility
-        let airport_result = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
-            .args(["-I"])
-            .output();
+        // Method 1: Try using airport utility (try multiple possible locations)
+        let airport_paths = [
+            "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+            "/usr/sbin/airport", // Alternative location on some macOS versions
+        ];
 
-        if let Ok(output) = airport_result {
+        let mut airport_result = None;
+        for path in &airport_paths {
+            if let Ok(output) = Command::new(path).args(["-I"]).output() {
+                airport_result = Some(output);
+                break;
+            }
+        }
+
+        if let Some(output) = airport_result {
             let info = String::from_utf8_lossy(&output.stdout);
 
             // Parse WiFi information from output
@@ -1178,12 +1204,23 @@ async fn scan_wifi_networks() -> Result<Vec<WiFiNetwork>, String> {
 
         let mut networks = Vec::new();
 
-        // Method 1: Try using airport utility
-        let airport_result = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
-            .args(["-s"])
-            .output();
+        // Method 1: Try using airport utility (try multiple possible locations)
+        let airport_paths = [
+            "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
+            "/usr/sbin/airport", // Alternative location on some macOS versions
+        ];
 
-        if let Ok(output) = airport_result {
+        let mut airport_result = None;
+        for path in &airport_paths {
+            if let Ok(output) = Command::new(path).args(["-s"]).output() {
+                if output.status.success() {
+                    airport_result = Some(output);
+                    break;
+                }
+            }
+        }
+
+        if let Some(output) = airport_result {
             if output.status.success() {
                 let info = String::from_utf8_lossy(&output.stdout);
 
