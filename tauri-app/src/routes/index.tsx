@@ -12,6 +12,7 @@ import {
   Wifi,
   Images,
   Users,
+  Camera,
   Activity,
 } from 'lucide-react';
 
@@ -103,6 +104,13 @@ const modules = [
     icon: Images,
     path: '/gallery',
     color: 'text-rose-500',
+  },
+  {
+    name: 'Camera',
+    description: 'Capture photos and record videos directly from device cameras',
+    icon: Camera,
+    path: '/camera',
+    color: 'text-red-500',
   },
   {
     name: 'Sensors & Hardware',
