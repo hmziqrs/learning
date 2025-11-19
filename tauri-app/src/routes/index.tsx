@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Mic,
   Monitor,
   Clipboard,
   Timer,
@@ -123,6 +124,13 @@ const modules = [
     color: 'text-amber-500',
   },
   {
+    name: 'Speech & Media Intelligence',
+    description: 'Speech recognition, text-to-speech, transcription, and AI-powered media analysis',
+    icon: Mic,
+    path: '/speech-media-intelligence',
+    color: 'text-fuchsia-500',
+  },
+  {
     name: 'App Lifecycle & OS Integration',
     description: 'Monitor window events, manage app state, and integrate with system dialogs',
     icon: Monitor,
@@ -141,7 +149,7 @@ const modules = [
     description: 'Schedule and manage background tasks with execution monitoring',
     icon: Timer,
     path: '/background-tasks',
-    color: 'text-fuchsia-500',
+    color: 'text-sky-500',
   },
 ]
 
