@@ -920,12 +920,6 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
-        let output = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
-            .args(["-I"])
-            .output()
-            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
-
-        let info = String::from_utf8_lossy(&output.stdout);
 
         let mut wifi_info = WiFiInfo {
             ssid: String::new(),
@@ -935,27 +929,51 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
             security_type: None,
         };
 
-        // Parse WiFi information from output
-        for line in info.lines() {
-            let trimmed = line.trim();
+        // Method 1: Try using airport utility
+        let airport_result = Command::new("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport")
+            .args(["-I"])
+            .output();
 
-            if trimmed.contains("SSID:") && !trimmed.contains("BSSID") {
-                if let Some(ssid) = trimmed.split(':').nth(1) {
-                    wifi_info.ssid = ssid.trim().to_string();
-                }
-            } else if trimmed.starts_with("BSSID:") {
-                if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
-                    wifi_info.bssid = Some(bssid.to_string());
-                }
-            } else if trimmed.contains("agrCtlRSSI:") {
-                if let Some(rssi) = trimmed.split(':').nth(1) {
-                    if let Ok(signal) = rssi.trim().parse::<i32>() {
-                        wifi_info.signal_strength = Some(signal);
+        if let Ok(output) = airport_result {
+            let info = String::from_utf8_lossy(&output.stdout);
+
+            // Parse WiFi information from output
+            for line in info.lines() {
+                let trimmed = line.trim();
+
+                if trimmed.contains("SSID:") && !trimmed.contains("BSSID") {
+                    if let Some(ssid) = trimmed.split(':').nth(1) {
+                        wifi_info.ssid = ssid.trim().to_string();
+                    }
+                } else if trimmed.starts_with("BSSID:") {
+                    if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+                        wifi_info.bssid = Some(bssid.to_string());
+                    }
+                } else if trimmed.contains("agrCtlRSSI:") {
+                    if let Some(rssi) = trimmed.split(':').nth(1) {
+                        if let Ok(signal) = rssi.trim().parse::<i32>() {
+                            wifi_info.signal_strength = Some(signal);
+                        }
+                    }
+                } else if trimmed.contains("link auth:") {
+                    if let Some(auth) = trimmed.split(':').nth(1) {
+                        wifi_info.security_type = Some(auth.trim().to_string());
                     }
                 }
-            } else if trimmed.contains("link auth:") {
-                if let Some(auth) = trimmed.split(':').nth(1) {
-                    wifi_info.security_type = Some(auth.trim().to_string());
+            }
+        }
+
+        // Method 2: Fallback to networksetup if airport failed or gave no results
+        if wifi_info.ssid.is_empty() {
+            if let Ok(output) = Command::new("networksetup")
+                .args(["-getairportnetwork", "en0"])
+                .output()
+            {
+                let info = String::from_utf8_lossy(&output.stdout);
+                if info.contains("Current Wi-Fi Network:") {
+                    if let Some(ssid) = info.split("Current Wi-Fi Network:").nth(1) {
+                        wifi_info.ssid = ssid.trim().to_string();
+                    }
                 }
             }
         }
@@ -973,7 +991,7 @@ async fn get_wifi_info() -> Result<WiFiInfo, String> {
         }
 
         if wifi_info.ssid.is_empty() {
-            Err("Not connected to WiFi".to_string())
+            Err("Not connected to WiFi or WiFi interface not found. Note: On macOS, WiFi information requires the 'airport' utility or 'networksetup' command.".to_string())
         } else {
             Ok(wifi_info)
         }
