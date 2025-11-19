@@ -926,14 +926,41 @@ async fn read_from_clipboard(app: tauri::AppHandle) -> Result<String, String> {
 
 // Share text (mobile-only, native implementation)
 #[tauri::command]
-async fn share_text(_request: ShareRequest) -> Result<ShareResult, String> {
+async fn share_text(app: tauri::AppHandle, request: ShareRequest) -> Result<ShareResult, String> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        // TODO: Implement native share sheet
-        // Android: Intent.ACTION_SEND
-        // iOS: UIActivityViewController
-        // For now, return error to fallback to Web Share API
-        Err("Native sharing requires platform plugin implementation. Use Web Share API.".to_string())
+        use tauri_plugin_share::ShareExt;
+
+        // Build the share text
+        let mut share_text = String::new();
+
+        if let Some(title) = &request.title {
+            share_text.push_str(title);
+            share_text.push_str("\n\n");
+        }
+
+        if let Some(text) = &request.text {
+            share_text.push_str(text);
+            if request.url.is_some() {
+                share_text.push_str("\n\n");
+            }
+        }
+
+        if let Some(url) = &request.url {
+            share_text.push_str(url);
+        }
+
+        // Share using the plugin
+        match app.share(share_text) {
+            Ok(_) => Ok(ShareResult {
+                success: true,
+                error: None,
+            }),
+            Err(e) => Ok(ShareResult {
+                success: false,
+                error: Some(format!("Share failed: {}", e)),
+            }),
+        }
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -945,7 +972,7 @@ async fn share_text(_request: ShareRequest) -> Result<ShareResult, String> {
 
 // Share files (mobile-only, native implementation)
 #[tauri::command]
-async fn share_files(files: Vec<String>, _title: Option<String>) -> Result<ShareResult, String> {
+async fn share_files(app: tauri::AppHandle, files: Vec<String>, title: Option<String>) -> Result<ShareResult, String> {
     // Validate file paths
     for file_path in &files {
         if !std::path::Path::new(file_path).exists() {
@@ -955,16 +982,33 @@ async fn share_files(files: Vec<String>, _title: Option<String>) -> Result<Share
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        // TODO: Implement native file sharing
-        // Android: FileProvider + Share Intent
-        // iOS: UIActivityViewController with file URLs
-        Err("Native file sharing requires platform plugin implementation.".to_string())
+        use tauri_plugin_share::ShareExt;
+
+        // For now, the share plugin primarily handles text
+        // File sharing requires additional platform-specific implementation
+        // We can provide the file path in the share text as a workaround
+        let share_text = if let Some(title_text) = title {
+            format!("{}\n\nFiles: {}", title_text, files.join(", "))
+        } else {
+            format!("Sharing files: {}", files.join(", "))
+        };
+
+        match app.share(share_text) {
+            Ok(_) => Ok(ShareResult {
+                success: true,
+                error: None,
+            }),
+            Err(e) => Ok(ShareResult {
+                success: false,
+                error: Some(format!("Share failed: {}. Note: Direct file sharing requires additional native implementation.", e)),
+            }),
+        }
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         // Desktop: File sharing not supported
-        Err("File sharing not supported on desktop.".to_string())
+        Err("File sharing not supported on desktop. Use Web Share API or file dialogs.".to_string())
     }
 }
 
@@ -2358,6 +2402,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_websocket::init())
+        .plugin(tauri_plugin_share::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             schedule_notification,

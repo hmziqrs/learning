@@ -73,10 +73,32 @@ export function isWebShareSupported(): boolean {
 
 /**
  * Share content using the best available method
- * Priority: Web Share API → Clipboard fallback
+ * Priority: Native backend share → Web Share API → Clipboard fallback
  */
 export async function share(request: ShareRequest): Promise<ShareResult> {
-  // Try Web Share API first
+  // Try native backend sharing first (mobile platforms)
+  if (await isNativeShareSupported()) {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>(
+        'share_text',
+        { request }
+      )
+      if (result.success) {
+        return {
+          success: true,
+          method: 'Native Share',
+        }
+      } else {
+        // Fall through to Web Share API if native share failed
+        console.warn('Native share failed:', result.error)
+      }
+    } catch (error) {
+      // Fall through to Web Share API
+      console.warn('Native share error:', error)
+    }
+  }
+
+  // Try Web Share API
   if (isWebShareSupported()) {
     try {
       await navigator.share({
