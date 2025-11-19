@@ -893,6 +893,135 @@ fn get_system_info() -> SystemInfo {
     }
 }
 
+// System Monitoring
+use sysinfo::{System, Disks, Networks};
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static APP_START_TIME: Lazy<u64> = Lazy::new(|| {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+});
+
+#[derive(Debug, Serialize)]
+struct SystemMetrics {
+    cpu_usage: f32,
+    memory_total: u64,
+    memory_used: u64,
+    memory_available: u64,
+    memory_usage_percent: f32,
+    swap_total: u64,
+    swap_used: u64,
+    disk_total: u64,
+    disk_used: u64,
+    disk_available: u64,
+    disk_usage_percent: f32,
+}
+
+#[derive(Debug, Serialize)]
+struct NetworkMetrics {
+    total_received: u64,
+    total_transmitted: u64,
+    interfaces: Vec<NetworkInterfaceMetrics>,
+}
+
+#[derive(Debug, Serialize)]
+struct NetworkInterfaceMetrics {
+    name: String,
+    received: u64,
+    transmitted: u64,
+}
+
+#[tauri::command]
+fn get_system_metrics() -> Result<SystemMetrics, String> {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Give it a moment to gather CPU data
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    sys.refresh_cpu_all();
+
+    let cpu_usage = sys.global_cpu_usage();
+    let memory_total = sys.total_memory();
+    let memory_used = sys.used_memory();
+    let memory_available = sys.available_memory();
+    let memory_usage_percent = (memory_used as f32 / memory_total as f32) * 100.0;
+
+    let swap_total = sys.total_swap();
+    let swap_used = sys.used_swap();
+
+    // Get disk usage
+    let disks = Disks::new_with_refreshed_list();
+    let mut disk_total = 0u64;
+    let mut disk_used = 0u64;
+
+    for disk in &disks {
+        disk_total += disk.total_space();
+        disk_used += disk.total_space() - disk.available_space();
+    }
+
+    let disk_available = disk_total - disk_used;
+    let disk_usage_percent = if disk_total > 0 {
+        (disk_used as f32 / disk_total as f32) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(SystemMetrics {
+        cpu_usage,
+        memory_total,
+        memory_used,
+        memory_available,
+        memory_usage_percent,
+        swap_total,
+        swap_used,
+        disk_total,
+        disk_used,
+        disk_available,
+        disk_usage_percent,
+    })
+}
+
+#[tauri::command]
+fn get_network_metrics() -> Result<NetworkMetrics, String> {
+    let networks = Networks::new_with_refreshed_list();
+
+    let mut total_received = 0u64;
+    let mut total_transmitted = 0u64;
+    let mut interfaces = Vec::new();
+
+    for (interface_name, network) in &networks {
+        let received = network.total_received();
+        let transmitted = network.total_transmitted();
+
+        total_received += received;
+        total_transmitted += transmitted;
+
+        interfaces.push(NetworkInterfaceMetrics {
+            name: interface_name.clone(),
+            received,
+            transmitted,
+        });
+    }
+
+    Ok(NetworkMetrics {
+        total_received,
+        total_transmitted,
+        interfaces,
+    })
+}
+
+#[tauri::command]
+fn get_app_uptime() -> u64 {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    now - *APP_START_TIME
+}
+
 // Network Status & WiFi Module
 #[derive(Debug, Serialize, Deserialize)]
 struct NetworkStatus {
@@ -2279,6 +2408,9 @@ pub fn run() {
             greet,
             schedule_notification,
             get_system_info,
+            get_system_metrics,
+            get_network_metrics,
+            get_app_uptime,
             export_events_to_ics,
             fetch_iap_products,
             purchase_product,

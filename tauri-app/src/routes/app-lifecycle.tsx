@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Activity, Check, X, Monitor, Info, MessageSquare } from 'lucide-react'
+import { Activity, Check, X, Monitor, Info, MessageSquare, Cpu, HardDrive, Network, Timer } from 'lucide-react'
 import { ModulePageLayout } from '@/components/module-page-layout'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
+import { getCurrentWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { message, ask, confirm } from '@tauri-apps/plugin-dialog'
@@ -28,6 +28,32 @@ interface SystemInfo {
   process_id: number
 }
 
+interface SystemMetrics {
+  cpu_usage: number
+  memory_total: number
+  memory_used: number
+  memory_available: number
+  memory_usage_percent: number
+  swap_total: number
+  swap_used: number
+  disk_total: number
+  disk_used: number
+  disk_available: number
+  disk_usage_percent: number
+}
+
+interface NetworkMetrics {
+  total_received: number
+  total_transmitted: number
+  interfaces: NetworkInterfaceMetrics[]
+}
+
+interface NetworkInterfaceMetrics {
+  name: string
+  received: number
+  transmitted: number
+}
+
 function AppLifecycle() {
   const [output, setOutput] = useState<string[]>([])
   const [loading, setLoading] = useState<string | null>(null)
@@ -36,11 +62,17 @@ function AppLifecycle() {
   const [windowState, setWindowState] = useState<WindowState | null>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [theme, setTheme] = useState<string>('')
+  const [uptime, setUptime] = useState<number>(0)
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
+  const [networkMetrics, setNetworkMetrics] = useState<NetworkMetrics | null>(null)
+  const [isMonitoring, setIsMonitoring] = useState(false)
 
   // Window property controls
   const [windowTitle, setWindowTitle] = useState('Tauri Capability Playground')
   const [windowWidth, setWindowWidth] = useState('800')
   const [windowHeight, setWindowHeight] = useState('600')
+  const [windowX, setWindowX] = useState('100')
+  const [windowY, setWindowY] = useState('100')
 
   // Dialog controls
   const [dialogMessage, setDialogMessage] = useState('Hello from Tauri!')
@@ -52,12 +84,30 @@ function AppLifecycle() {
     // Initial loads
     refreshWindowState()
     loadSystemInfo()
+    loadUptime()
 
     // Cleanup listeners on unmount
     return () => {
       unlisteners.forEach(unlisten => unlisten())
     }
   }, [])
+
+  // Auto-refresh monitoring data
+  useEffect(() => {
+    if (!isMonitoring) return
+
+    const interval = setInterval(async () => {
+      await loadSystemMetrics()
+      await loadNetworkMetrics()
+      await loadUptime()
+    }, 2000) // Update every 2 seconds
+
+    // Initial load
+    loadSystemMetrics()
+    loadNetworkMetrics()
+
+    return () => clearInterval(interval)
+  }, [isMonitoring])
 
   const addOutput = (message: string, success: boolean = true) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -287,6 +337,62 @@ function AppLifecycle() {
     }
   }
 
+  const loadUptime = async () => {
+    try {
+      const uptimeSeconds = await invoke<number>('get_app_uptime')
+      setUptime(uptimeSeconds)
+    } catch (error) {
+      console.error('Error loading uptime:', error)
+    }
+  }
+
+  const loadSystemMetrics = async () => {
+    try {
+      const metrics = await invoke<SystemMetrics>('get_system_metrics')
+      setSystemMetrics(metrics)
+    } catch (error) {
+      console.error('Error loading system metrics:', error)
+    }
+  }
+
+  const loadNetworkMetrics = async () => {
+    try {
+      const metrics = await invoke<NetworkMetrics>('get_network_metrics')
+      setNetworkMetrics(metrics)
+    } catch (error) {
+      console.error('Error loading network metrics:', error)
+    }
+  }
+
+  const toggleMonitoring = () => {
+    setIsMonitoring(!isMonitoring)
+    if (!isMonitoring) {
+      addOutput('Started system monitoring')
+    } else {
+      addOutput('Stopped system monitoring')
+    }
+  }
+
+  const handleSetPosition = async () => {
+    const x = parseInt(windowX)
+    const y = parseInt(windowY)
+
+    if (isNaN(x) || isNaN(y)) {
+      addOutput('Please enter valid position coordinates', false)
+      return
+    }
+
+    setLoading('position')
+    try {
+      await window.setPosition(new LogicalPosition(x, y))
+      addOutput(`Window position set to (${x}, ${y})`)
+    } catch (error) {
+      addOutput(`Error setting position: ${error}`, false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   // System Dialogs
   const handleShowMessage = async () => {
     setLoading('message')
@@ -483,6 +589,32 @@ function AppLifecycle() {
                 </Button>
               </div>
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Window Position</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  className="w-24 px-3 py-2 border rounded-md"
+                  value={windowX}
+                  onChange={(e) => setWindowX(e.target.value)}
+                  placeholder="X"
+                />
+                <span className="self-center">,</span>
+                <input
+                  type="number"
+                  className="w-24 px-3 py-2 border rounded-md"
+                  value={windowY}
+                  onChange={(e) => setWindowY(e.target.value)}
+                  placeholder="Y"
+                />
+                <Button
+                  onClick={handleSetPosition}
+                  disabled={loading === 'position'}
+                >
+                  Set Position
+                </Button>
+              </div>
+            </div>
             <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={handleGetTheme}
@@ -522,7 +654,134 @@ function AppLifecycle() {
               <InfoItem label="Architecture" value={systemInfo.arch} />
               <InfoItem label="App Version" value={systemInfo.app_version} />
               <InfoItem label="Process ID" value={systemInfo.process_id.toString()} />
+              <InfoItem label="App Uptime" value={formatUptime(uptime)} />
             </div>
+          )}
+        </div>
+
+        {/* Live System Monitoring Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Live System Monitoring
+            </h3>
+            <Button
+              onClick={toggleMonitoring}
+              variant={isMonitoring ? 'default' : 'outline'}
+              size="sm"
+            >
+              {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
+            </Button>
+          </div>
+
+          {isMonitoring && systemMetrics && (
+            <div className="space-y-4">
+              {/* CPU & Memory */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* CPU */}
+                <div className="p-4 bg-muted rounded-md">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Cpu className="h-5 w-5 text-blue-500" />
+                    <h4 className="font-semibold">CPU Usage</h4>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Usage</span>
+                      <span className="font-semibold">{systemMetrics.cpu_usage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(systemMetrics.cpu_usage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Memory */}
+                <div className="p-4 bg-muted rounded-md">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="h-5 w-5 text-green-500" />
+                    <h4 className="font-semibold">Memory</h4>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Used / Total</span>
+                      <span className="font-semibold">
+                        {formatBytes(systemMetrics.memory_used)} / {formatBytes(systemMetrics.memory_total)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${systemMetrics.memory_usage_percent.toFixed(1)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {systemMetrics.memory_usage_percent.toFixed(1)}% used
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Disk & Network */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Disk */}
+                <div className="p-4 bg-muted rounded-md">
+                  <div className="flex items-center gap-2 mb-3">
+                    <HardDrive className="h-5 w-5 text-purple-500" />
+                    <h4 className="font-semibold">Disk Usage</h4>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Used / Total</span>
+                      <span className="font-semibold">
+                        {formatBytes(systemMetrics.disk_used)} / {formatBytes(systemMetrics.disk_total)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${systemMetrics.disk_usage_percent.toFixed(1)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {systemMetrics.disk_usage_percent.toFixed(1)}% used
+                    </div>
+                  </div>
+                </div>
+
+                {/* Network */}
+                {networkMetrics && (
+                  <div className="p-4 bg-muted rounded-md">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Network className="h-5 w-5 text-orange-500" />
+                      <h4 className="font-semibold">Network</h4>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Downloaded</span>
+                        <span className="font-semibold">{formatBytes(networkMetrics.total_received)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Uploaded</span>
+                        <span className="font-semibold">{formatBytes(networkMetrics.total_transmitted)}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {networkMetrics.interfaces.length} interface(s) active
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isMonitoring && (
+            <p className="text-sm text-muted-foreground">
+              Click "Start Monitoring" to view live system metrics
+            </p>
           )}
         </div>
 
@@ -604,6 +863,30 @@ function AppLifecycle() {
       </div>
     </ModulePageLayout>
   )
+}
+
+// Helper Functions
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+}
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  const parts = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`)
+
+  return parts.join(' ')
 }
 
 // Helper Components
