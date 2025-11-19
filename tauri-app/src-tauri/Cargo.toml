@@ -30,7 +30,7 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-websocket = { version = "2", features = ["native-tls"], default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["time", "sync", "macros"] }
+tokio = { version = "1", features = ["time", "sync", "macros", "rt-multi-thread", "net"] }
 chrono = "0.4"
 reqwest = { version = "0.11", features = ["json", "multipart", "stream", "native-tls"], default-features = false }
 futures-util = "0.3"
@@ -40,4 +40,8 @@ cpal = "0.15"
 network-interface = "2.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 sysinfo = "0.32"
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+mime_guess = "2.0"
 

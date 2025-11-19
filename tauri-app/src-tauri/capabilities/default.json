@@ -214,6 +214,9 @@
     "clipboard-manager:allow-clear",
     "websocket:default",
     "websocket:allow-connect",
-    "websocket:allow-send"
+    "websocket:allow-send",
+    "core:default",
+    "core:app:allow-app-show",
+    "core:app:allow-app-hide"
   ]
 }
