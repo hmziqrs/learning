@@ -719,6 +719,17 @@ struct NetworkStatus {
     connection_type: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct WiFiInfo {
+    ssid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bssid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal_strength: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ip_address: Option<String>,
+}
+
 #[tauri::command]
 async fn check_network_status() -> Result<NetworkStatus, String> {
     use std::net::TcpStream;
@@ -739,7 +750,7 @@ async fn check_network_status() -> Result<NetworkStatus, String> {
 }
 
 #[tauri::command]
-async fn get_wifi_info() -> Result<String, String> {
+async fn get_wifi_info() -> Result<WiFiInfo, String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
@@ -750,40 +761,121 @@ async fn get_wifi_info() -> Result<String, String> {
 
         let info = String::from_utf8_lossy(&output.stdout);
 
-        // Parse SSID from output
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+        };
+
+        // Parse WiFi information from output
         for line in info.lines() {
-            if line.contains("SSID:") && !line.contains("BSSID") {
-                let ssid = line.split(':').nth(1).unwrap_or("").trim();
-                if !ssid.is_empty() {
-                    return Ok(ssid.to_string());
+            let trimmed = line.trim();
+
+            if trimmed.contains("SSID:") && !trimmed.contains("BSSID") {
+                if let Some(ssid) = trimmed.split(':').nth(1) {
+                    wifi_info.ssid = ssid.trim().to_string();
+                }
+            } else if trimmed.starts_with("BSSID:") {
+                if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+                    wifi_info.bssid = Some(bssid.to_string());
+                }
+            } else if trimmed.contains("agrCtlRSSI:") {
+                if let Some(rssi) = trimmed.split(':').nth(1) {
+                    if let Ok(signal) = rssi.trim().parse::<i32>() {
+                        wifi_info.signal_strength = Some(signal);
+                    }
                 }
             }
         }
 
-        Err("Not connected to WiFi".to_string())
+        // Get IP address
+        if let Ok(ip_output) = Command::new("ipconfig")
+            .args(["getifaddr", "en0"])
+            .output()
+        {
+            let ip = String::from_utf8_lossy(&ip_output.stdout);
+            let ip_trimmed = ip.trim();
+            if !ip_trimmed.is_empty() {
+                wifi_info.ip_address = Some(ip_trimmed.to_string());
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
+            Err("Not connected to WiFi".to_string())
+        } else {
+            Ok(wifi_info)
+        }
     }
 
     #[cfg(target_os = "linux")]
     {
         use std::process::Command;
-        let output = Command::new("iwgetid")
-            .args(["-r"])
-            .output()
-            .map_err(|e| format!("Failed to get WiFi info: {}", e))?;
 
-        let ssid = String::from_utf8_lossy(&output.stdout);
-        let trimmed = ssid.trim();
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+        };
 
-        if trimmed.is_empty() {
+        // Get SSID
+        if let Ok(output) = Command::new("iwgetid").args(["-r"]).output() {
+            let ssid = String::from_utf8_lossy(&output.stdout);
+            wifi_info.ssid = ssid.trim().to_string();
+        }
+
+        // Get more detailed info with iwconfig
+        if let Ok(output) = Command::new("iwconfig").output() {
+            let info = String::from_utf8_lossy(&output.stdout);
+
+            for line in info.lines() {
+                if line.contains("Access Point:") {
+                    if let Some(bssid) = line.split("Access Point:").nth(1) {
+                        let bssid_clean = bssid.trim().split_whitespace().next().unwrap_or("");
+                        if bssid_clean != "Not-Associated" && !bssid_clean.is_empty() {
+                            wifi_info.bssid = Some(bssid_clean.to_string());
+                        }
+                    }
+                }
+                if line.contains("Signal level=") {
+                    if let Some(signal_part) = line.split("Signal level=").nth(1) {
+                        if let Some(signal_str) = signal_part.split_whitespace().next() {
+                            if let Ok(signal) = signal_str.parse::<i32>() {
+                                wifi_info.signal_strength = Some(signal);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Get IP address
+        if let Ok(output) = Command::new("ip").args(["addr", "show"]).output() {
+            let ip_info = String::from_utf8_lossy(&output.stdout);
+            for line in ip_info.lines() {
+                if line.contains("inet ") && !line.contains("127.0.0.1") {
+                    if let Some(ip_part) = line.trim().split_whitespace().nth(1) {
+                        if let Some(ip) = ip_part.split('/').next() {
+                            wifi_info.ip_address = Some(ip.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
             Err("Not connected to WiFi".to_string())
         } else {
-            Ok(trimmed.to_string())
+            Ok(wifi_info)
         }
     }
 
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
+
         let output = Command::new("netsh")
             .args(["wlan", "show", "interfaces"])
             .output()
@@ -791,17 +883,57 @@ async fn get_wifi_info() -> Result<String, String> {
 
         let info = String::from_utf8_lossy(&output.stdout);
 
-        // Parse SSID from output
+        let mut wifi_info = WiFiInfo {
+            ssid: String::new(),
+            bssid: None,
+            signal_strength: None,
+            ip_address: None,
+        };
+
+        // Parse SSID, BSSID, and Signal
         for line in info.lines() {
-            if line.trim().starts_with("SSID") && !line.contains("BSSID") {
-                let ssid = line.split(':').nth(1).unwrap_or("").trim();
-                if !ssid.is_empty() {
-                    return Ok(ssid.to_string());
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("SSID") && !trimmed.contains("BSSID") {
+                if let Some(ssid) = trimmed.split(':').nth(1) {
+                    wifi_info.ssid = ssid.trim().to_string();
+                }
+            } else if trimmed.starts_with("BSSID") {
+                if let Some(bssid) = trimmed.split(':').skip(1).collect::<Vec<_>>().join(":").trim().split_whitespace().next() {
+                    wifi_info.bssid = Some(bssid.to_string());
+                }
+            } else if trimmed.starts_with("Signal") {
+                if let Some(signal_str) = trimmed.split(':').nth(1) {
+                    let signal_clean = signal_str.trim().trim_end_matches('%');
+                    if let Ok(signal) = signal_clean.parse::<i32>() {
+                        wifi_info.signal_strength = Some(signal);
+                    }
                 }
             }
         }
 
-        Err("Not connected to WiFi".to_string())
+        // Get IP address
+        if let Ok(ip_output) = Command::new("ipconfig").output() {
+            let ip_info = String::from_utf8_lossy(&ip_output.stdout);
+            let mut found_wireless = false;
+
+            for line in ip_info.lines() {
+                if line.contains("Wireless") {
+                    found_wireless = true;
+                } else if found_wireless && line.contains("IPv4") {
+                    if let Some(ip) = line.split(':').nth(1) {
+                        wifi_info.ip_address = Some(ip.trim().to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        if wifi_info.ssid.is_empty() {
+            Err("Not connected to WiFi".to_string())
+        } else {
+            Ok(wifi_info)
+        }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]

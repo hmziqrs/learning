@@ -99,9 +99,9 @@ serde_json = "1.0"
 
 ### WiFi Information
 - [x] Current SSID (network name)
-- [ ] Signal strength (RSSI)
-- [ ] MAC address (BSSID)
-- [ ] IP address information
+- [x] Signal strength (RSSI)
+- [x] MAC address (BSSID)
+- [x] IP address information
 - [ ] Scan available networks
 - [ ] WiFi security type
 
@@ -1124,11 +1124,12 @@ async fn cached_http_get(url: String, cache_duration: u64) -> Result<String, Str
 ---
 
 **Last Updated**: November 2025
-**Module Version**: 2.2.0
+**Module Version**: 2.3.0
 **Status**: Core Features Complete - Networking & Radio Access Module ✅
 
 **Implementation Summary:**
 - ✅ 6 core features implemented and working
-- ✅ HTTP, WebSocket, SSE, File Upload, Network Status, WiFi Info
+- ✅ HTTP, WebSocket, SSE, File Upload, Network Status, Advanced WiFi Info
+- ✅ WiFi details include: SSID, BSSID, Signal Strength (RSSI), IP Address
 - ✅ Desktop platforms fully supported (Windows, macOS, Linux)
 - ⚠️ Mobile cellular features require custom plugins (documented, not implemented)

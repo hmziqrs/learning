@@ -24,13 +24,20 @@ interface NetworkStatus {
   connectionType: string
 }
 
+interface WiFiInfo {
+  ssid: string
+  bssid?: string
+  signal_strength?: number
+  ip_address?: string
+}
+
 function NetworkRealtimeModule() {
   const [output, setOutput] = useState<string[]>([])
   const [loading, setLoading] = useState<string | null>(null)
 
   // Network Status State
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null)
-  const [wifiSsid, setWifiSsid] = useState<string>('')
+  const [wifiInfo, setWifiInfo] = useState<WiFiInfo | null>(null)
 
   // SSE State
   const [sseUrl, setSseUrl] = useState('https://sse.dev/test')
@@ -205,11 +212,20 @@ function NetworkRealtimeModule() {
     addOutput('Getting WiFi information...')
 
     try {
-      const ssid = await invoke<string>('get_wifi_info')
-      setWifiSsid(ssid)
-      addOutput(`✓ Connected to: ${ssid}`)
+      const info = await invoke<WiFiInfo>('get_wifi_info')
+      setWifiInfo(info)
+      addOutput(`✓ Connected to: ${info.ssid}`)
+      if (info.signal_strength !== undefined) {
+        addOutput(`Signal strength: ${info.signal_strength} dBm`)
+      }
+      if (info.bssid) {
+        addOutput(`BSSID: ${info.bssid}`)
+      }
+      if (info.ip_address) {
+        addOutput(`IP Address: ${info.ip_address}`)
+      }
     } catch (error) {
-      setWifiSsid('')
+      setWifiInfo(null)
       addOutput(`✗ ${error}`, false)
     } finally {
       setLoading(null)
@@ -532,26 +548,63 @@ function NetworkRealtimeModule() {
 
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Get information about your current WiFi connection (Desktop only)
+              Get detailed information about your current WiFi connection (Desktop only)
             </p>
 
-            <div className="flex flex-wrap gap-2 items-center">
-              <Button
-                onClick={handleGetWifiInfo}
-                disabled={loading === 'wifi-info'}
-                variant="outline"
-              >
-                <Radio className={`w-4 h-4 mr-2 ${loading === 'wifi-info' ? 'animate-pulse' : ''}`} />
-                {loading === 'wifi-info' ? 'Getting Info...' : 'Get WiFi Info'}
-              </Button>
+            <Button
+              onClick={handleGetWifiInfo}
+              disabled={loading === 'wifi-info'}
+              variant="outline"
+            >
+              <Radio className={`w-4 h-4 mr-2 ${loading === 'wifi-info' ? 'animate-pulse' : ''}`} />
+              {loading === 'wifi-info' ? 'Getting Info...' : 'Get WiFi Info'}
+            </Button>
 
-              {wifiSsid && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 text-blue-500 rounded-md text-sm">
-                  <Radio className="w-4 h-4" />
-                  <span className="font-mono">{wifiSsid}</span>
+            {wifiInfo && (
+              <div className="bg-muted rounded-md p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-blue-500" />
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold">SSID</div>
+                    <div className="text-xs text-muted-foreground font-mono">{wifiInfo.ssid}</div>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {wifiInfo.bssid && (
+                  <div className="flex items-start gap-2 pt-2 border-t">
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold">BSSID (MAC Address)</div>
+                      <div className="text-xs text-muted-foreground font-mono">{wifiInfo.bssid}</div>
+                    </div>
+                  </div>
+                )}
+
+                {wifiInfo.signal_strength !== undefined && (
+                  <div className="flex items-start gap-2 pt-2 border-t">
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold">Signal Strength</div>
+                      <div className="text-xs text-muted-foreground">
+                        {wifiInfo.signal_strength} dBm
+                        <span className="ml-2">
+                          {wifiInfo.signal_strength > -50 ? '(Excellent)' :
+                           wifiInfo.signal_strength > -60 ? '(Good)' :
+                           wifiInfo.signal_strength > -70 ? '(Fair)' : '(Weak)'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {wifiInfo.ip_address && (
+                  <div className="flex items-start gap-2 pt-2 border-t">
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold">IP Address</div>
+                      <div className="text-xs text-muted-foreground font-mono">{wifiInfo.ip_address}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
