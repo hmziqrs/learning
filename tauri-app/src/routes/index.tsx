@@ -14,6 +14,7 @@ import {
   Users,
   Camera,
   Activity,
+  Clipboard,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
@@ -118,6 +119,13 @@ const modules = [
     icon: Activity,
     path: '/sensors',
     color: 'text-amber-500',
+  },
+  {
+    name: 'System Services',
+    description: 'Access clipboard, battery info, and system audio devices',
+    icon: Clipboard,
+    path: '/system-services',
+    color: 'text-slate-500',
   },
 ]
 
