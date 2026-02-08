@@ -6,9 +6,8 @@
 //! - Integration with AppState for request execution
 
 use crate::app_state::AppState;
-use crate::ui::key_value_editor::{EditorType, KeyValueEditor};
 use gpui::{div, px, App, AppContext, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, Styled, Window};
-use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, button::Button, input::Input};
+use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, button::Button, checkbox::Checkbox, input::Input};
 use reqforge_core::models::request::{HttpMethod, KeyValuePair, BodyType};
 use reqforge_core::models::response::HttpResponse;
 
@@ -63,10 +62,6 @@ pub struct RequestEditor {
     selected_method: HttpMethod,
     /// Whether the method dropdown is open
     method_dropdown_open: bool,
-    /// Key-value editor for query parameters
-    params_editor: Option<Entity<KeyValueEditor>>,
-    /// Key-value editor for headers
-    headers_editor: Option<Entity<KeyValueEditor>>,
 }
 
 impl RequestEditor {
@@ -77,8 +72,6 @@ impl RequestEditor {
             active_sub_tab: RequestSubTab::Params,
             selected_method: HttpMethod::GET,
             method_dropdown_open: false,
-            params_editor: None,
-            headers_editor: None,
         }
     }
 
@@ -742,53 +735,13 @@ impl Render for RequestEditor {
         }
 
         // Get data for rendering
-        let (url_text, url_is_empty) = {
-            let app_state = self.app_state.read(cx);
-            app_state.active_tab().map(|tab| {
-                let text = tab.url_input.read(cx).text().to_string();
-                (if text.is_empty() {
-                    "https://example.com/api/endpoint".to_string()
-                } else {
-                    text.clone()
-                }, text.is_empty())
-            }).unwrap_or_else(|| ("https://example.com/api/endpoint".to_string(), true))
-        };
-
-        let (is_loading, _params, _headers, body_content, body_content_type) = {
+        let (is_loading, params, headers) = {
             let app_state = self.app_state.read(cx);
             let loading = app_state.active_tab().map(|tab| tab.is_loading).unwrap_or(false);
             let p = app_state.active_tab().map(|tab| tab.params.clone()).unwrap_or_default();
             let h = app_state.active_tab().map(|tab| tab.headers.clone()).unwrap_or_default();
-            let (bc, bt) = app_state.active_tab().map(|tab| {
-                let text = tab.body_input.read(cx).text().to_string();
-                (text.clone(), if text.is_empty() { "None" } else { "Raw" }.to_string())
-            }).unwrap_or_else(|| (String::new(), "None".to_string()));
-            (loading, p, h, bc, bt)
+            (loading, p, h)
         };
-
-        // Create or update KeyValueEditor entities for params and headers
-        // Note: For now, we'll use a simplified approach and create placeholder editors
-        // In a full implementation, these would be cached and updated rather than recreated
-
-        // Extract the count of params/headers to display
-        let params_count = {
-            let app_state = self.app_state.read(cx);
-            app_state.active_tab()
-                .map(|tab| tab.params.len())
-                .unwrap_or(0)
-        };
-
-        let headers_count = {
-            let app_state = self.app_state.read(cx);
-            app_state.active_tab()
-                .map(|tab| tab.headers.len())
-                .unwrap_or(0)
-        };
-
-        // Create simple placeholder editors for now
-        // TODO: Implement proper KeyValueEditor integration with entity caching
-        let params_editor_entity = cx.new(|_cx| KeyValueEditor::new(EditorType::Params));
-        let headers_editor_entity = cx.new(|_cx| KeyValueEditor::new(EditorType::Headers));
 
         // Build the method selector
         let method_name = self.selected_method.to_string();
@@ -831,25 +784,26 @@ impl Render for RequestEditor {
                 cx.listener(|this, _, window, cx| this.toggle_method_dropdown(window, cx)),
             );
 
-        // Build URL input
-        let text_div = div().child(url_text.clone());
-        let text_div = if url_is_empty {
-            text_div.text_color(cx.theme().muted_foreground)
-        } else {
-            text_div
-        };
-
-        let url_input = div()
-            .id("url-input-wrapper")
-            .flex_1()
-            .h(px(32.0))
-            .px_3()
-            .py_1()
-            .rounded_md()
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
-            .child(text_div);
+        // Build URL input - use real Input widget
+        let url_input = self.app_state.read(cx).active_tab().map(|tab| {
+            div()
+                .id("url-input-wrapper")
+                .flex_1()
+                .h(px(32.0))
+                .child(Input::new(&tab.url_input))
+        }).unwrap_or_else(|| {
+            div()
+                .id("url-input-wrapper")
+                .flex_1()
+                .h(px(32.0))
+                .px_3()
+                .py_1()
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().border)
+                .bg(cx.theme().background)
+                .child("No active tab")
+        });
 
         // Build send button
         let button_text = if is_loading { "Sending..." } else { "Send" };
@@ -887,7 +841,13 @@ impl Render for RequestEditor {
                 .py_1()
                 .rounded_md()
                 .cursor_pointer()
-                .child(display_name);
+                .child(display_name)
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _window, cx| {
+                        this.switch_sub_tab(tab, cx);
+                    }),
+                );
 
             if is_active {
                 tab_div.bg(cx.theme().muted)
@@ -896,17 +856,123 @@ impl Render for RequestEditor {
             }
         }).collect();
 
-        // Build params content
+        // Build params content - render actual tab params
         let params_tab = div()
             .id("params-tab")
             .flex_1()
-            .child(params_editor_entity.clone());
+            .p_4()
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Query Parameters"),
+                    )
+                    .children(
+                        params.iter().enumerate().map(|(idx, row)| {
+                            let enabled = row.enabled;
+                            let key_input = row.key_input.clone();
+                            let value_input = row.value_input.clone();
 
-        // Build headers content
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .w_full()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(150.0))
+                                        .child(Input::new(&key_input))
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(200.0))
+                                        .child(Input::new(&value_input))
+                                )
+                                .child(
+                                    Checkbox::new(("param", idx))
+                                        .checked(enabled)
+                                )
+                        })
+                    )
+                    .child(
+                        h_flex()
+                            .p_2()
+                            .child(
+                                div()
+                                    .px_3()
+                                    .py_1()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Add parameter functionality coming soon"),
+                            ),
+                    ),
+            );
+
+        // Build headers content - render actual tab headers
         let headers_tab = div()
             .id("headers-tab")
             .flex_1()
-            .child(headers_editor_entity.clone());
+            .p_4()
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(cx.theme().muted_foreground)
+                            .child("Headers"),
+                    )
+                    .children(
+                        headers.iter().enumerate().map(|(idx, row)| {
+                            let enabled = row.enabled;
+                            let key_input = row.key_input.clone();
+                            let value_input = row.value_input.clone();
+
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .w_full()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(150.0))
+                                        .child(Input::new(&key_input))
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w(px(200.0))
+                                        .child(Input::new(&value_input))
+                                )
+                                .child(
+                                    Checkbox::new(("header", idx))
+                                        .checked(enabled)
+                                )
+                        })
+                    )
+                    .child(
+                        h_flex()
+                            .p_2()
+                            .child(
+                                div()
+                                    .px_3()
+                                    .py_1()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(cx.theme().border)
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child("Add header functionality coming soon"),
+                            ),
+                    ),
+            );
 
         // Build body content
         let body_input_state = self.app_state.read(cx).active_tab().map(|tab| tab.body_input.clone());
@@ -943,15 +1009,6 @@ impl Render for RequestEditor {
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(cx.theme().muted_foreground)
                             .child("Request Body"),
-                    )
-                    .child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .child(body_content_type),
                     )
                     .child(body_input),
             );

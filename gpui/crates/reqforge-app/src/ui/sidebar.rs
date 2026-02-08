@@ -19,6 +19,7 @@ use reqforge_core::{
     },
     ReqForgeCore,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Context key for sidebar keyboard shortcuts
@@ -433,23 +434,44 @@ impl SidebarPanel {
     }
 
     /// Create a new collection
-    fn create_new_collection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let collection = Collection::new("My Collection");
-        self.app_state.update(cx, |state, cx| {
-            // Save the collection to the store
-            let _ = state.core.store.save_collection(&collection);
+    fn create_new_collection(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let collection_count = self.app_state.read(cx).core.collections.len();
+        let collection_name = format!("Collection {}", collection_count + 1);
+        let collection = Collection::new(&collection_name);
+        let collection_id = collection.id;
 
-            // Get mutable access to collections through unsafe code
-            // This is a workaround because ReqForgeCore doesn't implement Clone
-            // TODO: Find a better solution, perhaps make ReqForgeCore::collections use RwLock
-            unsafe {
-                let core_ptr = state.core.as_ref() as *const ReqForgeCore;
-                let collections_ptr = &(*core_ptr).collections as *const Vec<Collection> as *mut Vec<Collection>;
-                (*collections_ptr).push(collection);
-            }
+        // Save the collection to the store
+        let app_state = self.app_state.clone();
+        let save_result = app_state.read(cx).core.store.save_collection(&collection);
 
-            cx.notify();
-        });
+        if save_result.is_ok() {
+            // After saving, reload collections from the store
+            // We need to create a new ReqForgeCore to reload the collections
+            // Since we can't mutate the Arc, we'll use a workaround
+            // TODO: This is a temporary solution - proper fix requires modifying ReqForgeCore
+            log::info!("Created collection: {} ({})", collection_name, collection_id);
+
+            // Try to use unsafe to add the collection - this should work if we're the only owner
+            self.app_state.update(cx, |state, cx| {
+                unsafe {
+                    // Only do this if we're the sole owner of the Arc
+                    if Arc::strong_count(&state.core) == 1 {
+                        let core_ptr = state.core.as_ref() as *const ReqForgeCore as *mut ReqForgeCore;
+                        let collections = &mut (*core_ptr).collections;
+
+                        // Load collections from store to get the updated list
+                        if let Ok(reloaded_collections) = state.core.store.list_collections() {
+                            *collections = reloaded_collections;
+                        }
+                    } else {
+                        log::warn!("Cannot add collection - multiple references to core exist");
+                    }
+                }
+                cx.notify();
+            });
+        } else {
+            log::error!("Failed to save collection: {:?}", save_result.err());
+        }
     }
 
     /// Render the context menu
@@ -603,23 +625,41 @@ impl Render for SidebarPanel {
                             )
                     )
                     .child(
-                        h_flex().gap_1().child(
-                            div()
-                                .size(px(28.0))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded_md()
-                                .hover(|div| div.bg(cx.theme().muted))
-                                .cursor_pointer()
-                                .child(Icon::new(IconName::Plus).size(px(14.0)))
-                                .on_mouse_down(
-                                    MouseButton::Left,
-                                    cx.listener(|this, _, window, cx| {
-                                        this.on_action_new_request(&NewRequest, window, cx);
-                                    }),
-                                ),
-                        )
+                        h_flex().gap_1()
+                            .child(
+                                div()
+                                    .size(px(28.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_md()
+                                    .hover(|div| div.bg(cx.theme().muted))
+                                    .cursor_pointer()
+                                    .child(Icon::new(IconName::Plus).size(px(14.0)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.create_new_collection(window, cx);
+                                        }),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .size(px(28.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_md()
+                                    .hover(|div| div.bg(cx.theme().muted))
+                                    .cursor_pointer()
+                                    .child(Icon::new(IconName::File).size(px(14.0)))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.on_action_new_request(&NewRequest, window, cx);
+                                        }),
+                                    ),
+                            )
                     )
             )
             .child(if is_empty {
