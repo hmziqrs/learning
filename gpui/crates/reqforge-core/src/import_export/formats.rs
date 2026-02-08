@@ -1,15 +1,15 @@
 //! Support for external formats (Postman, OpenAPI, etc.)
 
-pub mod postman;
-pub mod openapi;
 pub mod manifest;
+pub mod openapi;
+pub mod postman;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::models::{HttpMethod, KeyValuePair, BodyType, RawContentType};
 use super::error::{ImportError, ImportErrorKind};
 use super::ImportResult;
+use crate::models::{BodyType, HttpMethod, KeyValuePair, RawContentType};
 
 /// Workspace manifest for full exports
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,8 +47,15 @@ fn extract_headers(headers_value: &Value) -> Vec<KeyValuePair> {
                     if let Some(obj) = v.as_object() {
                         let key = obj.get("key").and_then(|k| k.as_str()).unwrap_or("");
                         let value = obj.get("value").and_then(|v| v.as_str()).unwrap_or("");
-                        let enabled = obj.get("disabled").and_then(|d| d.as_bool()).map(|d| !d).unwrap_or(true);
-                        let description = obj.get("description").and_then(|d| d.as_str()).map(String::from);
+                        let enabled = obj
+                            .get("disabled")
+                            .and_then(|d| d.as_bool())
+                            .map(|d| !d)
+                            .unwrap_or(true);
+                        let description = obj
+                            .get("description")
+                            .and_then(|d| d.as_str())
+                            .map(String::from);
 
                         if !key.is_empty() {
                             Some(KeyValuePair {
@@ -79,8 +86,15 @@ fn extract_query_params(query_params_value: &Value) -> Vec<KeyValuePair> {
                     if let Some(obj) = v.as_object() {
                         let key = obj.get("key").and_then(|k| k.as_str()).unwrap_or("");
                         let value = obj.get("value").and_then(|v| v.as_str()).unwrap_or("");
-                        let enabled = obj.get("disabled").and_then(|d| d.as_bool()).map(|d| !d).unwrap_or(true);
-                        let description = obj.get("description").and_then(|d| d.as_str()).map(String::from);
+                        let enabled = obj
+                            .get("disabled")
+                            .and_then(|d| d.as_bool())
+                            .map(|d| !d)
+                            .unwrap_or(true);
+                        let description = obj
+                            .get("description")
+                            .and_then(|d| d.as_str())
+                            .map(String::from);
 
                         if !key.is_empty() {
                             Some(KeyValuePair {
@@ -123,7 +137,10 @@ fn extract_body(body_value: &Value, body_mode: Option<&str>) -> ImportResult<Bod
                 _ => RawContentType::Text,
             };
 
-            Ok(BodyType::Raw { content, content_type })
+            Ok(BodyType::Raw {
+                content,
+                content_type,
+            })
         }
         Some("urlencoded") => {
             let fields = body_value
@@ -135,8 +152,15 @@ fn extract_body(body_value: &Value, body_mode: Option<&str>) -> ImportResult<Bod
                             if let Some(obj) = v.as_object() {
                                 let key = obj.get("key").and_then(|k| k.as_str()).unwrap_or("");
                                 let value = obj.get("value").and_then(|v| v.as_str()).unwrap_or("");
-                                let enabled = obj.get("disabled").and_then(|d| d.as_bool()).map(|d| !d).unwrap_or(true);
-                                let description = obj.get("description").and_then(|d| d.as_str()).map(String::from);
+                                let enabled = obj
+                                    .get("disabled")
+                                    .and_then(|d| d.as_bool())
+                                    .map(|d| !d)
+                                    .unwrap_or(true);
+                                let description = obj
+                                    .get("description")
+                                    .and_then(|d| d.as_str())
+                                    .map(String::from);
 
                                 if !key.is_empty() {
                                     Some(KeyValuePair {
@@ -169,10 +193,19 @@ fn extract_body(body_value: &Value, body_mode: Option<&str>) -> ImportResult<Bod
                             if let Some(obj) = v.as_object() {
                                 let key = obj.get("key").and_then(|k| k.as_str()).unwrap_or("");
                                 let value = obj.get("value").and_then(|v| v.as_str()).unwrap_or("");
-                                let enabled = obj.get("disabled").and_then(|d| d.as_bool()).map(|d| !d).unwrap_or(true);
-                                let description = obj.get("description").and_then(|d| d.as_str()).map(String::from);
+                                let enabled = obj
+                                    .get("disabled")
+                                    .and_then(|d| d.as_bool())
+                                    .map(|d| !d)
+                                    .unwrap_or(true);
+                                let description = obj
+                                    .get("description")
+                                    .and_then(|d| d.as_str())
+                                    .map(String::from);
 
-                                if !key.is_empty() && obj.get("type").and_then(|t| t.as_str()) != Some("file") {
+                                if !key.is_empty()
+                                    && obj.get("type").and_then(|t| t.as_str()) != Some("file")
+                                {
                                     Some(KeyValuePair {
                                         key: key.to_string(),
                                         value: value.to_string(),

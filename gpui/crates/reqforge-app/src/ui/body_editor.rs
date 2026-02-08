@@ -79,9 +79,13 @@ impl BodyContentType {
     pub fn default_content(&self) -> String {
         match self {
             BodyContentType::Json => "{\n  \n}".to_string(),
-            BodyContentType::Xml => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root>\n  \n</root>".to_string(),
+            BodyContentType::Xml => {
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root>\n  \n</root>".to_string()
+            }
             BodyContentType::Text => String::new(),
-            BodyContentType::Html => "<!DOCTYPE html>\n<html>\n<body>\n  \n</body>\n</html>".to_string(),
+            BodyContentType::Html => {
+                "<!DOCTYPE html>\n<html>\n<body>\n  \n</body>\n</html>".to_string()
+            }
             BodyContentType::FormUrlEncoded => String::new(),
             BodyContentType::MultipartFormData => String::new(),
             BodyContentType::None => String::new(),
@@ -193,11 +197,7 @@ impl BodyEditor {
         // Content type selector
         print!("│ Content-Type: [");
         for (i, ct) in BodyContentType::all().iter().enumerate() {
-            let marker = if *ct == self.content_type {
-                "●"
-            } else {
-                " "
-            };
+            let marker = if *ct == self.content_type { "●" } else { " " };
             print!("{}{}", marker, ct.display_name());
             if i < BodyContentType::all().len() - 1 {
                 print!("|");
@@ -214,7 +214,8 @@ impl BodyEditor {
             EditorMode::MultiLine => "[Multi]",
             EditorMode::Form => "[Form]",
         };
-        println!("│ │ {} {} | Line {}:{} | {} lines{}                    │ │",
+        println!(
+            "│ │ {} {} | Line {}:{} | {} lines{}                    │ │",
             mode_str,
             if self.read_only { "[RO]" } else { "" },
             self.cursor.0,
@@ -237,11 +238,17 @@ impl BodyEditor {
             } else {
                 line.to_string()
             };
-            println!("│ │{} {:3}: {:<52} │ │", cursor_marker, line_num, display_line);
+            println!(
+                "│ │{} {:3}: {:<52} │ │",
+                cursor_marker, line_num, display_line
+            );
         }
 
         if lines.len() > 8 {
-            println!("│ │       ({} more lines...)                                    │ │", lines.len() - 8);
+            println!(
+                "│ │       ({} more lines...)                                    │ │",
+                lines.len() - 8
+            );
         }
 
         println!("│ │                                                           │ │");
@@ -268,7 +275,11 @@ impl BodyEditor {
             _ => EditorMode::MultiLine,
         };
 
-        println!("📝 Content type set to: {} ({})", content_type.display_name(), content_type.mime_type());
+        println!(
+            "📝 Content type set to: {} ({})",
+            content_type.display_name(),
+            content_type.mime_type()
+        );
     }
 
     /// Toggle the content type dropdown.
@@ -348,8 +359,8 @@ impl BodyEditor {
         match self.content_type {
             BodyContentType::Json => {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&self.content) {
-                    self.content = serde_json::to_string_pretty(&value)
-                        .map_err(|e| e.to_string())?;
+                    self.content =
+                        serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
                     self.dirty = true;
                     self.line_count = self.content.lines().count();
                     println!("✓ JSON formatted");
@@ -364,7 +375,10 @@ impl BodyEditor {
                 Err("XML formatting not implemented".to_string())
             }
             _ => {
-                println!("ℹ Formatting not available for {}", self.content_type.display_name());
+                println!(
+                    "ℹ Formatting not available for {}",
+                    self.content_type.display_name()
+                );
                 Err("Formatting not available".to_string())
             }
         }
@@ -375,8 +389,7 @@ impl BodyEditor {
         match self.content_type {
             BodyContentType::Json => {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&self.content) {
-                    self.content = serde_json::to_string(&value)
-                        .map_err(|e| e.to_string())?;
+                    self.content = serde_json::to_string(&value).map_err(|e| e.to_string())?;
                     self.dirty = true;
                     self.line_count = self.content.lines().count();
                     println!("✓ JSON minified");
@@ -386,7 +399,10 @@ impl BodyEditor {
                 }
             }
             _ => {
-                println!("ℹ Minify not available for {}", self.content_type.display_name());
+                println!(
+                    "ℹ Minify not available for {}",
+                    self.content_type.display_name()
+                );
                 Err("Minify not available".to_string())
             }
         }

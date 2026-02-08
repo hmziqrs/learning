@@ -3,9 +3,11 @@
 //! This module defines the main application state structure that wraps
 //! the headless core and adds UI-specific state like open tabs.
 
-use reqforge_core::{ReqForgeCore, models::request::RequestDefinition, models::response::HttpResponse};
-use std::sync::Arc;
 use parking_lot::RwLock;
+use reqforge_core::{
+    ReqForgeCore, models::request::RequestDefinition, models::response::HttpResponse,
+};
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Wraps the headless core and adds UI-specific state.
@@ -59,13 +61,15 @@ impl AppState {
 
     /// Get a reference to the active tab, if any.
     pub fn active_tab(&self) -> Option<&OpenTab> {
-        self.active_tab_index.and_then(|index| self.open_tabs.get(index))
+        self.active_tab_index
+            .and_then(|index| self.open_tabs.get(index))
     }
 
     /// Get a mutable reference to the active tab, if any.
     #[allow(dead_code)]
     pub fn active_tab_mut(&mut self) -> Option<&mut OpenTab> {
-        self.active_tab_index.and_then(move |index| self.open_tabs.get_mut(index))
+        self.active_tab_index
+            .and_then(move |index| self.open_tabs.get_mut(index))
     }
 
     /// Update the request draft in the active tab.
@@ -94,7 +98,8 @@ impl AppState {
     /// Execute a request and update the active tab with the response.
     pub async fn execute_active_tab_request(&self) -> Result<HttpResponse, String> {
         // Get the active tab's request
-        let request = self.active_tab()
+        let request = self
+            .active_tab()
             .map(|tab| tab.draft.clone())
             .ok_or_else(|| "No active tab".to_string())?;
 

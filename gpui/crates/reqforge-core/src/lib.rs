@@ -23,13 +23,14 @@ pub use templates::{TemplateManager, TemplateError};
 pub use import_export::{export_collection, import_collection, export_environment, import_environment, export_all, import_all, import_collection_from_postman, import_collection_from_openapi};
 pub use import_export::WorkspaceImport;
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 /// The top-level headless API surface.
 /// The UI crate only talks to this.
 pub struct ReqForgeCore {
     pub engine: HttpEngine,
     pub store: JsonStore,
-    pub history: RequestHistory,
+    history: RwLock<RequestHistory>,
     pub environments: Vec<Environment>,
     pub collections: Vec<Collection>,
     pub active_environment_id: Option<uuid::Uuid>,
@@ -48,7 +49,7 @@ impl ReqForgeCore {
         Ok(Self {
             engine: HttpEngine::new(),
             store,
-            history,
+            history: RwLock::new(history),
             environments,
             collections,
             active_environment_id: None,
@@ -71,7 +72,7 @@ impl ReqForgeCore {
     }
 
     /// Execute a request with environment interpolation.
-    pub async fn execute_request(&mut self, req: &RequestDefinition) -> Result<HttpResponse, HttpError> {
+    pub async fn execute_request(&self, req: &RequestDefinition) -> Result<HttpResponse, HttpError> {
         let vars = self.active_vars();
         let resolved = Interpolator::resolve(req, &vars);
         let response = self.engine.execute(&resolved).await;
@@ -94,7 +95,11 @@ impl ReqForgeCore {
             self.active_environment_id,
             self.active_environment_name(),
         );
-        self.history.add_entry(entry);
+
+        // Use write lock to add to history
+        if let Ok(mut history) = self.history.write() {
+            history.add_entry(entry);
+        }
 
         response
     }
@@ -105,37 +110,62 @@ impl ReqForgeCore {
         for col in &self.collections {
             self.store.save_collection(col)?;
         }
-        self.history.save()?;
+        // Use read lock to save history (save method takes &self)
+        if let Ok(history) = self.history.read() {
+            let _ = history.save();
+        }
         Ok(())
     }
 
     /// Get recent history entries
     pub fn get_recent_history(&self, count: usize) -> Vec<RequestHistoryEntry> {
-        self.history.get_recent(count)
+        if let Ok(history) = self.history.read() {
+            history.get_recent(count)
+        } else {
+            Vec::new()
+        }
     }
 
     /// Get all history entries
     pub fn get_all_history(&self) -> Vec<RequestHistoryEntry> {
-        self.history.get_all()
+        if let Ok(history) = self.history.read() {
+            history.get_all()
+        } else {
+            Vec::new()
+        }
     }
 
     /// Clear all history
-    pub fn clear_history(&mut self) {
-        self.history.clear();
+    pub fn clear_history(&self) {
+        if let Ok(mut history) = self.history.write() {
+            history.clear();
+        }
     }
 
     /// Replay a history entry
     pub async fn replay_history(&self, entry_id: uuid::Uuid) -> Result<HttpResponse, ReplayError> {
-        self.history.replay(entry_id, &self.engine, &self.active_vars()).await
+        if let Ok(history) = self.history.read() {
+            history.replay(entry_id, &self.engine, &self.active_vars()).await
+        } else {
+            Err(ReplayError::EntryNotFound(entry_id))
+        }
     }
 
     /// Get history entry count
     pub fn history_len(&self) -> usize {
-        self.history.len()
+        if let Ok(history) = self.history.read() {
+            history.len()
+        } else {
+            0
+        }
     }
 
     /// Check if history is empty
     pub fn history_is_empty(&self) -> bool {
-        self.history.is_empty()
+        if let Ok(history) = self.history.read() {
+            history.is_empty()
+        } else {
+            true
+        }
     }
 }
