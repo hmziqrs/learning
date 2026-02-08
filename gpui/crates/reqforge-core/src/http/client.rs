@@ -3,7 +3,7 @@ use crate::models::request::{RequestDefinition, BodyType, RawContentType};
 use crate::models::response::HttpResponse;
 use crate::validation::ValidationError;
 use std::time::Instant;
-use std::collections::HashMap;
+use std::time::Duration;
 
 pub struct HttpEngine {
     client: Client,
@@ -23,6 +23,9 @@ impl HttpEngine {
     pub fn new() -> Self {
         let client = Client::builder()
             .danger_accept_invalid_certs(false)   // make configurable later
+            // Prevent requests from hanging indefinitely (can be made configurable later)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
             .build()
             .expect("failed to build HTTP client");
         Self { client }
@@ -40,17 +43,27 @@ impl HttpEngine {
         // Validate the request before executing
         req.validate()?;
 
-        let method: reqwest::Method = req.method.to_string().parse().unwrap();
+        let method = match req.method {
+            crate::models::request::HttpMethod::GET => reqwest::Method::GET,
+            crate::models::request::HttpMethod::POST => reqwest::Method::POST,
+            crate::models::request::HttpMethod::PUT => reqwest::Method::PUT,
+            crate::models::request::HttpMethod::PATCH => reqwest::Method::PATCH,
+            crate::models::request::HttpMethod::DELETE => reqwest::Method::DELETE,
+            crate::models::request::HttpMethod::HEAD => reqwest::Method::HEAD,
+            crate::models::request::HttpMethod::OPTIONS => reqwest::Method::OPTIONS,
+        };
 
         let mut builder = self.client.request(method, &req.url);
 
         // Query params
-        let query_params: HashMap<String, String> = req.query_params
+        let query_params: Vec<(&str, &str)> = req.query_params
             .iter()
             .filter(|p| p.enabled)
-            .map(|p| (p.key.clone(), p.value.clone()))
+            .map(|p| (p.key.as_str(), p.value.as_str()))
             .collect();
-        builder = builder.query(&query_params);
+        if !query_params.is_empty() {
+            builder = builder.query(&query_params);
+        }
 
         // Headers
         for h in req.headers.iter().filter(|h| h.enabled) {
@@ -70,11 +83,11 @@ impl HttpEngine {
                 builder.header("Content-Type", mime).body(content.clone())
             }
             BodyType::FormUrlEncoded(pairs) => {
-                let form: HashMap<String, String> = pairs.iter()
+                let form: Vec<(&str, &str)> = pairs.iter()
                     .filter(|p| p.enabled)
-                    .map(|p| (p.key.clone(), p.value.clone()))
+                    .map(|p| (p.key.as_str(), p.value.as_str()))
                     .collect();
-                builder.form(&form)
+                if form.is_empty() { builder } else { builder.form(&form) }
             }
         };
 
@@ -88,9 +101,10 @@ impl HttpEngine {
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
-        let bytes = response.bytes().await?.to_vec();
-        let size = bytes.len();
-        let body_text = String::from_utf8(bytes.clone()).ok();
+        let body = response.bytes().await?;
+        let size = body.len();
+        let body_text = std::str::from_utf8(body.as_ref()).ok().map(ToOwned::to_owned);
+        let bytes = body.to_vec();
 
         Ok(HttpResponse {
             status,
