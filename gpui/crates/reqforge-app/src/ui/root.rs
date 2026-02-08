@@ -1,17 +1,17 @@
 //! Root view for the ReqForge application.
 //!
-//! This module defines the main UI layout with sidebar, tab bar, request editor,
+//! This module defines the main UI layout with sidebar, request editor,
 //! response viewer, and environment selector.
 
 use crate::app_state::AppState;
-use gpui::{div, prelude::FluentBuilder, px, Context, InteractiveElement, Render, Window, IntoElement, Styled, ParentElement, Entity};
-use gpui_component::{h_flex, v_flex, ActiveTheme, tab::TabBar, tab::Tab, Icon, IconName};
+use gpui::{div, px, Context, EventEmitter, Render, Window, IntoElement, Styled, ParentElement, Entity};
+use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName};
 
 /// Root view of the ReqForge application.
 ///
 /// Renders the three-panel layout:
 /// - Left: Collection/Request tree sidebar
-/// - Center: Tab bar + Request editor + Response viewer
+/// - Center: Request editor + Response viewer
 /// - Top: Environment selector
 pub struct RootView {
     /// The application state entity
@@ -38,10 +38,8 @@ impl RootView {
 
         // Create environment info
         let env_count = environments.len();
-        let has_envs = env_count > 0;
 
         div()
-            .id("env-selector")
             .h(px(32.0))
             .px_3()
             .py_1()
@@ -50,7 +48,6 @@ impl RootView {
             .border_color(cx.theme().border)
             .bg(cx.theme().background)
             .cursor_pointer()
-            .hover(|div| div.border_color(cx.theme().primary))
             .child(
                 h_flex()
                     .gap_2()
@@ -70,8 +67,8 @@ impl RootView {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child(if has_envs {
-                                format!("({} env{} available)", env_count, if env_count == 1 { "" } else { "s" })
+                            .child(if env_count > 0 {
+                                format!("({} env{})", env_count, if env_count == 1 { "" } else { "s" })
                             } else {
                                 "No envs".to_string()
                             }),
@@ -84,62 +81,17 @@ impl RootView {
             )
     }
 
-    /// Render the tab bar for open requests.
-    fn render_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let app_state = self.app_state.read(cx);
-        let tabs = &app_state.tabs;
-        let active_index = app_state.active_tab.unwrap_or(0);
-
-        if tabs.is_empty() {
-            // Empty state for tab bar
-            return div()
-                .id("tab-bar-empty")
-                .h(px(40.0))
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .px_4()
-                .items_center()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("No tabs open. Open a request from the sidebar."),
-                );
-        }
-
-        // Create TabBar with click handler - wrap in div for proper rendering
-        let app_state_clone = self.app_state.clone();
-        div()
-            .id("tab-bar-wrapper")
-            .h(px(40.0))
-            .border_b_1()
-            .border_color(cx.theme().border)
-            .child(
-                TabBar::new("main-tab-bar")
-                    .selected_index(active_index)
-                    .on_click(cx.listener(move |_view, index, _window, cx| {
-                        // Update active tab
-                        app_state_clone.update(cx, |state, cx| {
-                            if *index < state.tabs.len() {
-                                state.active_tab = Some(*index);
-                                cx.notify();
-                            }
-                        });
-                    }))
-                    .child(Tab::new().label("Tab 1"))
-                    .child(Tab::new().label("Tab 2"))
-                    .child(Tab::new().label("Tab 3"))
-            )
-    }
-
     /// Render the sidebar panel.
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let app_state = self.app_state.read(cx);
 
-        // For now, render a simple sidebar placeholder
-        // TODO: Integrate proper SidebarPanel component
+        // Render sidebar with collection info
+        let collection_count = app_state.core.collections.len();
+        let request_count: usize = app_state.core.collections.iter()
+            .map(|c| c.requests.len())
+            .sum();
+
         div()
-            .id("sidebar")
             .w(px(300.0))
             .h_full()
             .border_r_1()
@@ -158,27 +110,26 @@ impl RootView {
                     )
                     .child(
                         div()
-                            .text_sm()
+                            .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child(format!("{} collections", app_state.core.collections.len())),
+                            .child(format!("{} collections, {} requests", collection_count, request_count)),
                     )
                     .child(
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child("Sidebar Panel - Full integration pending"),
+                            .child("Sidebar Panel - Click collections to expand"),
                     ),
             )
     }
 
-    /// Render the request editor area (placeholder for now).
+    /// Render the request editor area.
     fn render_request_editor(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let app_state = self.app_state.read(cx);
 
         if let Some(tab) = app_state.active_tab() {
             // Show active request info
             v_flex()
-                .id("request-editor")
                 .flex_1()
                 .border_b_1()
                 .border_color(cx.theme().border)
@@ -229,13 +180,12 @@ impl RootView {
                             div()
                                 .text_sm()
                                 .text_color(cx.theme().muted_foreground)
-                                .child("Request Editor - Params/Headers/Body tabs"),
+                                .child("Request Editor - Use gpui-component RequestEditor"),
                         ),
                 )
         } else {
             // Empty state
             div()
-                .id("request-editor-empty")
                 .flex_1()
                 .border_b_1()
                 .border_color(cx.theme().border)
@@ -256,7 +206,7 @@ impl RootView {
         }
     }
 
-    /// Render the response viewer area (placeholder for now).
+    /// Render the response viewer area.
     fn render_response_viewer(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let app_state = self.app_state.read(cx);
 
@@ -264,7 +214,6 @@ impl RootView {
             if let Some(response) = &tab.last_response {
                 // Show response
                 v_flex()
-                    .id("response-viewer")
                     .flex_1()
                     .bg(cx.theme().background)
                     .child(
@@ -312,7 +261,6 @@ impl RootView {
             } else {
                 // No response yet
                 v_flex()
-                    .id("response-viewer-empty")
                     .flex_1()
                     .bg(cx.theme().background)
                     .child(
@@ -332,7 +280,6 @@ impl RootView {
         } else {
             // No tab selected
             div()
-                .id("response-viewer-empty")
                 .flex_1()
                 .bg(cx.theme().background)
                 .child(
@@ -351,14 +298,14 @@ impl RootView {
         }
     }
 
-    /// Render the main area with tab bar, request editor, and response viewer.
+    /// Render the main area with request editor and response viewer.
     fn render_main_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let app_state = self.app_state.read(cx);
         let has_tabs = !app_state.tabs.is_empty();
+        drop(app_state);
 
         // Build the main content
         let main_content = v_flex()
-            .id("main-area")
             .flex_1()
             .h_full()
             .flex()
@@ -367,7 +314,6 @@ impl RootView {
             .child(
                 // Top bar with environment selector
                 h_flex()
-                    .id("top-bar")
                     .h(px(40.0))
                     .border_b_1()
                     .border_color(cx.theme().border)
@@ -382,12 +328,6 @@ impl RootView {
                             .child("ReqForge"),
                     )
                     .child(self.render_env_selector(cx)),
-            )
-            .child(
-                // Tab bar
-                div()
-                    .id("tab-bar-container")
-                    .child(self.render_tab_bar(cx)),
             )
             .child(
                 // Request editor area
@@ -432,22 +372,6 @@ impl RootView {
                                     .text_sm()
                                     .text_color(cx.theme().muted_foreground)
                                     .child("Open a request from the sidebar to get started"),
-                            )
-                            .child(
-                                h_flex()
-                                    .mt_4()
-                                    .px_4()
-                                    .py_2()
-                                    .rounded(px(4.0))
-                                    .bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .cursor_pointer()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .child("Browse Collections"),
-                                    ),
                             ),
                     ),
             )
@@ -457,10 +381,11 @@ impl RootView {
     }
 }
 
+impl EventEmitter<()> for RootView {}
+
 impl Render for RootView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
-            .id("root")
             .size_full()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
