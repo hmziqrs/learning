@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::collections::HashMap;
+use std::borrow::Cow;
 use crate::models::request::{RequestDefinition, BodyType, KeyValuePair};
 
 pub struct Interpolator;
@@ -12,13 +13,13 @@ impl Interpolator {
         vars: &HashMap<String, String>,
     ) -> RequestDefinition {
         let mut resolved = req.clone();
-        resolved.url = Self::replace(&resolved.url, vars);
+        resolved.url = Self::replace(&resolved.url, vars).into_owned();
         Self::resolve_pairs(&mut resolved.headers, vars);
         Self::resolve_pairs(&mut resolved.query_params, vars);
         resolved.body = match &resolved.body {
             BodyType::None => BodyType::None,
             BodyType::Raw { content, content_type } => BodyType::Raw {
-                content: Self::replace(content, vars),
+                content: Self::replace(content, vars).into_owned(),
                 content_type: content_type.clone(),
             },
             BodyType::FormUrlEncoded(pairs) => {
@@ -30,18 +31,27 @@ impl Interpolator {
         resolved
     }
 
-    fn replace(input: &str, vars: &HashMap<String, String>) -> String {
+    /// Replace `{{var}}` placeholders with values from vars.
+    /// Returns `Cow<'a, str>` — borrows input when no substitutions needed,
+    /// owns an allocated String only when interpolation occurs.
+    fn replace<'a>(input: &'a str, vars: &HashMap<String, String>) -> Cow<'a, str> {
+        // Fast-path: no placeholders = zero allocation
+        if !input.contains("{{") {
+            return Cow::Borrowed(input);
+        }
+
+        // Slow-path: regex substitution
         let re = Regex::new(r"\{\{(\w+)\}\}").unwrap(); // compile once in real code
-        re.replace_all(input, |caps: &regex::Captures| {
+        Cow::Owned(re.replace_all(input, |caps: &regex::Captures| {
             let key = &caps[1];
             vars.get(key).cloned().unwrap_or_else(|| format!("{{{{{}}}}}", key))
-        }).to_string()
+        }).to_string())
     }
 
     fn resolve_pairs(pairs: &mut Vec<KeyValuePair>, vars: &HashMap<String, String>) {
         for pair in pairs.iter_mut() {
-            pair.key = Self::replace(&pair.key, vars);
-            pair.value = Self::replace(&pair.value, vars);
+            pair.key = Self::replace(&pair.key, vars).into_owned();
+            pair.value = Self::replace(&pair.value, vars).into_owned();
         }
     }
 }

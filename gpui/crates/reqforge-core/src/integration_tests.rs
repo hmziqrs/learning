@@ -1,17 +1,16 @@
 use tempfile::TempDir;
-use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path, header}};
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{header, method, path},
+};
 
+use crate::ReqForgeCore;
 use crate::models::collection::Collection;
 use crate::models::environment::{Environment, Variable};
 use crate::models::request::{HttpMethod, KeyValuePair, RequestDefinition};
-use crate::ReqForgeCore;
 
 /// Helper to create a test request with environment variables
-fn create_test_request_with_vars(
-    name: &str,
-    method: HttpMethod,
-    url: &str,
-) -> RequestDefinition {
+fn create_test_request_with_vars(name: &str, method: HttpMethod, url: &str) -> RequestDefinition {
     let mut request = RequestDefinition::new(name, method, url);
     request.headers = vec![
         KeyValuePair {
@@ -80,12 +79,16 @@ fn requests_equal(req1: &RequestDefinition, req2: &RequestDefinition) -> bool {
         && req1.method == req2.method
         && req1.url == req2.url
         && req1.headers.len() == req2.headers.len()
-        && req1.headers.iter().zip(req2.headers.iter()).all(|(h1, h2)| {
-            h1.key == h2.key
-                && h1.value == h2.value
-                && h1.enabled == h2.enabled
-                && h1.description == h2.description
-        })
+        && req1
+            .headers
+            .iter()
+            .zip(req2.headers.iter())
+            .all(|(h1, h2)| {
+                h1.key == h2.key
+                    && h1.value == h2.value
+                    && h1.enabled == h2.enabled
+                    && h1.description == h2.description
+            })
 }
 
 /// Helper to compare collections field by field
@@ -121,27 +124,20 @@ mod integration_tests {
         let workspace_path = temp_dir.path().join("test_workspace");
 
         // Step 2: Create a ReqForgeCore instance
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Step 3: Create a collection with requests
         let mut collection = Collection::new("API Test Collection");
 
         // Create a GET request
-        let get_request = create_test_request_with_vars(
-            "Get User",
-            HttpMethod::GET,
-            "{{base_url}}/api/user",
-        );
+        let get_request =
+            create_test_request_with_vars("Get User", HttpMethod::GET, "{{base_url}}/api/user");
         let get_request_id = get_request.id;
         collection.add_request(get_request, None);
 
         // Create a POST request
-        let post_request = create_test_request_with_vars(
-            "Create User",
-            HttpMethod::POST,
-            "{{base_url}}/api/user",
-        );
+        let post_request =
+            create_test_request_with_vars("Create User", HttpMethod::POST, "{{base_url}}/api/user");
         let post_request_id = post_request.id;
         collection.add_request(post_request, None);
 
@@ -219,8 +215,8 @@ mod integration_tests {
         assert_eq!(response.status, 200);
         assert_eq!(response.status_text, "OK");
         assert!(response.is_success());
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("Test User"));
         assert!(body_text.contains("test@example.com"));
 
@@ -231,12 +227,11 @@ mod integration_tests {
         );
 
         // Step 7: Save and reload to verify persistence
-        core.save_all()
-            .expect("Failed to save core state");
+        core.save_all().expect("Failed to save core state");
 
         // Create a new ReqForgeCore instance to verify persistence
-        let mut reloaded_core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to reopen ReqForgeCore");
+        let mut reloaded_core =
+            ReqForgeCore::open(&workspace_path).expect("Failed to reopen ReqForgeCore");
 
         // Verify environment persistence
         assert_eq!(reloaded_core.environments.len(), 1);
@@ -248,17 +243,12 @@ mod integration_tests {
         assert_eq!(reloaded_core.collections.len(), 1);
         let reloaded_collection = &reloaded_core.collections[0];
         assert_eq!(reloaded_collection.name, "API Test Collection");
-        assert!(collections_equal(
-            &core.collections[0],
-            reloaded_collection
-        ));
+        assert!(collections_equal(&core.collections[0], reloaded_collection));
 
         // Verify both requests were persisted
         assert_eq!(reloaded_collection.requests.len(), 2);
         assert!(reloaded_collection.requests.contains_key(&get_request_id));
-        assert!(reloaded_collection
-            .requests
-            .contains_key(&post_request_id));
+        assert!(reloaded_collection.requests.contains_key(&post_request_id));
 
         // Verify tree structure
         assert_eq!(reloaded_collection.tree.len(), 2);
@@ -268,14 +258,11 @@ mod integration_tests {
         Mock::given(method("GET"))
             .and(path("/api/user/reloaded"))
             .and(header("X-API-Key", "test-api-key-123"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!({
-                        "id": 456,
-                        "name": "Reloaded User",
-                        "email": "reloaded@example.com"
-                    })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 456,
+                "name": "Reloaded User",
+                "email": "reloaded@example.com"
+            })))
             .mount(&mock_server)
             .await;
 
@@ -302,7 +289,7 @@ mod integration_tests {
             .expect("Failed to execute request after reload");
 
         assert_eq!(reloaded_response.status, 200);
-        let reloaded_body = reloaded_response.body_text.as_ref().unwrap();
+        let reloaded_body = reloaded_response.body_text().unwrap();
         assert!(reloaded_body.contains("Reloaded User"));
     }
 
@@ -312,25 +299,13 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("multi_env_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create multiple environments
-        let dev_env = create_test_env(
-            "Development",
-            "http://localhost:3000",
-            "dev-key-123",
-        );
-        let staging_env = create_test_env(
-            "Staging",
-            "https://staging.example.com",
-            "staging-key-456",
-        );
-        let prod_env = create_test_env(
-            "Production",
-            "https://api.example.com",
-            "prod-key-789",
-        );
+        let dev_env = create_test_env("Development", "http://localhost:3000", "dev-key-123");
+        let staging_env =
+            create_test_env("Staging", "https://staging.example.com", "staging-key-456");
+        let prod_env = create_test_env("Production", "https://api.example.com", "prod-key-789");
 
         let dev_env_id = dev_env.id;
         let staging_env_id = staging_env.id;
@@ -346,10 +321,7 @@ mod integration_tests {
 
         core.active_environment_id = Some(staging_env_id);
         let vars = core.active_vars();
-        assert_eq!(
-            vars.get("base_url").unwrap(),
-            "https://staging.example.com"
-        );
+        assert_eq!(vars.get("base_url").unwrap(), "https://staging.example.com");
         assert_eq!(vars.get("api_key").unwrap(), "staging-key-456");
 
         core.active_environment_id = Some(prod_env_id);
@@ -366,22 +338,13 @@ mod integration_tests {
         core.save_all()
             .expect("Failed to save multi-environment state");
 
-        let reloaded = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to reload multi-environment core");
+        let reloaded =
+            ReqForgeCore::open(&workspace_path).expect("Failed to reload multi-environment core");
 
         assert_eq!(reloaded.environments.len(), 3);
-        assert_eq!(
-            reloaded.environments[0].name,
-            "Development"
-        );
-        assert_eq!(
-            reloaded.environments[1].name,
-            "Staging"
-        );
-        assert_eq!(
-            reloaded.environments[2].name,
-            "Production"
-        );
+        assert_eq!(reloaded.environments[0].name, "Development");
+        assert_eq!(reloaded.environments[1].name, "Staging");
+        assert_eq!(reloaded.environments[2].name, "Production");
     }
 
     /// Test environment variable interpolation in URLs
@@ -390,8 +353,7 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("interpolation_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create environment with various variable types
         let mut env = Environment::new("Test Env");
@@ -446,8 +408,7 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("disabled_vars_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create environment with mixed enabled/disabled variables
         let mut env = Environment::new("Mixed Env");
@@ -495,32 +456,22 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("multi_collection_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create multiple collections
         let mut api_collection = Collection::new("API Collection");
-        let api_req = create_test_request_with_vars(
-            "API Request",
-            HttpMethod::GET,
-            "{{base_url}}/api",
-        );
+        let api_req =
+            create_test_request_with_vars("API Request", HttpMethod::GET, "{{base_url}}/api");
         api_collection.add_request(api_req, None);
 
         let mut test_collection = Collection::new("Test Collection");
-        let test_req = create_test_request_with_vars(
-            "Test Request",
-            HttpMethod::POST,
-            "{{base_url}}/test",
-        );
+        let test_req =
+            create_test_request_with_vars("Test Request", HttpMethod::POST, "{{base_url}}/test");
         test_collection.add_request(test_req, None);
 
         let mut docs_collection = Collection::new("Documentation");
-        let docs_req = create_test_request_with_vars(
-            "Docs Request",
-            HttpMethod::GET,
-            "{{base_url}}/docs",
-        );
+        let docs_req =
+            create_test_request_with_vars("Docs Request", HttpMethod::GET, "{{base_url}}/docs");
         docs_collection.add_request(docs_req, None);
 
         core.collections = vec![api_collection, test_collection, docs_collection];
@@ -540,12 +491,13 @@ mod integration_tests {
         core.save_all()
             .expect("Failed to save multi-collection state");
 
-        let reloaded = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to reload multi-collection core");
+        let reloaded =
+            ReqForgeCore::open(&workspace_path).expect("Failed to reload multi-collection core");
 
         assert_eq!(reloaded.collections.len(), 3);
         // Collections may be loaded in a different order, so check by name
-        let collection_names: Vec<&str> = reloaded.collections
+        let collection_names: Vec<&str> = reloaded
+            .collections
             .iter()
             .map(|c| c.name.as_str())
             .collect();
@@ -560,8 +512,7 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("empty_workspace");
 
-        let core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Verify empty state
         assert!(core.environments.is_empty());
@@ -573,12 +524,10 @@ mod integration_tests {
         assert!(vars.is_empty());
 
         // Saving empty state should work
-        core.save_all()
-            .expect("Failed to save empty state");
+        core.save_all().expect("Failed to save empty state");
 
         // Reloading should maintain empty state
-        let reloaded = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to reload empty core");
+        let reloaded = ReqForgeCore::open(&workspace_path).expect("Failed to reload empty core");
 
         assert!(reloaded.environments.is_empty());
         assert!(reloaded.collections.is_empty());
@@ -590,8 +539,7 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("secret_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create environment with secret variables
         let mut env = Environment::new("Secure Environment");
@@ -623,18 +571,13 @@ mod integration_tests {
         let vars = core.active_vars();
         assert_eq!(vars.len(), 3);
         assert_eq!(vars.get("public_key").unwrap(), "public-value");
-        assert_eq!(
-            vars.get("secret_key").unwrap(),
-            "super-secret-value"
-        );
+        assert_eq!(vars.get("secret_key").unwrap(), "super-secret-value");
         assert_eq!(vars.get("api_token").unwrap(), "bearer-token-12345");
 
         // Save and reload
-        core.save_all()
-            .expect("Failed to save secrets");
+        core.save_all().expect("Failed to save secrets");
 
-        let reloaded = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to reload secrets");
+        let reloaded = ReqForgeCore::open(&workspace_path).expect("Failed to reload secrets");
 
         assert_eq!(reloaded.environments.len(), 1);
         let reloaded_env = &reloaded.environments[0];
@@ -655,8 +598,7 @@ mod integration_tests {
         // Verify workspace doesn't exist yet
         assert!(!workspace_path.exists());
 
-        let _core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let _core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Verify workspace directory was created
         assert!(workspace_path.exists());
@@ -673,8 +615,7 @@ mod integration_tests {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace_path = temp_dir.path().join("query_params_workspace");
 
-        let mut core = ReqForgeCore::open(&workspace_path)
-            .expect("Failed to open ReqForgeCore");
+        let mut core = ReqForgeCore::open(&workspace_path).expect("Failed to open ReqForgeCore");
 
         // Create environment
         let mut env = Environment::new("Test Env");
@@ -731,13 +672,10 @@ mod integration_tests {
             .and(path("/api/data"))
             .and(wiremock::matchers::query_param("version", "v1"))
             .and(wiremock::matchers::query_param("format", "json"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!({
-                        "status": "success",
-                        "data": {"version": "v1", "format": "json"}
-                    })),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "status": "success",
+                "data": {"version": "v1", "format": "json"}
+            })))
             .mount(&mock_server)
             .await;
 
@@ -752,7 +690,7 @@ mod integration_tests {
 
         // Verify response
         assert_eq!(response.status, 200);
-        let body = response.body_text.as_ref().unwrap();
+        let body = response.body_text().unwrap();
         assert!(body.contains("success"));
     }
 }

@@ -2,62 +2,65 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build & Test Commands
+## Commands
 
 ```bash
-cargo build --workspace          # build everything
-cargo test -p reqforge-core      # run core tests (120 unit + 6 doc)
-cargo test --workspace           # run all workspace tests
-cargo test -p reqforge-core -- test_basic_interpolation  # run a single test by name
-cargo check -p reqforge-app      # type-check the app crate (faster than build)
-cargo run -p reqforge-app        # run the GUI app (currently stub UI)
-cargo run -p reqforge-cli        # run the CLI tool
+cargo build --workspace                                    # build all
+cargo test -p reqforge-core                                # core tests (120 unit + 6 doc)
+cargo test -p reqforge-core -- test_basic_interpolation    # single test
+cargo test --workspace                                     # all tests
+cargo check -p reqforge-app                                # type-check app (fast)
+cargo run -p reqforge-app                                  # run GUI (stub)
+cargo run -p reqforge-cli                                  # run CLI
 ```
 
 ## Architecture
 
-ReqForge is a Postman-like HTTP client. Three crates in a Cargo workspace (edition 2024):
+Cargo workspace, edition 2024. Three crates:
 
-```
-reqforge-core (lib)    — All domain logic, zero UI deps. The single source of truth.
-reqforge-app  (bin)    — GUI shell. Currently stub (println-based); being migrated to gpui-component.
-reqforge-cli  (bin)    — CLI tool using clap. Thin wrapper over reqforge-core.
-```
+- `reqforge-core` (lib) — all domain logic, zero UI deps
+- `reqforge-app` (bin) — GUI shell, migrating to `gpui-component`
+- `reqforge-cli` (bin) — CLI via clap, thin wrapper over core
 
-### reqforge-core internals
+### Core (`reqforge-core`)
 
-`ReqForgeCore` is the top-level facade (defined in `lib.rs`). UI crates only talk to this struct. It owns:
-- `HttpEngine` — async HTTP execution via `reqwest` (shared `Client` with connect/request timeouts)
-- `JsonStore` — file-based persistence (`collections/{id}.json`, `environments.json`, `history.json`)
-- `RequestHistory` — behind `RwLock`, auto-records every sent request
-- In-memory `Vec<Collection>` and `Vec<Environment>`
+`ReqForgeCore` facade in `lib.rs` — the only API surface for UI crates. Owns `HttpEngine`, `JsonStore`, `RequestHistory` (behind `RwLock`), in-memory `Vec<Collection>` + `Vec<Environment>`.
 
-Key data flow: `RequestDefinition` → `Interpolator::resolve()` (replaces `{{var}}` placeholders) → `HttpEngine::execute()` → `HttpResponse`
+Data flow: `RequestDefinition` → `Interpolator::resolve()` → `HttpEngine::execute()` → `HttpResponse`
 
-Module map inside `reqforge-core/src/`:
-- `models/` — `RequestDefinition`, `HttpResponse`, `Environment`, `Collection`, `Folder`, `RequestHistoryEntry`, `RequestTemplate`
-- `http/client.rs` — `HttpEngine` + `HttpError`. Validates requests before sending.
-- `env/interpolator.rs` — `{{variable}}` replacement in all string fields of a request
-- `store/json_store.rs` — CRUD for collections and environments on disk
-- `history.rs` — `RequestHistory` manager with add/replay/clear, max 100 entries
-- `templates/` — 8 built-in request templates + custom template CRUD
-- `validation.rs` — URL, header, body validation. Integrated into `HttpEngine::execute()`.
-- `import_export.rs` — Native JSON, Postman v2.1, OpenAPI 3.x import; ZIP workspace export
+Key modules: `models/` (all domain types), `http/client.rs` (reqwest engine + validation), `env/interpolator.rs` (`{{var}}` replacement), `store/json_store.rs` (file persistence), `history.rs`, `templates/`, `validation.rs`, `import_export.rs`.
 
-### reqforge-app internals (in transition)
+### App (`reqforge-app`) — in transition
 
-Currently uses `Arc<RwLock<ReqForgeCore>>` + `parking_lot` + `tokio::main` with println-based stub components. Being migrated to `gpui-component` crate (see `docs/gpui-component-plan.md`) which will replace this with GPUI's `Entity<T>` system and real UI components.
+Current: `Arc<RwLock>` + `parking_lot` + `tokio::main` + println stubs. Being replaced per `docs/gpui-component-plan.md`:
 
-## Design Principles
+- `gpui-component = "0.5"` (bundles GPUI + 60 components)
+- `Entity<AppState>` replaces `Arc<RwLock>` — GPUI handles concurrency + re-render
+- `App::new().run()` + `cx.spawn()` replaces `tokio::main`
+- `Entity<InputState>` (Rope-backed) manages text — no `String` cloning until save/send
+- `bridge.rs` = single ownership boundary: `build_request_from_tab()` / `populate_tab_from_request()`
 
-**Read `docs/zerocopy.md` first** — it's the primary architecture guide for this project.
+## Design Rules
 
-- **Zero-copy first:** borrow by default, copy only at ownership boundaries. Use `bytes::Bytes` for response bodies, `Cow<str>` for interpolation fast-paths, `&str` views over buffers instead of `String` allocations.
-- **Core stays headless:** all domain logic lives in `reqforge-core` with zero UI deps. The app crate is a thin adapter layer.
-- **Propagate errors, don't panic:** use `thiserror` typed errors and `Result`. No `unwrap`/`expect` outside tests.
-- **Reuse the `reqwest::Client`:** `HttpEngine` holds a single shared client. Use `Response::bytes()` + `std::str::from_utf8` (not `Response::text()` which always allocates).
-- **`{{variable}}` syntax:** the `Interpolator` resolves placeholders in URLs, headers, query params, and body content before execution.
+**Read `docs/zerocopy.md` before writing any code.** It is the primary architecture guide. Key references:
 
-## Current State & Next Steps
+- `zerocopy.md:7-18` — no-copy boundary rule. Red-flag calls: `to_vec()`, `to_string()`, `clone()` on buffers
+- `zerocopy.md:22-38` — own buffer once (`Bytes`), then only slice. Never mutate after handing out borrows
+- `zerocopy.md:65-80` — `Cow<str>` for borrow fast-path, own on slow-path
+- `zerocopy.md:109-122` — lifetime discipline. Never return borrows to temporaries
+- `zerocopy.md:126-139` — no self-referential structs. Prefer "owner outside + views returned"
+- `zerocopy.md:145-149` — postpone UTF-8 decode. Keep bytes as bytes until display
 
-The core library is complete (120 tests). The app crate has stub UI components that demonstrate the architecture but don't render real windows. The active plan (`docs/gpui-component-plan.md`) migrates to `gpui-component = "0.5"` from crates.io and refactors `HttpResponse.body` from `Vec<u8>` to `bytes::Bytes`.
+**Project-specific zero-copy rules:**
+- `HttpResponse.body` is `Bytes`, not `Vec<u8>`. `body_text()` is a **method** (`-> Option<&str>`) — not a field. Do not add `body_text: Option<String>`.
+- `Interpolator::replace()` returns `Cow<str>` — borrows when no `{{vars}}`, allocates only when substituting.
+- Allocate `String` only in bridge layer (`build_request_from_tab`) at the ownership boundary.
+
+**Other rules:**
+- Core stays headless — zero UI deps in `reqforge-core`
+- Propagate errors with `thiserror` + `Result`. No `unwrap`/`expect` outside tests.
+- Single shared `reqwest::Client` in `HttpEngine`. Use `Response::bytes()` + `from_utf8`, not `Response::text()`.
+
+## Current State
+
+Core: complete, 120 tests. App: stub UI. Active plan: `docs/gpui-component-plan.md` — follow its checklist and phase order. Phase 0 (zero-copy core refactor) comes before any UI work.

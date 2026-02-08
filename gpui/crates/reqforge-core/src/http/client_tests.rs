@@ -98,8 +98,8 @@ mod tests {
         assert_eq!(response.status, 200);
         assert_eq!(response.status_text, "OK");
         assert!(response.is_success());
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("Alice"));
         assert!(body_text.contains("Bob"));
         assert!(response.elapsed >= Duration::ZERO);
@@ -140,8 +140,8 @@ mod tests {
         assert_eq!(response.status, 201);
         assert_eq!(response.status_text, "Created");
         assert!(response.is_success());
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("Charlie"));
         assert!(body_text.contains("123"));
     }
@@ -179,8 +179,8 @@ mod tests {
         // Assert response
         assert_eq!(response.status, 200);
         assert!(response.is_success());
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("token"));
         assert!(body_text.contains("testuser"));
     }
@@ -279,10 +279,10 @@ mod tests {
         // Assert body parsing
         assert!(!response.body.is_empty());
         assert_eq!(response.size_bytes, response.body.len());
-        assert!(response.body_text.is_some());
+        assert!(response.body_text().is_some());
 
         // Verify JSON body content
-        let body_text = response.body_text.as_ref().unwrap();
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("items"));
         assert!(body_text.contains("count"));
 
@@ -326,8 +326,8 @@ mod tests {
         assert_eq!(response.status, 404);
         assert_eq!(response.status_text, "Not Found");
         assert!(!response.is_success());
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("Not Found"));
     }
 
@@ -505,8 +505,8 @@ mod tests {
 
         // Assert response
         assert_eq!(response.status, 200);
-        assert!(response.body_text.is_some());
-        let body_text = response.body_text.as_ref().unwrap();
+        assert!(response.body_text().is_some());
+        let body_text = response.body_text().unwrap();
         assert!(body_text.contains("<?xml"));
         assert!(body_text.contains("<status>ok</status>"));
     }
@@ -537,7 +537,7 @@ mod tests {
         assert!(response.is_success()); // 2xx range
         assert_eq!(response.size_bytes, 0);
         assert!(response.body.is_empty());
-        assert_eq!(response.body_text, Some("".to_string()));
+        assert_eq!(response.body_text(), Some(""));
     }
 
     #[tokio::test]
@@ -567,9 +567,9 @@ mod tests {
 
         // Assert binary response
         assert_eq!(response.status, 200);
-        assert_eq!(response.body, binary_data);
+        assert_eq!(response.body.as_ref(), binary_data.as_slice());
         assert_eq!(response.size_bytes, binary_data.len());
         // body_text should be None for non-UTF8 data
-        assert!(response.body_text.is_none());
+        assert!(response.body_text().is_none());
     }
 }

@@ -4,6 +4,7 @@ use crate::models::response::HttpResponse;
 use crate::validation::ValidationError;
 use std::time::Instant;
 use std::time::Duration;
+use bytes::Bytes;
 
 pub struct HttpEngine {
     client: Client,
@@ -101,17 +102,15 @@ impl HttpEngine {
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
+        // Use Bytes directly — reqwest returns Bytes, no allocation needed
         let body = response.bytes().await?;
         let size = body.len();
-        let body_text = std::str::from_utf8(body.as_ref()).ok().map(ToOwned::to_owned);
-        let bytes = body.to_vec();
 
         Ok(HttpResponse {
             status,
             status_text,
             headers,
-            body: bytes,
-            body_text,
+            body,                 // Bytes — refcounted, cheap clone
             size_bytes: size,
             elapsed,
         })

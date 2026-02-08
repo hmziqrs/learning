@@ -13,6 +13,7 @@ chrono.workspace = true
 regex.workspace = true
 thiserror.workspace = true
 url.workspace = true
+bytes.workspace = true
 zip = "2.2"
 
 [dev-dependencies]

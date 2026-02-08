@@ -20,3 +20,5 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 regex = "1.12.2"
 thiserror = "2.0.17"
 url = "2.5"
+bytes = "1"
+log = "0.4"

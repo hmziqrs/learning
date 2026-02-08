@@ -436,7 +436,7 @@ fn print_response(response: &reqforge_core::HttpResponse) {
     println!("\n--- Body ---");
     if let Some(pretty) = response.pretty_body() {
         println!("{}", pretty);
-    } else if let Some(text) = &response.body_text {
+    } else if let Some(text) = response.body_text() {
         println!("{}", text);
     } else {
         println!("<binary data, {} bytes>", response.body.len());
