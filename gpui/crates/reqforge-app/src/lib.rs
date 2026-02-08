@@ -14,9 +14,7 @@ pub use bridge::{
     build_request_from_components,
     populate_tab_from_request,
     key_value_row_to_pair,
-    key_value_pair_to_row,
     key_value_rows_to_pairs,
-    key_value_pairs_to_rows,
     body_string_to_body_type,
     body_type_to_string,
 };

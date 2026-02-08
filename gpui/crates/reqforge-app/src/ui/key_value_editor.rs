@@ -7,7 +7,7 @@ use gpui::{
     div, px, AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement,
     Render, Styled, Window,
 };
-use gpui_component::{h_flex, v_flex, Disableable};
+use gpui_component::{h_flex, v_flex, Disableable, StyledExt};
 use gpui_component::button::Button;
 use gpui_component::checkbox::Checkbox;
 use gpui_component::input::{Input, InputState};

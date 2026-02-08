@@ -197,7 +197,7 @@ impl RootView {
                                 .bg(cx.theme().muted)
                                 .text_sm()
                                 .font_weight(gpui::FontWeight::BOLD)
-                                .child(format!("{:?}", tab.draft.method)),
+                                .child(format!("{:?}", tab.method)),
                         )
                         .child(
                             div()
@@ -205,7 +205,7 @@ impl RootView {
                                 .px_2()
                                 .py_1()
                                 .text_sm()
-                                .child(tab.draft.url.clone()),
+                                .child(tab.url_input.read(cx).text().to_string()),
                         )
                         .child(
                             div()

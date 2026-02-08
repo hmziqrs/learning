@@ -3,8 +3,7 @@
 mod root;
 mod sidebar;
 
-// Stub modules - will be replaced with GPUI components in Phase 4
-mod body_editor;
+// UI modules - gpui-component implementations
 mod env_editor_modal;
 mod env_selector;
 mod key_value_editor;
@@ -16,6 +15,7 @@ pub use root::RootView;
 pub use sidebar::{SidebarPanel, init as init_sidebar};
 pub use env_selector::{EnvSelector, init as init_env_selector};
 pub use env_editor_modal::{EnvEditorModal, init as init_env_editor_modal};
+pub use key_value_editor::{KeyValueEditor, KeyValueRow, EditorType};
 pub use request_editor::RequestEditor;
 pub use response_viewer::ResponseViewer;
 pub use tab_bar::{RequestTabBar, init as init_tab_bar};
