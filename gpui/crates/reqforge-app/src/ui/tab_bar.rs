@@ -11,7 +11,8 @@ use gpui::{
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt, h_flex};
 use gpui::rgb;
-use reqforge_core::models::request::HttpMethod;
+use reqforge_core::models::request::{HttpMethod, RequestDefinition};
+use uuid::Uuid;
 
 /// Context key for tab bar keyboard shortcuts
 const TAB_CONTEXT: &str = "RequestTabBar";
@@ -304,6 +305,21 @@ impl RequestTabBar {
             )
     }
 
+    /// Create a new empty tab.
+    fn on_new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let app_state = self.app_state.clone();
+        app_state.update(cx, |state, cx| {
+            // Get the first collection ID if available, or use a default UUID
+            let collection_id = state.core.collections.first().map(|c| c.id).unwrap_or_else(Uuid::new_v4);
+
+            // Create a new empty request
+            let new_request = RequestDefinition::new("Untitled Request", HttpMethod::GET, "");
+
+            // Create tab from the request
+            state.create_tab_from_request(&new_request, collection_id, window, cx);
+        });
+    }
+
     /// Render all tabs horizontally.
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tab_count = {
@@ -319,6 +335,7 @@ impl RequestTabBar {
                 .h(px(40.0))
                 .px_3()
                 .items_center()
+                .justify_between()
                 .border_b_1()
                 .border_color(cx.theme().border)
                 .bg(cx.theme().background)
@@ -326,7 +343,28 @@ impl RequestTabBar {
                     div()
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child("No tabs open - select a request from the sidebar"),
+                        .child("No tabs open"),
+                )
+                .child(
+                    div()
+                        .size(px(28.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_md()
+                        .hover(|div| div.bg(cx.theme().muted))
+                        .cursor_pointer()
+                        .child(
+                            Icon::new(IconName::Plus)
+                                .size(px(14.0))
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _, window, cx| {
+                                this.on_new_tab(window, cx);
+                            }),
+                        ),
                 );
         }
 
@@ -357,11 +395,18 @@ impl RequestTabBar {
                 .items_center()
                 .justify_center()
                 .rounded_md()
+                .hover(|div| div.bg(cx.theme().muted))
                 .cursor_pointer()
                 .child(
                     Icon::new(IconName::Plus)
                         .size(px(14.0))
                         .text_color(cx.theme().muted_foreground),
+                )
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, window, cx| {
+                        this.on_new_tab(window, cx);
+                    }),
                 ),
         );
 

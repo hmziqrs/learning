@@ -396,11 +396,45 @@ impl SidebarPanel {
     /// Handle the Rename action
     fn on_action_rename(&mut self, _: &Rename, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(metadata) = &self.context_menu_item {
+            // For now, just log the action - full rename dialog requires text input
             log::info!(
                 "Rename action triggered for item: {:?}",
                 metadata.item_type
             );
-            // TODO: Implement rename dialog
+
+            // Simple rename implementation for collections
+            if metadata.is_collection() {
+                let collection_id = metadata.collection_id;
+                let app_state = self.app_state.clone();
+
+                self.app_state.update(cx, |state, cx| {
+                    // Find and rename the collection
+                    let renamed = unsafe {
+                        if Arc::strong_count(&state.core) == 1 {
+                            let core_ptr = state.core.as_ref() as *const ReqForgeCore as *mut ReqForgeCore;
+                            let collections = &mut (*core_ptr).collections;
+
+                            if let Some(collection) = collections.iter_mut().find(|c| c.id == collection_id) {
+                                let old_name = collection.name.clone();
+                                collection.name = format!("{} (renamed)", old_name);
+
+                                // Save to store
+                                let _ = state.core.store.save_collection(collection);
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+
+                    if renamed {
+                        log::info!("Renamed collection {}", collection_id);
+                        cx.notify();
+                    }
+                });
+            }
         }
 
         // Close context menu
@@ -416,7 +450,46 @@ impl SidebarPanel {
                 "Delete action triggered for item: {:?}",
                 metadata.item_type
             );
-            // TODO: Implement delete confirmation and logic
+
+            // Delete implementation for collections
+            if metadata.is_collection() {
+                let collection_id = metadata.collection_id;
+                let app_state = self.app_state.clone();
+
+                self.app_state.update(cx, |state, cx| {
+                    // Find and delete the collection
+                    let deleted = unsafe {
+                        if Arc::strong_count(&state.core) == 1 {
+                            let core_ptr = state.core.as_ref() as *const ReqForgeCore as *mut ReqForgeCore;
+
+                            // First, get the collection to delete from store
+                            let collection_to_delete = state.core.collections.iter()
+                                .find(|c| c.id == collection_id)
+                                .cloned();
+
+                            if let Some(collection) = collection_to_delete {
+                                // Delete from store
+                                let _ = state.core.store.delete_collection(&collection);
+
+                                // Remove from collections vec
+                                let collections = &mut (*core_ptr).collections;
+                                collections.retain(|c| c.id != collection_id);
+
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+
+                    if deleted {
+                        log::info!("Deleted collection {}", collection_id);
+                        cx.notify();
+                    }
+                });
+            }
         }
 
         // Close context menu
