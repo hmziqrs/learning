@@ -1,0 +1,17 @@
+[package]
+name = "reqforge-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+reqforge-core = { path = "../reqforge-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+parking_lot = "0.12"
+dirs = "6.0"
+
+# Note: GPUI is temporarily disabled due to dependency conflicts between core-graphics versions.
+# The stub UI below demonstrates the architecture without requiring GPUI.
+# gpui = { git = "https://github.com/zed-industries/zed", branch = "main", package = "gpui" }

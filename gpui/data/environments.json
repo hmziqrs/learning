@@ -1,0 +1,76 @@
+{
+  "environments": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Development",
+      "variables": [
+        {
+          "key": "BASE_URL",
+          "value": "http://localhost:3000",
+          "secret": false,
+          "enabled": true
+        },
+        {
+          "key": "API_KEY",
+          "value": "dev-api-key-12345",
+          "secret": false,
+          "enabled": true
+        },
+        {
+          "key": "DEBUG",
+          "value": "true",
+          "secret": false,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "Staging",
+      "variables": [
+        {
+          "key": "BASE_URL",
+          "value": "https://staging.api.example.com",
+          "secret": false,
+          "enabled": true
+        },
+        {
+          "key": "API_KEY",
+          "value": "staging-api-key-67890",
+          "secret": true,
+          "enabled": true
+        },
+        {
+          "key": "DEBUG",
+          "value": "false",
+          "secret": false,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "name": "Production",
+      "variables": [
+        {
+          "key": "BASE_URL",
+          "value": "https://api.example.com",
+          "secret": false,
+          "enabled": true
+        },
+        {
+          "key": "API_KEY",
+          "value": "prod-api-key-secret-12345",
+          "secret": true,
+          "enabled": true
+        },
+        {
+          "key": "DEBUG",
+          "value": "false",
+          "secret": false,
+          "enabled": false
+        }
+      ]
+    }
+  ]
+}
