@@ -43,6 +43,11 @@ fn main() {
         // Initialize gpui-component (register actions, themes, etc.)
         gpui_component::init(cx);
 
+        // Initialize UI component keyboard bindings
+        ui::init_tab_bar(cx);
+        ui::init_sidebar(cx);
+        ui::init_env_selector(cx);
+
         // Create application state - core is moved into AppState
         let app_state = cx.new(|_cx| app_state::AppState::new(core));
 

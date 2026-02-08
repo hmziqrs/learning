@@ -6,9 +6,11 @@
 //! - Integration with AppState for request execution
 
 use crate::app_state::AppState;
-use gpui::{div, px, Context, Entity, IntoElement, ParentElement, Render, Styled, Window, FontWeight};
+use crate::bridge::build_request_from_tab;
+use gpui::{div, px, Context, Entity, IntoElement, InteractiveElement, MouseButton, ParentElement, Render, Styled, Window, FontWeight};
 use gpui_component::{h_flex, v_flex, ActiveTheme};
 use reqforge_core::models::request::{HttpMethod, KeyValuePair, BodyType};
+use reqforge_core::models::response::HttpResponse;
 
 /// Sub-tabs within the request editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,18 +117,28 @@ impl RequestEditor {
             .map(|tab| tab.is_loading)
             .unwrap_or(false);
 
+        let bg_color: gpui::Hsla = if is_loading {
+            gpui::Hsla { h: 0.0, s: 0.0, l: 0.4, a: 1.0 }
+        } else {
+            cx.theme().primary
+        };
+
         div()
             .min_w(px(80.0))
             .h(px(32.0))
             .px_4()
             .py_1()
             .rounded(px(4.0))
-            .bg(cx.theme().primary)
+            .bg(bg_color)
             .text_color(cx.theme().primary_foreground)
             .font_weight(FontWeight::BOLD)
             .items_center()
             .justify_center()
+            .cursor_pointer()
             .child(if is_loading { "Sending..." } else { "Send" })
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _window, cx| {
+                this.on_send(cx);
+            }))
     }
 
     /// Render the sub-tab bar.
@@ -364,6 +376,110 @@ impl RequestEditor {
             .flex_col()
             .gap_1()
             .children(rows)
+    }
+
+    /// Handle the Send button click - execute the HTTP request asynchronously.
+    ///
+    /// This method:
+    /// 1. Gets the active tab and validates URL is present
+    /// 2. Sets is_loading = true and triggers re-render
+    /// 3. Builds the request from the tab state
+    /// 4. Spawns an async task using cx.spawn() for execution
+    /// 5. On completion: updates last_response, sets is_loading = false
+    /// 6. Handles errors gracefully by displaying them in the response viewer
+    fn on_send(&mut self, cx: &mut Context<Self>) {
+        // Get the active tab's draft request to validate URL is present
+        let app_state = self.app_state.clone();
+
+        // Read the tab state to get the URL for validation
+        let (url_opt, request_opt) = app_state.read(cx).active_tab()
+            .map(|tab| (Some(tab.draft.url.clone()), Some(build_request_from_tab(tab))))
+            .unwrap_or((None, None));
+
+        let url = match url_opt {
+            Some(u) => u,
+            None => {
+                eprintln!("Cannot send request: no active tab");
+                return;
+            }
+        };
+
+        // Validate that URL is not empty
+        if url.trim().is_empty() {
+            // Create an error response to display
+            let error_response = HttpResponse {
+                status: 0,
+                status_text: "Invalid Request".to_string(),
+                headers: std::collections::HashMap::new(),
+                body: bytes::Bytes::from("Error: URL cannot be empty. Please enter a valid URL."),
+                size_bytes: 0,
+                elapsed: std::time::Duration::ZERO,
+            };
+
+            // Update the tab with the error response
+            app_state.update(cx, |app, cx| {
+                if let Some(tab) = app.active_tab_mut() {
+                    tab.last_response = Some(error_response);
+                    tab.is_loading = false;
+                }
+                cx.notify();
+            });
+            return;
+        }
+
+        // Get the request to execute
+        let request = match request_opt {
+            Some(r) => r,
+            None => {
+                eprintln!("Cannot send request: no active tab");
+                return;
+            }
+        };
+
+        // Set is_loading = true and trigger re-render
+        app_state.update(cx, |app, cx| {
+            if let Some(tab) = app.active_tab_mut() {
+                tab.is_loading = true;
+            }
+            cx.notify();
+        });
+
+        // Clone necessary references for the async task
+        let core = app_state.read(cx).core.clone();
+        let app_state = app_state.clone();
+
+        // Use the executor directly to spawn the async task
+        // This avoids the lifetime issues with cx.spawn()
+        let async_cx = cx.to_async();
+        async_cx.spawn(async move |cx| {
+            // Execute the request using the core
+            let result = core.execute_request(&request).await;
+
+            // Update the app state with the response or error
+            app_state.update(cx, |app, cx| {
+                if let Some(tab) = app.active_tab_mut() {
+                    match result {
+                        Ok(response) => {
+                            tab.last_response = Some(response);
+                        }
+                        Err(error) => {
+                            // Create an error response to display in the viewer
+                            let error_body = format!("Request failed: {}", error);
+                            tab.last_response = Some(HttpResponse {
+                                status: 0,
+                                status_text: "Error".to_string(),
+                                headers: std::collections::HashMap::new(),
+                                body: bytes::Bytes::from(error_body),
+                                size_bytes: 0,
+                                elapsed: std::time::Duration::ZERO,
+                            });
+                        }
+                    }
+                    tab.is_loading = false;
+                }
+                cx.notify();
+            });
+        }).detach();
     }
 }
 

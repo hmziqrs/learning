@@ -13,7 +13,9 @@ mod response_viewer;
 mod tab_bar;
 
 pub use root::RootView;
-pub use sidebar::SidebarPanel;
+pub use sidebar::{SidebarPanel, init as init_sidebar};
+pub use env_selector::{EnvSelector, init as init_env_selector};
+pub use env_editor_modal::{EnvEditorModal, init as init_env_editor_modal};
 pub use request_editor::RequestEditor;
 pub use response_viewer::ResponseViewer;
 pub use tab_bar::{RequestTabBar, init as init_tab_bar};

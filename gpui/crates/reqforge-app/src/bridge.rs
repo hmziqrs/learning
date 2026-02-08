@@ -19,7 +19,6 @@ use reqforge_core::models::request::{
     RequestDefinition, KeyValuePair, BodyType, RawContentType, HttpMethod,
 };
 use crate::app_state::{TabState, KeyValueRow};
-use gpui::{App, Context, Entity};
 use uuid::Uuid;
 
 /// Build a RequestDefinition from a TabState.
@@ -31,7 +30,6 @@ use uuid::Uuid;
 /// # Arguments
 ///
 /// * `tab` - The tab state containing UI inputs
-/// * `cx` - The App context for reading Entity values (used when InputState is implemented)
 ///
 /// # Returns
 ///
@@ -41,11 +39,10 @@ use uuid::Uuid;
 ///
 /// ```ignore
 /// use reqforge_app::bridge::build_request_from_tab;
-/// use gpui::App;
 ///
-/// let request = build_request_from_tab(&tab, &mut cx);
+/// let request = build_request_from_tab(&tab);
 /// ```
-pub fn build_request_from_tab(tab: &TabState, cx: &mut App) -> RequestDefinition {
+pub fn build_request_from_tab(tab: &TabState) -> RequestDefinition {
     // In the current stub implementation, TabState contains a draft RequestDefinition directly.
     // When Phase 3 implements Entity<InputState>, we will:
     // 1. Read URL input: tab.url_input.read(cx).text().to_string()
@@ -119,7 +116,6 @@ pub fn build_request_from_components(
 /// # Arguments
 ///
 /// * `req` - The request definition to populate from
-/// * `_cx` - The App context for creating Entity values (unused in stub implementation)
 ///
 /// # Returns
 ///
@@ -130,12 +126,9 @@ pub fn build_request_from_components(
 /// ```ignore
 /// use reqforge_app::bridge::populate_tab_from_request;
 ///
-/// let tab = populate_tab_from_request(&request, &mut cx);
+/// let tab = populate_tab_from_request(&request);
 /// ```
-pub fn populate_tab_from_request(
-    req: &RequestDefinition,
-    _cx: &mut App,
-) -> TabState {
+pub fn populate_tab_from_request(req: &RequestDefinition) -> TabState {
     // In the current stub implementation, we create a simple TabState with the
     // RequestDefinition directly embedded.
     //
