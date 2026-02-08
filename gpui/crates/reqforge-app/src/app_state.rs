@@ -91,7 +91,7 @@ impl AppState {
             reqforge_core::models::request::BodyType::None => String::new(),
         };
         let body_input = cx.new(|cx| {
-            InputState::new(window, cx).default_value(body_content)
+            InputState::new(window, cx).placeholder("Request body content...").default_value(body_content)
         });
 
         // Create header rows from KeyValuePair vector

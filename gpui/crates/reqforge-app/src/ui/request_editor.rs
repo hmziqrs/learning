@@ -6,8 +6,9 @@
 //! - Integration with AppState for request execution
 
 use crate::app_state::AppState;
-use gpui::{div, px, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, Styled, Window};
-use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, button::Button};
+use crate::ui::key_value_editor::{EditorType, KeyValueEditor};
+use gpui::{div, px, App, AppContext, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, Styled, Window};
+use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, button::Button, input::Input};
 use reqforge_core::models::request::{HttpMethod, KeyValuePair, BodyType};
 use reqforge_core::models::response::HttpResponse;
 
@@ -62,6 +63,10 @@ pub struct RequestEditor {
     selected_method: HttpMethod,
     /// Whether the method dropdown is open
     method_dropdown_open: bool,
+    /// Key-value editor for query parameters
+    params_editor: Option<Entity<KeyValueEditor>>,
+    /// Key-value editor for headers
+    headers_editor: Option<Entity<KeyValueEditor>>,
 }
 
 impl RequestEditor {
@@ -72,6 +77,8 @@ impl RequestEditor {
             active_sub_tab: RequestSubTab::Params,
             selected_method: HttpMethod::GET,
             method_dropdown_open: false,
+            params_editor: None,
+            headers_editor: None,
         }
     }
 
@@ -722,7 +729,7 @@ impl RequestEditor {
 }
 
 impl Render for RequestEditor {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Get the current method from the active tab before rendering
         let current_method = {
             let app_state = self.app_state.read(cx);
@@ -758,6 +765,30 @@ impl Render for RequestEditor {
             }).unwrap_or_else(|| (String::new(), "None".to_string()));
             (loading, p, h, bc, bt)
         };
+
+        // Create or update KeyValueEditor entities for params and headers
+        // Note: For now, we'll use a simplified approach and create placeholder editors
+        // In a full implementation, these would be cached and updated rather than recreated
+
+        // Extract the count of params/headers to display
+        let params_count = {
+            let app_state = self.app_state.read(cx);
+            app_state.active_tab()
+                .map(|tab| tab.params.len())
+                .unwrap_or(0)
+        };
+
+        let headers_count = {
+            let app_state = self.app_state.read(cx);
+            app_state.active_tab()
+                .map(|tab| tab.headers.len())
+                .unwrap_or(0)
+        };
+
+        // Create simple placeholder editors for now
+        // TODO: Implement proper KeyValueEditor integration with entity caching
+        let params_editor_entity = cx.new(|_cx| KeyValueEditor::new(EditorType::Params));
+        let headers_editor_entity = cx.new(|_cx| KeyValueEditor::new(EditorType::Headers));
 
         // Build the method selector
         let method_name = self.selected_method.to_string();
@@ -869,76 +900,34 @@ impl Render for RequestEditor {
         let params_tab = div()
             .id("params-tab")
             .flex_1()
-            .p_4()
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Query Parameters"),
-                    )
-                    .child(
-                        h_flex()
-                            .p_2()
-                            .child(
-                                div()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .cursor_pointer()
-                                    .child("Add Parameter"),
-                            ),
-                    ),
-            );
+            .child(params_editor_entity.clone());
 
         // Build headers content
         let headers_tab = div()
             .id("headers-tab")
             .flex_1()
-            .p_4()
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Headers"),
-                    )
-                    .child(
-                        h_flex()
-                            .p_2()
-                            .child(
-                                div()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .cursor_pointer()
-                                    .child("Add Header"),
-                            ),
-                    ),
-            );
+            .child(headers_editor_entity.clone());
 
         // Build body content
-        let display_body = if body_content.is_empty() {
-            "Request body content...".to_string()
-        } else {
-            body_content.clone()
-        };
+        let body_input_state = self.app_state.read(cx).active_tab().map(|tab| tab.body_input.clone());
 
-        let content_div = div().child(display_body);
-        let content_div = if body_content.is_empty() {
-            content_div.text_color(cx.theme().muted_foreground)
+        let body_input = if let Some(input_state) = body_input_state {
+            div()
+                .flex_1()
+                .min_h(px(200.0))
+                .child(Input::new(&input_state))
         } else {
-            content_div
+            div()
+                .flex_1()
+                .min_h(px(200.0))
+                .p_3()
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().border)
+                .font_family("Monospace")
+                .text_sm()
+                .text_color(cx.theme().muted_foreground)
+                .child("No body input available")
         };
 
         let body_tab = div()
@@ -964,18 +953,7 @@ impl Render for RequestEditor {
                             .border_color(cx.theme().border)
                             .child(body_content_type),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h(px(200.0))
-                            .p_3()
-                            .rounded_md()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .font_family("Monospace")
-                            .text_sm()
-                            .child(content_div),
-                    ),
+                    .child(body_input),
             );
 
         // Build method dropdown

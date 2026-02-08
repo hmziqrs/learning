@@ -10,11 +10,14 @@ use gpui::{
     IntoElement, KeyBinding, MouseButton, ParentElement, Render, SharedString, Styled,
     Window,
 };
-use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, StyledExt, list, tree};
-use reqforge_core::models::{
-    collection::Collection,
-    folder::CollectionItem,
-    request::{HttpMethod, RequestDefinition},
+use gpui_component::{button::{Button, ButtonVariants}, h_flex, v_flex, ActiveTheme, Icon, IconName, StyledExt, Sizable, list, tree};
+use reqforge_core::{
+    models::{
+        collection::Collection,
+        folder::CollectionItem,
+        request::{HttpMethod, RequestDefinition},
+    },
+    ReqForgeCore,
 };
 use uuid::Uuid;
 
@@ -429,6 +432,26 @@ impl SidebarPanel {
         cx.notify();
     }
 
+    /// Create a new collection
+    fn create_new_collection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let collection = Collection::new("My Collection");
+        self.app_state.update(cx, |state, cx| {
+            // Save the collection to the store
+            let _ = state.core.store.save_collection(&collection);
+
+            // Get mutable access to collections through unsafe code
+            // This is a workaround because ReqForgeCore doesn't implement Clone
+            // TODO: Find a better solution, perhaps make ReqForgeCore::collections use RwLock
+            unsafe {
+                let core_ptr = state.core.as_ref() as *const ReqForgeCore;
+                let collections_ptr = &(*core_ptr).collections as *const Vec<Collection> as *mut Vec<Collection>;
+                (*collections_ptr).push(collection);
+            }
+
+            cx.notify();
+        });
+    }
+
     /// Render the context menu
     fn render_context_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(_metadata) = &self.context_menu_item else {
@@ -539,6 +562,7 @@ impl Render for SidebarPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Capture collections data for the render closure
         let collections = self.build_tree_items(cx);
+        let is_empty = collections.is_empty();
 
         // Clone necessary data for the render closure
         let app_state = self.app_state.clone();
@@ -576,7 +600,7 @@ impl Render for SidebarPanel {
                                     .font_semibold()
                                     .text_color(cx.theme().foreground)
                                     .child("Collections"),
-                            ),
+                            )
                     )
                     .child(
                         h_flex().gap_1().child(
@@ -595,17 +619,42 @@ impl Render for SidebarPanel {
                                         this.on_action_new_request(&NewRequest, window, cx);
                                     }),
                                 ),
-                        ),
-                    ),
+                        )
+                    )
             )
-            .child(
+            .child(if is_empty {
+                // Empty state with "New Collection" button
                 div()
-                    .id("sidebar-tree-container")
+                    .id("sidebar-content-container")
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_4()
+                    .child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("No collections yet"),
+                    )
+                    .child(
+                        Button::new("new-collection")
+                            .label("New Collection")
+                            .primary()
+                            .small()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.create_new_collection(window, cx);
+                            })),
+                    )
+            } else {
+                // Tree view with collections
+                div()
+                    .id("sidebar-content-container")
                     .flex_1()
                     .child({
                         let tree_state = cx.new(|cx| tree::TreeState::new(cx).items(collections));
 
-                        tree::Tree::new(&tree_state, {
+                        div().size_full().child(tree::Tree::new(&tree_state, {
                             move |ix: usize,
                                   entry: &tree::TreeEntry,
                                   selected: bool,
@@ -737,9 +786,9 @@ impl Render for SidebarPanel {
                                     .child(content.child(label.clone()))
                             }
                         })
-                    },
-                ),
-            )
+                        )
+                    })
+            })
             .children(self.context_menu_open.then(|| self.render_context_menu(cx)))
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _window, cx| {
                 // Close context menu when clicking outside
