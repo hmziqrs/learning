@@ -6,10 +6,12 @@
 //! - Integration with AppState for request execution
 
 use crate::app_state::AppState;
+use gpui_component::input::InputState;
 use gpui::{div, px, App, AppContext, Context, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, Styled, Window};
 use gpui_component::{h_flex, v_flex, ActiveTheme, Icon, IconName, button::Button, checkbox::Checkbox, input::Input};
 use reqforge_core::models::request::{HttpMethod, KeyValuePair, BodyType};
 use reqforge_core::models::response::HttpResponse;
+use uuid::Uuid;
 
 /// Sub-tabs within the request editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -793,7 +795,7 @@ impl Render for RequestEditor {
                 .child(Input::new(&tab.url_input))
         }).unwrap_or_else(|| {
             div()
-                .id("url-input-wrapper")
+                .id("empty-state")
                 .flex_1()
                 .h(px(32.0))
                 .px_3()
@@ -802,7 +804,15 @@ impl Render for RequestEditor {
                 .border_1()
                 .border_color(cx.theme().border)
                 .bg(cx.theme().background)
-                .child("No active tab")
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Right-click collection → New Request")
+                )
         });
 
         // Build send button
@@ -903,14 +913,23 @@ impl Render for RequestEditor {
                         h_flex()
                             .p_2()
                             .child(
-                                div()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Add parameter functionality coming soon"),
+                                Button::new("add-param")
+                                    .label("Add Parameter")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.app_state.update(cx, |state, cx| {
+                                            if let Some(tab) = state.active_tab_mut() {
+                                                let key_input = cx.new(|cx| InputState::new(window, cx));
+                                                let value_input = cx.new(|cx| InputState::new(window, cx));
+                                                tab.params.push(crate::app_state::KeyValueRow {
+                                                    id: Uuid::new_v4(),
+                                                    enabled: true,
+                                                    key_input,
+                                                    value_input,
+                                                });
+                                            }
+                                            cx.notify();
+                                        });
+                                    })),
                             ),
                     ),
             );
@@ -962,14 +981,23 @@ impl Render for RequestEditor {
                         h_flex()
                             .p_2()
                             .child(
-                                div()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("Add header functionality coming soon"),
+                                Button::new("add-header")
+                                    .label("Add Header")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.app_state.update(cx, |state, cx| {
+                                            if let Some(tab) = state.active_tab_mut() {
+                                                let key_input = cx.new(|cx| InputState::new(window, cx));
+                                                let value_input = cx.new(|cx| InputState::new(window, cx));
+                                                tab.headers.push(crate::app_state::KeyValueRow {
+                                                    id: Uuid::new_v4(),
+                                                    enabled: true,
+                                                    key_input,
+                                                    value_input,
+                                                });
+                                            }
+                                            cx.notify();
+                                        });
+                                    })),
                             ),
                     ),
             );

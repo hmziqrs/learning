@@ -840,10 +840,26 @@ impl Render for SidebarPanel {
                                     .rounded_lg()
                                     .cursor_pointer();
 
+                                // Clone metadata and view for the mouse handler
+                                let metadata_for_handler = metadata.clone();
+                                let view_for_handler = view.clone();
+
                                 // Add selection background
                                 if selected {
                                     content = content.bg(cx.theme().muted);
                                 }
+
+                                // Add right-click handler
+                                let content = content.on_mouse_down(MouseButton::Right, {
+                                    let metadata = metadata_for_handler.clone();
+                                    move |event: &gpui::MouseDownEvent, _window: &mut Window, cx: &mut App| {
+                                        let x: f32 = event.position.x.into();
+                                        let y: f32 = event.position.y.into();
+                                        view_for_handler.update(cx, |view, cx| {
+                                            view.on_item_right_click(metadata.clone(), x, y, cx);
+                                        });
+                                    }
+                                });
 
                                 // Add icon or HTTP method badge
                                 let content = if is_collection || is_folder {
@@ -885,14 +901,9 @@ impl Render for SidebarPanel {
                                                 .text_color(cx.theme().muted_foreground),
                                         )
                                     }
-                                };
+ };
 
-                                // Build list item with click and right-click handlers
-                                // Note: In a real implementation, we would need to handle click events
-                                // through the Tree component's selection mechanism or by using
-                                // the window's event system. For now, the tree displays correctly.
-                                // Click handling is implemented via the Tree component's selection system.
-
+                                // Build list item with right-click handler on content
                                 list::ListItem::new(ix)
                                     .w_full()
                                     .selected(selected)
