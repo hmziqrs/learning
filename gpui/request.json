@@ -1,8 +1,0 @@
-{
-  "name": "Test GET",
-  "method": "GET",
-  "url": "https://httpbin.org/get",
-  "headers": [{"key": "User-Agent", "value": "ReqForge", "enabled": true}],
-  "query_params": [{"key": "test", "value": "true", "enabled": true}],
-  "body": "None"
-}
