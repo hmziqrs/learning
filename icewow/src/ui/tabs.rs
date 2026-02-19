@@ -1,6 +1,5 @@
-use iced::mouse;
 use iced::widget::{button, container, mouse_area, row, text};
-use iced::{Element, Length};
+use iced::{mouse, Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
 use crate::model::DragState;
@@ -13,25 +12,9 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     for (index, tab) in app.state.tabs.iter().enumerate() {
         let active = app.state.active_tab == Some(tab.id);
 
-        let chip = container(
+        let chip_content = container(
             row![
-                mouse_area(
-                    container(text("⋮⋮").size(13))
-                        .padding([4, 6])
-                        .style(|theme| crate::ui::styles::drag_handle(theme)),
-                )
-                .on_press(Message::StartDragTab(tab.id, index))
-                .interaction(mouse::Interaction::Grab),
-                button(text(tab.title.clone()).size(14))
-                    .padding([4, 8])
-                    .on_press(Message::SelectTab(tab.id))
-                    .style(move |theme, status| {
-                        if active {
-                            crate::ui::styles::secondary_button(theme, status)
-                        } else {
-                            crate::ui::styles::handle_button(theme, status)
-                        }
-                    }),
+                container(text(tab.title.clone()).size(14)).width(Length::Fill),
                 button("×")
                     .padding([4, 6])
                     .on_press(Message::AskDeleteTab(tab.id))
@@ -40,8 +23,17 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
             .spacing(4)
             .align_y(iced::Alignment::Center),
         )
-        .padding(4)
+        .padding([6, 8])
         .style(move |theme| crate::ui::styles::tab_chip(theme, active));
+
+        let chip: Element<'_, Message> = mouse_area(chip_content)
+            .on_press(Message::BeginLongPressTab {
+                tab_id: tab.id,
+                source_index: index,
+            })
+            .on_enter(Message::HoverTabIndex(index + 1))
+            .interaction(mouse::Interaction::Grab)
+            .into();
 
         tabs_row = tabs_row.push(chip).push(tab_drop_zone(app, index + 1));
     }
@@ -74,8 +66,8 @@ fn tab_drop_zone(app: &PostmanUiApp, index: usize) -> Element<'_, Message> {
 
     mouse_area(
         container(text(""))
-            .width(Length::Fixed(8.0))
-            .height(Length::Fixed(28.0))
+            .width(Length::Fixed(10.0))
+            .height(Length::Fixed(30.0))
             .style(move |theme| crate::ui::styles::tab_insert(theme, active)),
     )
     .on_enter(Message::HoverTabIndex(index))

@@ -1,28 +1,107 @@
-use iced::mouse;
-use iced::widget::{button, column, container, mouse_area, row, scrollable, text, Space};
-use iced::{Element, Length};
+use iced::widget::{button, column, container, mouse_area, row, scrollable, stack, text, Space};
+use iced::{mouse, Element, Length};
 
-use crate::app::{Message, PostmanUiApp};
+use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
 use crate::model::{
-    ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
+    ClickAction, ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
 };
 
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
 
-    if app.state.open_context_menu == Some(ContextMenuTarget::ProjectRoot) {
-        entries.push(project_menu());
-    }
-
     render_nodes(app, None, &app.state.tree_root, 1, &mut entries);
 
     let content = column(entries).spacing(4).padding(8);
 
-    container(scrollable(content))
+    container(scrollable(content).id(sidebar_scroll_id()))
         .width(Length::Fixed(320.0))
         .height(Length::Fill)
         .style(|theme| crate::ui::styles::sidebar_panel(theme))
         .into()
+}
+
+pub fn view_context_menu_overlay(app: &PostmanUiApp) -> Option<Element<'_, Message>> {
+    let target = app.state.open_context_menu?;
+
+    let pos = app
+        .state
+        .context_menu_position
+        .unwrap_or(app.state.pointer_position);
+
+    let max_x = (app.state.window_size.width - 220.0).max(8.0);
+    let max_y = (app.state.window_size.height - 220.0).max(8.0);
+
+    let x = pos.x.clamp(8.0, max_x);
+    let y = pos.y.clamp(8.0, max_y);
+
+    let menu_items = menu_items(target);
+
+    let menu = container(column(menu_items).spacing(4))
+        .padding(6)
+        .width(Length::Fixed(210.0))
+        .style(|theme| crate::ui::styles::context_menu(theme));
+
+    let dismiss_layer: Element<'_, Message> =
+        mouse_area(container(text("")).width(Length::Fill).height(Length::Fill))
+            .on_press(Message::CloseContextMenu)
+            .into();
+
+    let position_layer: Element<'_, Message> = container(
+        column![
+            Space::new().height(Length::Fixed(y)),
+            row![Space::new().width(Length::Fixed(x)), menu].align_y(iced::Alignment::Start),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into();
+
+    Some(stack([dismiss_layer, position_layer]).into())
+}
+
+fn menu_items(target: ContextMenuTarget) -> Vec<Element<'static, Message>> {
+    match target {
+        ContextMenuTarget::ProjectRoot => vec![
+            button("New Folder")
+                .on_press(Message::CreateFolder { parent: None })
+                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
+                .into(),
+            button("New Request")
+                .on_press(Message::CreateRequest { parent: None })
+                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
+                .into(),
+        ],
+        ContextMenuTarget::Folder(folder_id) => vec![
+            button("New Folder")
+                .on_press(Message::CreateFolder {
+                    parent: Some(folder_id),
+                })
+                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
+                .into(),
+            button("New Request")
+                .on_press(Message::CreateRequest {
+                    parent: Some(folder_id),
+                })
+                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
+                .into(),
+            button("Delete Folder")
+                .on_press(Message::AskDeleteFolder(folder_id))
+                .style(|theme, status| crate::ui::styles::danger_button(theme, status))
+                .into(),
+        ],
+        ContextMenuTarget::Request(request_id) => vec![
+            button("Open Request")
+                .on_press(Message::SelectRequest(request_id))
+                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
+                .into(),
+            button("Delete Request")
+                .on_press(Message::AskDeleteRequest(request_id))
+                .style(|theme, status| crate::ui::styles::danger_button(theme, status))
+                .into(),
+        ],
+    }
 }
 
 fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
@@ -42,22 +121,6 @@ fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
         .width(Length::Fill)
         .style(|theme| crate::ui::styles::tree_row(theme, true, false))
         .into()
-}
-
-fn project_menu() -> Element<'static, Message> {
-    context_menu(
-        vec![
-            button("New Folder")
-                .on_press(Message::CreateFolder { parent: None })
-                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
-                .into(),
-            button("New Request")
-                .on_press(Message::CreateRequest { parent: None })
-                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
-                .into(),
-        ],
-        1,
-    )
 }
 
 fn render_nodes<'a>(
@@ -87,20 +150,12 @@ fn render_nodes<'a>(
             TreeNode::Folder(folder) => {
                 out.push(folder_row(app, parent, index, depth, folder));
 
-                if app.state.open_context_menu == Some(ContextMenuTarget::Folder(folder.id)) {
-                    out.push(folder_menu(folder.id, depth + 1));
-                }
-
                 if folder.expanded {
                     render_nodes(app, Some(folder.id), &folder.children, depth + 1, out);
                 }
             }
             TreeNode::Request(request) => {
                 out.push(request_row(app, parent, index, depth, request));
-
-                if app.state.open_context_menu == Some(ContextMenuTarget::Request(request.id)) {
-                    out.push(request_menu(request.id, depth + 1));
-                }
             }
         }
 
@@ -127,11 +182,6 @@ fn folder_row<'a>(
     let inside_active = is_sidebar_hover(app, inside_target);
 
     let row = row![
-        drag_handle(Message::StartDragSidebar(
-            DragKind::Folder(folder.id),
-            parent,
-            index,
-        )),
         button(if folder.expanded { "▾" } else { "▸" })
             .padding([2, 6])
             .on_press(Message::ToggleFolder(folder.id))
@@ -139,7 +189,9 @@ fn folder_row<'a>(
         container(text(folder.name.clone()).size(14)).width(Length::Fill),
         button("⋯")
             .padding([2, 6])
-            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(folder.id)))
+            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
+                folder.id
+            )))
             .style(|theme, status| crate::ui::styles::handle_button(theme, status)),
     ]
     .spacing(4)
@@ -151,35 +203,18 @@ fn folder_row<'a>(
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, false, inside_active)),
     )
+    .on_press(Message::BeginLongPressSidebar {
+        kind: DragKind::Folder(folder.id),
+        source_parent: parent,
+        source_index: index,
+        click_action: None,
+    })
     .on_enter(Message::HoverSidebarTarget(inside_target))
     .on_exit(Message::ClearSidebarHover)
+    .interaction(mouse::Interaction::Grab)
     .into();
 
     indent(depth, inner)
-}
-
-fn folder_menu(folder_id: FolderId, depth: u16) -> Element<'static, Message> {
-    context_menu(
-        vec![
-            button("New Folder")
-                .on_press(Message::CreateFolder {
-                    parent: Some(folder_id),
-                })
-                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
-                .into(),
-            button("New Request")
-                .on_press(Message::CreateRequest {
-                    parent: Some(folder_id),
-                })
-                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
-                .into(),
-            button("Delete Folder")
-                .on_press(Message::AskDeleteFolder(folder_id))
-                .style(|theme, status| crate::ui::styles::danger_button(theme, status))
-                .into(),
-        ],
-        depth,
-    )
 }
 
 fn request_row<'a>(
@@ -195,64 +230,34 @@ fn request_row<'a>(
         .is_some_and(|tab| tab.request_id == Some(request.id));
 
     let row = row![
-        drag_handle(Message::StartDragSidebar(
-            DragKind::Request(request.id),
-            parent,
-            index,
-        )),
-        container(text(" ")).width(Length::Fixed(18.0)),
-        button(text(request.name.clone()).size(14))
-            .on_press(Message::SelectRequest(request.id))
-            .padding([2, 6])
-            .width(Length::Fill)
-            .style(move |theme, status| {
-                if selected {
-                    crate::ui::styles::secondary_button(theme, status)
-                } else {
-                    crate::ui::styles::handle_button(theme, status)
-                }
-            }),
+        container(text("•").size(14)).width(Length::Fixed(18.0)),
+        container(text(request.name.clone()).size(14)).width(Length::Fill),
         button("⋯")
             .padding([2, 6])
-            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(request.id)))
+            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
+                request.id,
+            )))
             .style(|theme, status| crate::ui::styles::handle_button(theme, status)),
     ]
     .spacing(4)
     .align_y(iced::Alignment::Center);
 
-    let inner: Element<'a, Message> = container(row)
-        .padding([4, 6])
-        .width(Length::Fill)
-        .style(move |theme| crate::ui::styles::tree_row(theme, selected, false))
-        .into();
+    let inner: Element<'a, Message> = mouse_area(
+        container(row)
+            .padding([4, 6])
+            .width(Length::Fill)
+            .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
+    )
+    .on_press(Message::BeginLongPressSidebar {
+        kind: DragKind::Request(request.id),
+        source_parent: parent,
+        source_index: index,
+        click_action: Some(ClickAction::SelectRequest(request.id)),
+    })
+    .interaction(mouse::Interaction::Grab)
+    .into();
 
     indent(depth, inner)
-}
-
-fn request_menu(request_id: u64, depth: u16) -> Element<'static, Message> {
-    context_menu(
-        vec![
-            button("Open Request")
-                .on_press(Message::SelectRequest(request_id))
-                .style(|theme, status| crate::ui::styles::menu_button(theme, status))
-                .into(),
-            button("Delete Request")
-                .on_press(Message::AskDeleteRequest(request_id))
-                .style(|theme, status| crate::ui::styles::danger_button(theme, status))
-                .into(),
-        ],
-        depth,
-    )
-}
-
-fn context_menu<'a>(items: Vec<Element<'a, Message>>, depth: u16) -> Element<'a, Message> {
-    let menu = container(column(items).spacing(4))
-        .padding(6)
-        .width(Length::Shrink)
-        .style(|theme| crate::ui::styles::context_menu(theme))
-        .into();
-
-    indent(depth, menu)
 }
 
 fn indent<'a>(depth: u16, inner: Element<'a, Message>) -> Element<'a, Message> {
@@ -288,15 +293,4 @@ fn is_sidebar_hover(app: &PostmanUiApp, target: SidebarDropTarget) -> bool {
             ..
         }) if current == target
     )
-}
-
-fn drag_handle<'a>(start: Message) -> Element<'a, Message> {
-    mouse_area(
-        container(text("⋮⋮").size(13))
-            .padding([3, 6])
-            .style(|theme| crate::ui::styles::drag_handle(theme)),
-    )
-    .on_press(start)
-    .interaction(mouse::Interaction::Grab)
-    .into()
 }

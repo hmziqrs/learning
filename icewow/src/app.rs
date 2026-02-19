@@ -1,9 +1,10 @@
 use iced::widget::{column, container, row, stack, text, text_input};
-use iced::{event, mouse, Element, Length, Subscription, Task, Theme};
+use iced::{event, mouse, window, Element, Length, Subscription, Task, Theme};
+use std::time::Duration;
 
 use crate::model::{
-    AppState, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId, NodeRef, RequestId,
-    SidebarDropTarget, Tab,
+    AppState, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId, NodeRef,
+    PendingLongPress, PressKind, RequestId, SidebarDropTarget, Tab,
 };
 use crate::tree_ops;
 use crate::ui;
@@ -15,26 +16,40 @@ pub struct PostmanUiApp {
 #[derive(Debug, Clone)]
 pub enum Message {
     ToggleContextMenu(ContextMenuTarget),
-    CreateFolder { parent: Option<FolderId> },
-    CreateRequest { parent: Option<FolderId> },
+    CloseContextMenu,
+    CreateFolder {
+        parent: Option<FolderId>,
+    },
+    CreateRequest {
+        parent: Option<FolderId>,
+    },
     AskDeleteFolder(FolderId),
     AskDeleteRequest(RequestId),
     AskDeleteTab(u64),
     ConfirmDelete,
     CancelDelete,
     SelectRequest(RequestId),
-    SelectTab(u64),
     NewTab,
     UrlChanged(String),
     ToggleFolder(FolderId),
-    StartDragSidebar(DragKind, Option<FolderId>, usize),
+    BeginLongPressSidebar {
+        kind: DragKind,
+        source_parent: Option<FolderId>,
+        source_index: usize,
+        click_action: Option<ClickAction>,
+    },
+    BeginLongPressTab {
+        tab_id: u64,
+        source_index: usize,
+    },
+    LongPressElapsed(u64),
     HoverSidebarTarget(SidebarDropTarget),
     ClearSidebarHover,
-    StartDragTab(u64, usize),
     HoverTabIndex(usize),
     ClearTabHover,
     PointerMoved(iced::Point),
     PointerReleased,
+    WindowResized(iced::Size),
 }
 
 impl PostmanUiApp {
@@ -52,9 +67,15 @@ impl PostmanUiApp {
             Message::ToggleContextMenu(target) => {
                 if self.state.open_context_menu == Some(target) {
                     self.state.open_context_menu = None;
+                    self.state.context_menu_position = None;
                 } else {
                     self.state.open_context_menu = Some(target);
+                    self.state.context_menu_position = Some(self.state.pointer_position);
                 }
+            }
+            Message::CloseContextMenu => {
+                self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
             }
             Message::CreateFolder { parent } => {
                 let id = self.state.alloc_folder_id();
@@ -70,6 +91,7 @@ impl PostmanUiApp {
                 let index = self.children_len(parent);
                 let _ = tree_ops::insert_node(&mut self.state.tree_root, parent, index, folder);
                 self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
             }
             Message::CreateRequest { parent } => {
                 let id = self.state.alloc_request_id();
@@ -84,14 +106,17 @@ impl PostmanUiApp {
                 let index = self.children_len(parent);
                 let _ = tree_ops::insert_node(&mut self.state.tree_root, parent, index, request);
                 self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
             }
             Message::AskDeleteFolder(folder_id) => {
                 self.state.delete_dialog = Some(DeleteDialog::Folder(folder_id));
                 self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
             }
             Message::AskDeleteRequest(request_id) => {
                 self.state.delete_dialog = Some(DeleteDialog::Request(request_id));
                 self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
             }
             Message::AskDeleteTab(tab_id) => {
                 self.state.delete_dialog = Some(DeleteDialog::Tab(tab_id));
@@ -130,10 +155,7 @@ impl PostmanUiApp {
             Message::SelectRequest(request_id) => {
                 self.open_request_tab(request_id);
                 self.state.open_context_menu = None;
-            }
-            Message::SelectTab(tab_id) => {
-                self.state.active_tab = Some(tab_id);
-                self.state.sync_url_input_from_active_tab();
+                self.state.context_menu_position = None;
             }
             Message::NewTab => {
                 let id = self.state.alloc_tab_id();
@@ -163,14 +185,93 @@ impl PostmanUiApp {
                     );
                 }
             }
-            Message::StartDragSidebar(kind, source_parent, source_index) => {
-                self.state.drag_state = Some(DragState::Sidebar {
-                    kind,
-                    source_parent,
-                    source_index,
-                    hover: None,
+            Message::BeginLongPressSidebar {
+                kind,
+                source_parent,
+                source_index,
+                click_action,
+            } => {
+                let token = self.state.alloc_press_token();
+                self.state.pending_long_press = Some(PendingLongPress {
+                    token,
+                    kind: PressKind::Sidebar {
+                        kind,
+                        source_parent,
+                        source_index,
+                    },
+                    click_action,
                 });
                 self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
+
+                return Task::perform(
+                    async move {
+                        tokio::time::sleep(Duration::from_millis(220)).await;
+                        token
+                    },
+                    Message::LongPressElapsed,
+                );
+            }
+            Message::BeginLongPressTab {
+                tab_id,
+                source_index,
+            } => {
+                let token = self.state.alloc_press_token();
+                self.state.pending_long_press = Some(PendingLongPress {
+                    token,
+                    kind: PressKind::Tab {
+                        tab_id,
+                        source_index,
+                    },
+                    click_action: Some(ClickAction::SelectTab(tab_id)),
+                });
+                self.state.open_context_menu = None;
+                self.state.context_menu_position = None;
+
+                return Task::perform(
+                    async move {
+                        tokio::time::sleep(Duration::from_millis(220)).await;
+                        token
+                    },
+                    Message::LongPressElapsed,
+                );
+            }
+            Message::LongPressElapsed(token) => {
+                if self
+                    .state
+                    .pending_long_press
+                    .is_some_and(|pending| pending.token == token)
+                    && self.state.drag_state.is_none()
+                {
+                    let pending = self.state.pending_long_press.take();
+
+                    if let Some(pending) = pending {
+                        match pending.kind {
+                            PressKind::Sidebar {
+                                kind,
+                                source_parent,
+                                source_index,
+                            } => {
+                                self.state.drag_state = Some(DragState::Sidebar {
+                                    kind,
+                                    source_parent,
+                                    source_index,
+                                    hover: None,
+                                });
+                            }
+                            PressKind::Tab {
+                                tab_id,
+                                source_index,
+                            } => {
+                                self.state.drag_state = Some(DragState::Tabs {
+                                    tab_id,
+                                    source_index,
+                                    hover_index: Some(source_index),
+                                });
+                            }
+                        }
+                    }
+                }
             }
             Message::HoverSidebarTarget(target) => {
                 if let Some(DragState::Sidebar { hover, .. }) = &mut self.state.drag_state {
@@ -181,14 +282,6 @@ impl PostmanUiApp {
                 if let Some(DragState::Sidebar { hover, .. }) = &mut self.state.drag_state {
                     *hover = None;
                 }
-            }
-            Message::StartDragTab(tab_id, source_index) => {
-                self.state.drag_state = Some(DragState::Tabs {
-                    tab_id,
-                    source_index,
-                    hover_index: Some(source_index),
-                });
-                self.state.open_context_menu = None;
             }
             Message::HoverTabIndex(index) => {
                 if let Some(DragState::Tabs { hover_index, .. }) = &mut self.state.drag_state {
@@ -202,23 +295,40 @@ impl PostmanUiApp {
             }
             Message::PointerMoved(position) => {
                 self.state.pointer_position = position;
+
+                if let Some(task) = self.maybe_sidebar_auto_scroll_task() {
+                    return task;
+                }
             }
             Message::PointerReleased => match self.state.drag_state {
                 Some(DragState::Sidebar { .. }) => self.finish_sidebar_drag(),
                 Some(DragState::Tabs { .. }) => self.finish_tab_drag(),
-                None => {}
+                None => {
+                    if let Some(pending) = self.state.pending_long_press.take() {
+                        if let Some(click_action) = pending.click_action {
+                            match click_action {
+                                ClickAction::SelectRequest(request_id) => {
+                                    self.open_request_tab(request_id);
+                                }
+                                ClickAction::SelectTab(tab_id) => {
+                                    self.state.active_tab = Some(tab_id);
+                                    self.state.sync_url_input_from_active_tab();
+                                }
+                            }
+                        }
+                    }
+                }
             },
+            Message::WindowResized(size) => {
+                self.state.window_size = size;
+            }
         }
 
         Task::none()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.state.drag_state.is_none() {
-            return Subscription::none();
-        }
-
-        event::listen_with(|event, _, _| match event {
+        let pointer_events = event::listen_with(|event, _, _| match event {
             iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
                 Some(Message::PointerMoved(position))
             }
@@ -226,7 +336,12 @@ impl PostmanUiApp {
                 Some(Message::PointerReleased)
             }
             _ => None,
-        })
+        });
+
+        let resize_events =
+            window::resize_events().map(|(_window_id, size)| Message::WindowResized(size));
+
+        Subscription::batch(vec![pointer_events, resize_events])
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -246,21 +361,20 @@ impl PostmanUiApp {
         .spacing(8)
         .padding(8);
 
-        if self.state.delete_dialog.is_some() {
-            stack([
-                container(base)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into(),
-                ui::delete_modal(self),
-            ])
-            .into()
-        } else {
-            container(base)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+        let mut root: Element<'_, Message> = container(base)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+
+        if let Some(menu_overlay) = ui::sidebar::view_context_menu_overlay(self) {
+            root = stack([root, menu_overlay]).into();
         }
+
+        if self.state.delete_dialog.is_some() {
+            root = stack([root, ui::delete_modal(self)]).into();
+        }
+
+        root
     }
 
     pub fn theme(&self) -> Theme {
@@ -379,6 +493,39 @@ impl PostmanUiApp {
         self.state.drag_state = None;
     }
 
+    fn maybe_sidebar_auto_scroll_task(&self) -> Option<Task<Message>> {
+        if !matches!(self.state.drag_state, Some(DragState::Sidebar { .. })) {
+            return None;
+        }
+
+        let x = self.state.pointer_position.x;
+        let y = self.state.pointer_position.y;
+
+        if x > 360.0 {
+            return None;
+        }
+
+        let top_zone = 150.0;
+        let bottom_zone = (self.state.window_size.height - 40.0).max(top_zone + 120.0);
+
+        let delta_y: f32 = if y < top_zone {
+            -14.0
+        } else if y > bottom_zone {
+            14.0
+        } else {
+            0.0
+        };
+
+        if delta_y.abs() < f32::EPSILON {
+            return None;
+        }
+
+        Some(iced::widget::operation::scroll_by(
+            sidebar_scroll_id(),
+            iced::widget::operation::AbsoluteOffset { x: 0.0, y: delta_y },
+        ))
+    }
+
     fn children_len(&self, parent: Option<FolderId>) -> usize {
         fn recurse(nodes: &[crate::model::TreeNode], id: FolderId) -> Option<usize> {
             for node in nodes {
@@ -420,4 +567,8 @@ impl PostmanUiApp {
 
         recurse(&self.state.tree_root, folder_id)
     }
+}
+
+pub fn sidebar_scroll_id() -> iced::widget::Id {
+    iced::widget::Id::new("sidebar-scroll")
 }

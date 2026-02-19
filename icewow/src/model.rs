@@ -93,6 +93,32 @@ pub enum ContextMenuTarget {
     Request(RequestId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PressKind {
+    Sidebar {
+        kind: DragKind,
+        source_parent: Option<FolderId>,
+        source_index: usize,
+    },
+    Tab {
+        tab_id: TabId,
+        source_index: usize,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClickAction {
+    SelectRequest(RequestId),
+    SelectTab(TabId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingLongPress {
+    pub token: u64,
+    pub kind: PressKind,
+    pub click_action: Option<ClickAction>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub project_name: String,
@@ -101,9 +127,13 @@ pub struct AppState {
     pub active_tab: Option<TabId>,
     pub url_input: String,
     pub drag_state: Option<DragState>,
+    pub pending_long_press: Option<PendingLongPress>,
     pub open_context_menu: Option<ContextMenuTarget>,
+    pub context_menu_position: Option<Point>,
     pub delete_dialog: Option<DeleteDialog>,
     pub pointer_position: Point,
+    pub window_size: iced::Size,
+    pub next_press_token: u64,
     pub next_folder_id: FolderId,
     pub next_request_id: RequestId,
     pub next_tab_id: TabId,
@@ -118,9 +148,13 @@ impl AppState {
             active_tab: None,
             url_input: String::new(),
             drag_state: None,
+            pending_long_press: None,
             open_context_menu: None,
+            context_menu_position: None,
             delete_dialog: None,
             pointer_position: Point::new(0.0, 0.0),
+            window_size: iced::Size::new(1300.0, 820.0),
+            next_press_token: 1,
             next_folder_id: 1,
             next_request_id: 1,
             next_tab_id: 1,
@@ -229,6 +263,12 @@ impl AppState {
         let id = self.next_tab_id;
         self.next_tab_id += 1;
         id
+    }
+
+    pub fn alloc_press_token(&mut self) -> u64 {
+        let token = self.next_press_token;
+        self.next_press_token += 1;
+        token
     }
 
     pub fn active_tab_mut(&mut self) -> Option<&mut Tab> {

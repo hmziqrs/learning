@@ -168,18 +168,6 @@ pub fn menu_button(theme: &Theme, status: button::Status) -> button::Style {
     style
 }
 
-pub fn drag_handle(theme: &Theme) -> container::Style {
-    let palette = theme.extended_palette();
-
-    container::Style {
-        background: Some(Background::Color(palette.background.weak.color)),
-        border: border::rounded(6)
-            .color(palette.background.strong.color)
-            .width(1),
-        ..container::Style::default()
-    }
-}
-
 pub fn secondary_button(theme: &Theme, status: button::Status) -> button::Style {
     let palette = theme.extended_palette();
 
