@@ -1,0 +1,10 @@
+[package]
+name = "icewow"
+version = "0.1.0"
+edition = "2021"
+description = "An iced.rs GUI application"
+authors = ["hmziq"]
+
+[dependencies]
+iced = { version = "0.14", features = ["tokio", "canvas", "svg", "image"] }
+tokio = { version = "1", features = ["full"] }
