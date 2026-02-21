@@ -370,6 +370,10 @@ impl PostmanUiApp {
             root = stack([root, menu_overlay]).into();
         }
 
+        if let Some(drag_overlay) = ui::drag_preview_overlay(self) {
+            root = stack([root, drag_overlay]).into();
+        }
+
         if self.state.delete_dialog.is_some() {
             root = stack([root, ui::delete_modal(self)]).into();
         }
@@ -433,6 +437,31 @@ impl PostmanUiApp {
         self.state.active_tab = Some(tab.id);
         self.state.tabs.push(tab);
         self.state.sync_url_input_from_active_tab();
+    }
+
+    pub fn drag_preview_text(&self) -> Option<String> {
+        match self.state.drag_state {
+            Some(DragState::Sidebar {
+                kind: DragKind::Folder(folder_id),
+                ..
+            }) => self
+                .find_folder_name(folder_id)
+                .map(|name| format!("Folder: {name}")),
+            Some(DragState::Sidebar {
+                kind: DragKind::Request(request_id),
+                ..
+            }) => self
+                .state
+                .find_request(request_id)
+                .map(|request| format!("Request: {}", request.name)),
+            Some(DragState::Tabs { tab_id, .. }) => self
+                .state
+                .tabs
+                .iter()
+                .find(|tab| tab.id == tab_id)
+                .map(|tab| format!("Tab: {}", tab.title)),
+            None => None,
+        }
     }
 
     fn finish_sidebar_drag(&mut self) {
@@ -557,6 +586,26 @@ impl PostmanUiApp {
                     }
 
                     if let Some(found) = recurse(&folder.children, id) {
+                        return Some(found);
+                    }
+                }
+            }
+
+            None
+        }
+
+        recurse(&self.state.tree_root, folder_id)
+    }
+
+    fn find_folder_name(&self, folder_id: FolderId) -> Option<&str> {
+        fn recurse(nodes: &[crate::model::TreeNode], folder_id: FolderId) -> Option<&str> {
+            for node in nodes {
+                if let crate::model::TreeNode::Folder(folder) = node {
+                    if folder.id == folder_id {
+                        return Some(folder.name.as_str());
+                    }
+
+                    if let Some(found) = recurse(&folder.children, folder_id) {
                         return Some(found);
                     }
                 }

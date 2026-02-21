@@ -6,12 +6,10 @@ use crate::model::DragState;
 
 pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut tabs_row = row![].spacing(4).align_y(iced::Alignment::Center);
-    let order = preview_tab_order(app);
 
     tabs_row = tabs_row.push(tab_drop_zone(app, 0));
 
-    for (slot_index, &original_index) in order.iter().enumerate() {
-        let tab = &app.state.tabs[original_index];
+    for (index, tab) in app.state.tabs.iter().enumerate() {
         let active = app.state.active_tab == Some(tab.id);
 
         let chip_content = container(
@@ -28,17 +26,16 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         .padding([6, 8])
         .style(move |theme| crate::ui::styles::tab_chip(theme, active));
 
-        let source_index = original_index;
         let chip: Element<'_, Message> = mouse_area(chip_content)
             .on_press(Message::BeginLongPressTab {
                 tab_id: tab.id,
-                source_index,
+                source_index: index,
             })
-            .on_enter(Message::HoverTabIndex(slot_index + 1))
+            .on_enter(Message::HoverTabIndex(index + 1))
             .interaction(mouse::Interaction::Grab)
             .into();
 
-        tabs_row = tabs_row.push(chip).push(tab_drop_zone(app, slot_index + 1));
+        tabs_row = tabs_row.push(chip).push(tab_drop_zone(app, index + 1));
     }
 
     let container = container(
@@ -76,36 +73,4 @@ fn tab_drop_zone(app: &PostmanUiApp, index: usize) -> Element<'_, Message> {
     .on_enter(Message::HoverTabIndex(index))
     .on_exit(Message::ClearTabHover)
     .into()
-}
-
-fn preview_tab_order(app: &PostmanUiApp) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..app.state.tabs.len()).collect();
-
-    let Some(DragState::Tabs {
-        source_index,
-        hover_index,
-        ..
-    }) = app.state.drag_state
-    else {
-        return order;
-    };
-
-    if source_index >= order.len() {
-        return order;
-    }
-
-    let Some(mut target) = hover_index else {
-        return order;
-    };
-
-    target = target.min(order.len());
-
-    let item = order.remove(source_index);
-
-    if source_index < target {
-        target = target.saturating_sub(1);
-    }
-
-    order.insert(target, item);
-    order
 }

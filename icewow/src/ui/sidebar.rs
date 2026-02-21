@@ -139,10 +139,7 @@ fn render_nodes<'a>(
         return;
     }
 
-    let order = preview_order_for_parent(app, parent, nodes.len());
-
-    for &index in &order {
-        let node = &nodes[index];
+    for (index, node) in nodes.iter().enumerate() {
         out.push(drop_line(
             app,
             SidebarDropTarget::Before { parent, index },
@@ -296,47 +293,4 @@ fn is_sidebar_hover(app: &PostmanUiApp, target: SidebarDropTarget) -> bool {
             ..
         }) if current == target
     )
-}
-
-fn preview_order_for_parent(
-    app: &PostmanUiApp,
-    parent: Option<FolderId>,
-    len: usize,
-) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..len).collect();
-
-    let Some(DragState::Sidebar {
-        source_parent,
-        source_index,
-        hover,
-        ..
-    }) = app.state.drag_state
-    else {
-        return order;
-    };
-
-    if source_parent != parent || source_index >= len {
-        return order;
-    }
-
-    let Some(target) = hover else {
-        return order;
-    };
-
-    let mut target_index = match target {
-        SidebarDropTarget::Before { parent: p, index } if p == parent => index,
-        SidebarDropTarget::After { parent: p, index } if p == parent => index.saturating_add(1),
-        _ => return order,
-    };
-
-    target_index = target_index.min(len);
-
-    let moved = order.remove(source_index);
-
-    if source_index < target_index {
-        target_index = target_index.saturating_sub(1);
-    }
-
-    order.insert(target_index, moved);
-    order
 }
