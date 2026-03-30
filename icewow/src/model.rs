@@ -4,6 +4,48 @@ pub type FolderId = u64;
 pub type RequestId = u64;
 pub type TabId = u64;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HttpMethod {
+    Get,
+    Post,
+    Put,
+    Delete,
+    Patch,
+}
+
+impl HttpMethod {
+    pub const ALL: [HttpMethod; 5] = [
+        HttpMethod::Get,
+        HttpMethod::Post,
+        HttpMethod::Put,
+        HttpMethod::Delete,
+        HttpMethod::Patch,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HttpMethod::Get => "GET",
+            HttpMethod::Post => "POST",
+            HttpMethod::Put => "PUT",
+            HttpMethod::Delete => "DELETE",
+            HttpMethod::Patch => "PATCH",
+        }
+    }
+}
+
+impl std::fmt::Display for HttpMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponseData {
+    pub status_code: u16,
+    pub body: String,
+    pub elapsed_ms: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TreeNode {
     Folder(FolderNode),
@@ -23,6 +65,7 @@ pub struct RequestNode {
     pub id: RequestId,
     pub name: String,
     pub url: String,
+    pub method: HttpMethod,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +74,7 @@ pub struct Tab {
     pub request_id: Option<RequestId>,
     pub title: String,
     pub url_input: String,
+    pub method: HttpMethod,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +181,8 @@ pub struct AppState {
     pub next_folder_id: FolderId,
     pub next_request_id: RequestId,
     pub next_tab_id: TabId,
+    pub response: Option<ResponseData>,
+    pub loading: bool,
 }
 
 impl AppState {
@@ -158,6 +204,8 @@ impl AppState {
             next_folder_id: 1,
             next_request_id: 1,
             next_tab_id: 1,
+            response: None,
+            loading: false,
         };
 
         let users_folder = FolderNode {
@@ -169,11 +217,13 @@ impl AppState {
                     id: state.alloc_request_id(),
                     name: "Get Users".to_string(),
                     url: "https://api.example.com/users".to_string(),
+                    method: HttpMethod::Get,
                 }),
                 TreeNode::Request(RequestNode {
                     id: state.alloc_request_id(),
                     name: "Create User".to_string(),
                     url: "https://api.example.com/users".to_string(),
+                    method: HttpMethod::Post,
                 }),
                 TreeNode::Folder(FolderNode {
                     id: state.alloc_folder_id(),
@@ -183,6 +233,7 @@ impl AppState {
                         id: state.alloc_request_id(),
                         name: "Delete User".to_string(),
                         url: "https://api.example.com/admin/users/1".to_string(),
+                        method: HttpMethod::Delete,
                     })],
                 }),
             ],
@@ -196,6 +247,7 @@ impl AppState {
                 id: state.alloc_request_id(),
                 name: "List Products".to_string(),
                 url: "https://api.example.com/products".to_string(),
+                method: HttpMethod::Get,
             })],
         };
 
@@ -206,25 +258,28 @@ impl AppState {
                 id: state.alloc_request_id(),
                 name: "Health Check".to_string(),
                 url: "https://api.example.com/health".to_string(),
+                method: HttpMethod::Get,
             }),
         ];
 
         let get_users = state
             .find_request(1)
-            .map(|r| (r.id, r.name.clone(), r.url.clone()))
+            .map(|r| (r.id, r.name.clone(), r.url.clone(), r.method))
             .unwrap_or((
                 0,
                 "Get Users".to_string(),
                 "https://api.example.com/users".to_string(),
+                HttpMethod::Get,
             ));
 
         let list_products = state
             .find_request(4)
-            .map(|r| (r.id, r.name.clone(), r.url.clone()))
+            .map(|r| (r.id, r.name.clone(), r.url.clone(), r.method))
             .unwrap_or((
                 0,
                 "List Products".to_string(),
                 "https://api.example.com/products".to_string(),
+                HttpMethod::Get,
             ));
 
         let tab_a = Tab {
@@ -232,12 +287,14 @@ impl AppState {
             request_id: Some(get_users.0),
             title: get_users.1,
             url_input: get_users.2,
+            method: get_users.3,
         };
         let tab_b = Tab {
             id: state.alloc_tab_id(),
             request_id: Some(list_products.0),
             title: list_products.1,
             url_input: list_products.2,
+            method: list_products.3,
         };
 
         state.tabs = vec![tab_a, tab_b];

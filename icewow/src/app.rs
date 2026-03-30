@@ -1,10 +1,11 @@
-use iced::widget::{column, container, row, stack, text, text_input};
+use iced::widget::{column, container, pick_list, row, stack, text, text_input};
 use iced::{event, mouse, window, Element, Length, Subscription, Task, Theme};
 use std::time::Duration;
 
 use crate::model::{
-    AppState, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId, NodeRef,
-    PendingLongPress, PressKind, RequestId, SidebarDropTarget, Tab,
+    AppState, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId,
+    HttpMethod, NodeRef, PendingLongPress, PressKind, RequestId, ResponseData, SidebarDropTarget,
+    Tab,
 };
 use crate::tree_ops;
 use crate::ui;
@@ -50,6 +51,9 @@ pub enum Message {
     PointerMoved(iced::Point),
     PointerReleased,
     WindowResized(iced::Size),
+    SendRequest,
+    RequestFinished(Result<ResponseData, String>),
+    MethodChanged(HttpMethod),
 }
 
 impl PostmanUiApp {
@@ -101,6 +105,7 @@ impl PostmanUiApp {
                     id,
                     name,
                     url: "https://api.example.com/new".to_string(),
+                    method: HttpMethod::Get,
                 });
 
                 let index = self.children_len(parent);
@@ -164,11 +169,13 @@ impl PostmanUiApp {
                     request_id: None,
                     title: format!("New Tab {id}"),
                     url_input: String::new(),
+                    method: HttpMethod::Get,
                 };
 
                 self.state.tabs.push(tab);
                 self.state.active_tab = Some(id);
                 self.state.sync_url_input_from_active_tab();
+                self.state.response = None;
             }
             Message::UrlChanged(value) => {
                 self.state.url_input = value.clone();
@@ -313,6 +320,7 @@ impl PostmanUiApp {
                                 ClickAction::SelectTab(tab_id) => {
                                     self.state.active_tab = Some(tab_id);
                                     self.state.sync_url_input_from_active_tab();
+                                    self.state.response = None;
                                 }
                             }
                         }
@@ -321,6 +329,47 @@ impl PostmanUiApp {
             },
             Message::WindowResized(size) => {
                 self.state.window_size = size;
+            }
+            Message::SendRequest => {
+                let url = self.state.url_input.clone();
+                let method = self
+                    .state
+                    .active_tab_ref()
+                    .map(|t| t.method)
+                    .unwrap_or(HttpMethod::Get);
+
+                if url.is_empty() {
+                    return Task::none();
+                }
+
+                self.state.loading = true;
+                self.state.response = None;
+
+                return Task::perform(
+                    send_request(url, method),
+                    Message::RequestFinished,
+                );
+            }
+            Message::RequestFinished(result) => {
+                self.state.loading = false;
+                match result {
+                    Ok(response) => self.state.response = Some(response),
+                    Err(e) => self.state.response = Some(ResponseData {
+                        status_code: 0,
+                        body: format!("Error: {e}"),
+                        elapsed_ms: 0,
+                    }),
+                }
+            }
+            Message::MethodChanged(method) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.method = method;
+                }
+                if let Some(tab) = self.state.active_tab_ref() {
+                    if let Some(request_id) = tab.request_id {
+                        self.update_request_method(request_id, method);
+                    }
+                }
             }
         }
 
@@ -386,20 +435,44 @@ impl PostmanUiApp {
     }
 
     fn view_url_bar(&self) -> Element<'_, Message> {
+        let current_method = self
+            .state
+            .active_tab_ref()
+            .map(|t| t.method)
+            .unwrap_or(HttpMethod::Get);
+
+        let method_picker = pick_list(
+            &HttpMethod::ALL[..],
+            Some(current_method),
+            Message::MethodChanged,
+        )
+        .padding([8, 12])
+        .style(|theme, status| ui::styles::method_pick_list(theme, status));
+
         let input = text_input("https://api.example.com", &self.state.url_input)
             .on_input(Message::UrlChanged)
             .padding(10)
             .size(16)
             .width(Length::Fill);
 
-        let url_row = row![
-            container(text("GET").size(14))
-                .padding([8, 12])
-                .style(|theme| ui::styles::method_badge(theme)),
-            input,
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
+        let send_label = if self.state.loading {
+            "Sending..."
+        } else {
+            "Send"
+        };
+
+        let send_btn = iced::widget::button(text(send_label).size(14))
+            .on_press_maybe(if self.state.loading {
+                None
+            } else {
+                Some(Message::SendRequest)
+            })
+            .padding([8, 20])
+            .style(|theme, status| ui::styles::send_button(theme, status));
+
+        let url_row = row![method_picker, input, send_btn,]
+            .spacing(8)
+            .align_y(iced::Alignment::Center);
 
         container(url_row)
             .padding(10)
@@ -417,6 +490,7 @@ impl PostmanUiApp {
         {
             self.state.active_tab = Some(existing);
             self.state.sync_url_input_from_active_tab();
+            self.state.response = None;
             return;
         }
 
@@ -426,17 +500,20 @@ impl PostmanUiApp {
 
         let title = request.name.clone();
         let url = request.url.clone();
+        let method = request.method;
 
         let tab = Tab {
             id: self.state.alloc_tab_id(),
             request_id: Some(request_id),
             title,
             url_input: url,
+            method,
         };
 
         self.state.active_tab = Some(tab.id);
         self.state.tabs.push(tab);
         self.state.sync_url_input_from_active_tab();
+        self.state.response = None;
     }
 
     pub fn drag_preview_text(&self) -> Option<String> {
@@ -616,6 +693,48 @@ impl PostmanUiApp {
 
         recurse(&self.state.tree_root, folder_id)
     }
+
+    fn update_request_method(&mut self, request_id: RequestId, method: HttpMethod) {
+        fn recurse(nodes: &mut [crate::model::TreeNode], request_id: RequestId, method: HttpMethod) {
+            for node in nodes.iter_mut() {
+                if let crate::model::TreeNode::Request(ref mut req) = node {
+                    if req.id == request_id {
+                        req.method = method;
+                        return;
+                    }
+                }
+                if let crate::model::TreeNode::Folder(ref mut folder) = node {
+                    recurse(&mut folder.children, request_id, method);
+                }
+            }
+        }
+
+        recurse(&mut self.state.tree_root, request_id, method);
+    }
+}
+
+async fn send_request(url: String, method: HttpMethod) -> Result<ResponseData, String> {
+    let client = reqwest::Client::new();
+    let start = std::time::Instant::now();
+
+    let response = match method {
+        HttpMethod::Get => client.get(&url).send().await,
+        HttpMethod::Post => client.post(&url).send().await,
+        HttpMethod::Put => client.put(&url).send().await,
+        HttpMethod::Delete => client.delete(&url).send().await,
+        HttpMethod::Patch => client.patch(&url).send().await,
+    }
+    .map_err(|e| e.to_string())?;
+
+    let status_code = response.status().as_u16();
+    let body = response.text().await.map_err(|e| e.to_string())?;
+    let elapsed_ms = start.elapsed().as_millis() as u64;
+
+    Ok(ResponseData {
+        status_code,
+        body,
+        elapsed_ms,
+    })
 }
 
 pub fn sidebar_scroll_id() -> iced::widget::Id {

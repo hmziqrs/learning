@@ -220,7 +220,7 @@ fn remove_matching(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{FolderNode, RequestNode};
+    use crate::model::{FolderNode, HttpMethod, RequestNode};
 
     fn sample_tree() -> Vec<TreeNode> {
         vec![
@@ -233,11 +233,13 @@ mod tests {
                         id: 10,
                         name: "r1".to_string(),
                         url: "u1".to_string(),
+                        method: HttpMethod::Get,
                     }),
                     TreeNode::Request(RequestNode {
                         id: 11,
                         name: "r2".to_string(),
                         url: "u2".to_string(),
+                        method: HttpMethod::Get,
                     }),
                     TreeNode::Folder(FolderNode {
                         id: 3,
@@ -247,6 +249,7 @@ mod tests {
                             id: 12,
                             name: "r3".to_string(),
                             url: "u3".to_string(),
+                            method: HttpMethod::Get,
                         })],
                     }),
                 ],
