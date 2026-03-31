@@ -8,7 +8,7 @@ Two tracks, in order: **component wrappers first** (cleans up the codebase and c
 
 ---
 
-## Track 1: Component Wrappers
+## Track 1: Component Wrappers — DONE
 
 ### Problem
 
@@ -20,193 +20,100 @@ Repeated patterns across UI files:
 - `container(content).padding([...]).style(|t| styles::method_badge(t, method))` — 2 occurrences
 - `container(text("")).height(Length::Fixed(...)).width(Length::Fill).style(...)` — drop_line pattern repeated
 
-### Target Structure
+### Implementation
 
-Add a `ui/components.rs` module with small builder functions:
+**`src/ui/components.rs`** (new file) — 6 component functions:
+| Component | Line | Purpose |
+|---|---|---|
+| `icon_button(label)` | :8 | Small icon button (⋯, ×, ▾, ▸) using `handle_button` style |
+| `menu_button(label)` | :15 | Context menu item using `menu_button` style |
+| `danger_button(label)` | :21 | Destructive action using `danger_button` style |
+| `secondary_button(label)` | :27 | Secondary action using `secondary_button` style |
+| `method_badge(method)` | :33 | HTTP method pill (GET, POST, etc.) using `method_badge` style |
+| `status_badge(status_code)` | :40 | Response status pill using `status_badge` style |
 
-```
-ui/
-  mod.rs
-  components.rs    ← NEW: reusable widget builders
-  styles.rs        ← unchanged: raw style functions
-  sidebar.rs       ← uses components
-  tabs.rs          ← uses components
-  main_panel.rs    ← uses components
-```
+**`src/ui/styles.rs`** — new style function:
+| Style | Line | Purpose |
+|---|---|---|
+| `body_type_button(theme, status, active)` | :372 | Body type selector button (active/hover/default states) |
 
-### Components to Create
+**Files refactored** (all raw button/style patterns replaced with component calls):
+- `src/ui/sidebar.rs` — `icon_button` (×4), `menu_button` (×5), `danger_button` (×2)
+- `src/ui/tabs.rs` — `icon_button` (×1), `secondary_button` (×1)
+- `src/ui/mod.rs` — `secondary_button` (×1), `danger_button` (×1)
+- `src/ui/main_panel.rs` — `method_badge` (×1), `status_badge` (×1), `body_type_button` via styles (×1)
 
-1. **Buttons** — each returns `Button<'a, Message>` pre-styled, caller adds `.on_press()`:
-   - `icon_button(label: &str) -> Button<Message>` — uses `handle_button` style, small padding
-   - `menu_button(label: &str) -> Button<Message>` — uses `menu_button` style
-   - `action_button(label: &str, style: ActionStyle) -> Button<Message>` — `ActionStyle` enum: `Secondary`, `Danger`, `Primary` (new, for send button)
-
-These are thin wrappers — not a full component framework. Just enough to deduplicate the current codebase. Badge and panel wrappers are deferred to Track 2 where they'll have real motivation (multiple call sites).
-
-### Files Changed
-
-- `ui/components.rs` — new file with component functions
-- `ui/mod.rs` — add `pub mod components;`
-- `ui/sidebar.rs` — replace raw button/style patterns with component calls
-- `ui/tabs.rs` — replace raw button/style patterns with component calls
-- `ui/main_panel.rs` — replace raw container/style patterns with component calls
-- `ui/mod.rs` (delete_modal, drag_preview_overlay) — replace patterns with component calls
-
-### Verification
-
-- `cargo check` — compiles
-- `cargo test` — tests pass
-- `cargo run` — visual regression: UI looks identical to before
+No raw `styles::handle_button`/`menu_button`/`danger_button`/`secondary_button` closures remain outside `components.rs`.
 
 ---
 
-## Track 2: Request Builder & Response Improvements
+## Track 2: Request Builder & Response Improvements — DONE
 
-### Problem
+### 2A: Engine — Request Builder — DONE
 
-Engine `Client::send()` only takes `url + method`. No way to set:
-- Request body (JSON, form data, raw text)
-- Headers (Content-Type, Authorization, custom)
-- Content type selection
+#### `engine/src/http/request.rs` (new file)
+| Item | Line | Description |
+|---|---|---|
+| `struct Request` | :3 | url, method, headers, body fields |
+| `enum RequestBody` | :10 | `Raw(String)`, `Json(serde_json::Value)`, `Form(Vec<(String, String)>)` |
+| `Request::new()` | :18 | Constructor with url + method |
+| `Request::header()` | :27 | Builder: add header pair |
+| `Request::body()` | :32 | Builder: set body from RequestBody |
+| `Request::json()` | :37 | Builder: set JSON body |
+| `Request::raw_body()` | :42 | Builder: set raw text body |
+| `Request::form()` | :47 | Builder: set form-encoded body |
 
-Response only captures `status_code`, `body`, `elapsed_ms` — no response headers.
+#### `engine/src/http/client.rs`
+| Method | Line | Description |
+|---|---|---|
+| `Client::new()` | :11 | Wraps `reqwest::Client` |
+| `Client::send()` | :17 | Simple url+method, delegates to `execute()` |
+| `Client::execute()` | :22 | Full request with headers, body; extracts response headers |
 
-### 2A: Engine — Request Builder
+#### `engine/src/http/response.rs`
+| Field | Line | Description |
+|---|---|---|
+| `headers: Vec<(String, String)>` | :6 | Response headers extracted from reqwest |
 
-#### Target API
+#### `engine/Cargo.toml`
+- `serde_json = "1"` added
 
-```rust
-// engine/src/http/request.rs
-pub struct Request {
-    url: String,
-    method: HttpMethod,
-    headers: Vec<(String, String)>,
-    body: Option<RequestBody>,
-}
+#### Re-exports
+- `engine/src/http/mod.rs` (:8) — `pub use request::{RequestBody, Request}`
+- `engine/src/lib.rs` (:5) — `pub use http::{Client, HttpMethod, Request, RequestBody, Response}`
 
-pub enum RequestBody {
-    Raw(String),
-    Json(serde_json::Value),
-    Form(Vec<(String, String)>),
-}
+### 2B: UI — Request Editor — DONE
 
-impl Request {
-    pub fn new(url: String, method: HttpMethod) -> Self { ... }
-    pub fn header(mut self, key: String, value: String) -> Self { ... }
-    pub fn body(mut self, body: RequestBody) -> Self { ... }
-    pub fn json(mut self, value: serde_json::Value) -> Self { ... }
-    pub fn raw_body(mut self, text: String) -> Self { ... }
-    pub fn form(mut self, pairs: Vec<(String, String)>) -> Self { ... }
-}
-```
+#### `src/model.rs`
+| Item | Line | Description |
+|---|---|---|
+| `Tab.body_type` | :38 | `BodyType` — which body editor to show |
+| `Tab.body_text` | :39 | `String` — raw/JSON body content |
+| `Tab.form_pairs` | :40 | `Vec<(String, String)>` — form key-value pairs |
+| `Tab.headers` | :41 | `Vec<(String, String)>` — request headers |
+| `enum BodyType` | :45 | `None`, `Raw`, `Json`, `Form` |
 
-Client gets a new method alongside existing `send()`:
-```rust
-impl Client {
-    // Keep existing simple method
-    pub async fn send(&self, url: String, method: HttpMethod) -> Result<Response, Error> { ... }
+All 3 `Tab` constructors updated with new fields: model.rs (:263-266, :274-277), app.rs (:172-176, :515-519).
 
-    // New: full request builder
-    pub async fn execute(&self, request: Request) -> Result<Response, Error> { ... }
-}
-```
+#### `src/app.rs`
+Message variants (lines :57-66):
+- `SetBodyType(BodyType)`, `UpdateBodyText(String)`, `AddFormPair`, `UpdateFormKey(usize, String)`, `UpdateFormValue(usize, String)`, `RemoveFormPair(usize)`
+- `AddHeader`, `UpdateHeaderKey(usize, String)`, `UpdateHeaderValue(usize, String)`, `RemoveHeader(usize)`
 
-#### Engine Changes
+All 10 message handlers implemented (lines :391-449).
 
-- `engine/Cargo.toml` — add `serde_json` dependency (for `RequestBody::Json`)
-- `engine/src/http/request.rs` — new file: `Request` struct, `RequestBody` enum, builder methods
-- `engine/src/http/client.rs` — add `execute(&self, request: Request)` method
-- `engine/src/http/response.rs` — add `headers: Vec<(String, String)>` to `Response`
-- `engine/src/http/mod.rs` — re-export `Request`, `RequestBody`
-- `engine/src/lib.rs` — re-export `Request`, `RequestBody`
+`send_engine_request()` (line :795) builds `icewow_engine::Request` from tab fields and calls `Client::execute()`. Auto-sets Content-Type for JSON and Form body types.
 
-### 2B: UI — Request Editor
+#### `src/ui/main_panel.rs`
+| Function | Line | Description |
+|---|---|---|
+| `view_main_panel()` | :9 | Shows headers editor + body editor when tab is active |
+| `view_headers_editor()` | :88 | Key-value pair list with add/remove |
+| `view_body_editor()` | :125 | BodyType selector (None/Raw/JSON/Form) + appropriate editor |
 
-#### Tab Struct Changes
+### 2C: UI — Response Display Improvements — DONE
 
-```rust
-pub struct Tab {
-    pub id: TabId,
-    pub request_id: Option<RequestId>,
-    pub title: String,
-    pub url_input: String,
-    pub method: HttpMethod,
-    // New fields:
-    pub body_type: BodyType,          // which body editor to show
-    pub body_text: String,            // raw/JSON body content
-    pub form_pairs: Vec<(String, String)>,  // form key-value pairs
-    pub headers: Vec<(String, String)>,     // request headers
-}
-
-pub enum BodyType {
-    None,
-    Raw,
-    Json,
-    Form,
-}
-```
-
-#### UI Design
-
-Below the URL bar in `main_panel.rs`, add two sections:
-
-**Headers editor** — key-value pair list:
-- Each row: `[key input] [value input] [× remove button]`
-- `[+ Add Header]` button at bottom
-- Empty by default
-
-**Body editor** — depends on `BodyType` selector:
-- Row of buttons: `None | Raw | JSON | Form` (only one active)
-- `None` → no editor shown (default, used for GET)
-- `Raw` → single `text_editor` area
-- `Json` → same `text_editor` area (Content-Type set automatically to `application/json`)
-- `Form` → key-value pair list like headers (Content-Type set to `application/x-www-form-urlencoded`)
-
-#### Message Variants
-
-```rust
-// Body
-Message::SetBodyType(BodyType)
-Message::UpdateBodyText(String)
-Message::AddFormPair
-Message::UpdateFormKey(usize, String)
-Message::UpdateFormValue(usize, String)
-Message::RemoveFormPair(usize)
-// Headers
-Message::AddHeader
-Message::UpdateHeaderKey(usize, String)
-Message::UpdateHeaderValue(usize, String)
-Message::RemoveHeader(usize)
-```
-
-#### SendRequest Update
-
-`SendRequest` handler builds a `Request` from the active tab's fields and calls `Client::execute()` instead of `Client::send()`. Content-Type header is auto-added based on `BodyType` if not already set by the user.
-
-### 2C: UI — Response Display Improvements
-
-Current response display is plain text in a scrollable container. Improvements:
-
-- Show response headers in a collapsible section below the status badge
-- Add `method_badge` component for the response status code (reuse `status_badge` style — color by status range: 2xx green, 3xx blue, 4xx orange, 5xx red)
-- Badge wrappers (`method_badge`, `status_badge`) are created here in `ui/components.rs` since now there are real use cases
-
-### Files Changed
-
-- `engine/Cargo.toml` — add `serde_json`
-- `engine/src/http/request.rs` — new file
-- `engine/src/http/client.rs` — add `execute()`
-- `engine/src/http/response.rs` — add `headers` field
-- `engine/src/http/mod.rs` — re-exports
-- `engine/src/lib.rs` — re-exports
-- `src/model.rs` — `Tab` struct new fields, `BodyType` enum
-- `src/app.rs` — new `Message` variants, updated `SendRequest` handler
-- `src/ui/main_panel.rs` — headers editor, body editor, improved response view
-- `src/ui/components.rs` — add `method_badge`, `status_badge` wrappers
-
-### Verification
-
-- `cargo check -p icewow-engine` — engine compiles with new types
-- `cargo check` — both crates compile
-- `cargo test` — existing tests pass
-- `cargo run` — can send GET (unchanged), can type body text and send POST with body, response shows headers
+- Response headers displayed below status badge (main_panel.rs :56-69)
+- `components::method_badge()` used for request method badge (main_panel.rs :22)
+- `components::status_badge()` used for response status code (main_panel.rs :48)
+- `styles::body_type_button()` extracted to styles.rs (:372), replacing inline closure
