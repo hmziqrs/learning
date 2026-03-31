@@ -1,5 +1,5 @@
 use iced::widget::{column, container, pick_list, row, stack, text, text_input};
-use iced::{event, mouse, window, Element, Length, Subscription, Task, Theme};
+use iced::{event, font, mouse, window, Element, Length, Subscription, Task, Theme};
 use std::time::Duration;
 
 use crate::model::{
@@ -72,6 +72,7 @@ pub enum Message {
     UpdateQueryParamKey(usize, String),
     UpdateQueryParamValue(usize, String),
     RemoveQueryParam(usize),
+    IconFontLoaded(Result<(), font::Error>),
 }
 
 impl PostmanUiApp {
@@ -80,7 +81,7 @@ impl PostmanUiApp {
             Self {
                 state: AppState::sample(),
             },
-            Task::none(),
+            load_icon_fonts(),
         )
     }
 
@@ -496,6 +497,7 @@ impl PostmanUiApp {
                     tab.query_params.remove(index);
                 }
             }
+            Message::IconFontLoaded(_) => {}
         }
 
         Task::none()
@@ -870,6 +872,14 @@ impl PostmanUiApp {
 
         recurse(&mut self.state.tree_root, request_id, method);
     }
+}
+
+fn load_icon_fonts() -> Task<Message> {
+    Task::batch(
+        iconflow::fonts()
+            .iter()
+            .map(|f| font::load(f.bytes).map(Message::IconFontLoaded)),
+    )
 }
 
 async fn send_engine_request(

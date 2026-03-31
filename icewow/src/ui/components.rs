@@ -1,12 +1,13 @@
 use iced::widget::{self, button, container, text};
+use iced::Element;
 
 use crate::app::Message;
 use crate::model::HttpMethod;
 use crate::ui::styles;
 
-/// Small icon-style button (⋯, ×, ▾, ▸) — transparent with hover highlight.
-pub fn icon_button(label: &str) -> widget::Button<'_, Message> {
-    button(label)
+/// Small icon-style button — transparent with hover highlight.
+pub fn icon_button<'a>(icon: impl Into<Element<'a, Message>>) -> widget::Button<'a, Message> {
+    button(icon)
         .padding([2, 6])
         .style(|theme, status| styles::handle_button(theme, status))
 }

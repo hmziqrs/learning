@@ -3,8 +3,7 @@ use iced::{Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
 use crate::model::{BodyType, RequestTab, ResponseTab};
-use crate::ui::components;
-use crate::ui::styles;
+use crate::ui::{components, icons, styles};
 
 /// Request name row: [method badge] Request Name                    [Save]
 pub fn view_request_name_row(app: &PostmanUiApp) -> Element<'_, Message> {
@@ -220,7 +219,7 @@ fn view_params_editor(tab: &crate::model::Tab) -> Element<'_, Message> {
             .width(Length::Fill)
             .size(13);
 
-        let remove = components::icon_button("×")
+        let remove = components::icon_button(icons::lucide_icon("x", 14.0))
             .on_press(Message::RemoveQueryParam(i));
 
         rows = rows.push(
@@ -253,7 +252,7 @@ fn view_headers_editor(tab: &crate::model::Tab) -> Element<'_, Message> {
             .width(Length::Fill)
             .size(13);
 
-        let remove = components::icon_button("×")
+        let remove = components::icon_button(icons::lucide_icon("x", 14.0))
             .on_press(Message::RemoveHeader(i));
 
         rows = rows.push(
@@ -314,7 +313,7 @@ fn view_body_editor(tab: &crate::model::Tab) -> Element<'_, Message> {
                     .width(Length::Fill)
                     .size(13);
 
-                let remove = components::icon_button("×")
+                let remove = components::icon_button(icons::lucide_icon("x", 14.0))
                     .on_press(Message::RemoveFormPair(i));
 
                 editor = editor.push(

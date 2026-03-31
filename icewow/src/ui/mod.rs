@@ -1,4 +1,5 @@
 pub mod components;
+pub mod icons;
 pub mod main_panel;
 pub mod sidebar;
 pub mod styles;

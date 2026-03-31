@@ -3,8 +3,7 @@ use iced::{mouse, Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
 use crate::model::DragState;
-use crate::ui::components;
-use crate::ui::theme;
+use crate::ui::{components, icons, theme};
 
 pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut tabs_row = row![].spacing(0).align_y(iced::Alignment::Center);
@@ -21,7 +20,7 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         let chip_content = container(
             row![
                 row![method_label, title_label].spacing(4).align_y(iced::Alignment::Center),
-                components::icon_button("×")
+                components::icon_button(icons::lucide_icon("x", 14.0))
                     .padding([2, 4])
                     .on_press(Message::AskDeleteTab(tab.id)),
             ]

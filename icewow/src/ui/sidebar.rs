@@ -5,7 +5,7 @@ use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
 use crate::model::{
     ClickAction, ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
 };
-use crate::ui::components;
+use crate::ui::{components, icons};
 
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
@@ -100,9 +100,9 @@ fn menu_items(target: ContextMenuTarget) -> Vec<Element<'static, Message>> {
 
 fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
     let row = row![
-        container(text("📦").size(14)).width(Length::Fixed(20.0)),
+        container(icons::lucide_icon("package", 14.0)).width(Length::Fixed(20.0)),
         container(text(app.state.project_name.clone()).size(15)).width(Length::Fill),
-        components::icon_button("⋯")
+        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
     ]
     .spacing(4)
@@ -173,11 +173,17 @@ fn folder_row<'a>(
 
     let inside_active = is_sidebar_hover(app, inside_target);
 
+    let chevron = if folder.expanded {
+        icons::lucide_icon("chevron-down", 16.0)
+    } else {
+        icons::lucide_icon("chevron-right", 16.0)
+    };
+
     let row = row![
-        components::icon_button(if folder.expanded { "▾" } else { "▸" })
+        components::icon_button(chevron)
             .on_press(Message::ToggleFolder(folder.id)),
         container(text(folder.name.clone()).size(14)).width(Length::Fill),
-        components::icon_button("⋯")
+        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
                 folder.id
             ))),
@@ -218,9 +224,9 @@ fn request_row<'a>(
         .is_some_and(|tab| tab.request_id == Some(request.id));
 
     let row = row![
-        container(text("•").size(14)).width(Length::Fixed(18.0)),
+        container(icons::lucide_icon("circle", 8.0)).width(Length::Fixed(18.0)),
         container(text(request.name.clone()).size(14)).width(Length::Fill),
-        components::icon_button("⋯")
+        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
                 request.id,
             ))),

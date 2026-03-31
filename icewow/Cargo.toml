@@ -12,3 +12,4 @@ authors = ["hmziq"]
 iced = { version = "0.14", features = ["tokio", "canvas", "svg", "image"] }
 tokio = { version = "1", features = ["full"] }
 icewow-engine = { path = "engine" }
+iconflow = { version = "1", features = ["pack-lucide"] }
