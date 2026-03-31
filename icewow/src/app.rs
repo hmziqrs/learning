@@ -506,7 +506,7 @@ impl PostmanUiApp {
     }
 
     pub fn theme(&self) -> Theme {
-        Theme::CatppuccinMocha
+        crate::ui::theme::theme()
     }
 
     fn view_url_bar(&self) -> Element<'_, Message> {

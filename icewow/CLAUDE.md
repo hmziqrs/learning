@@ -28,7 +28,8 @@ main.rs → PostmanUiApp
       ├── sidebar.rs     — Recursive tree rendering, drag-drop zones
       ├── tabs.rs        — Tab strip with reordering
       ├── main_panel.rs  — Content area (shows active tab/request info)
-      └── styles.rs      — Theme-aware styling functions
+      ├── styles.rs      — Theme-aware styling functions
+      └── theme.rs       — Custom shadcn-inspired dark theme palette
 ```
 
 ### Data Model (`model.rs`)
@@ -57,4 +58,4 @@ Long-press (220ms `PendingLongPress` timer) initiates drag. Mouse position is tr
 
 ### Styling
 
-All style functions are in `ui/styles.rs`. The app uses the Catppuccin Mocha dark theme via `iced::Theme::CatppuccinMocha`. Style functions accept `&Theme` and return `iced::widget::container::Style` or similar.
+All style functions are in `ui/styles.rs`. The app uses a custom shadcn-inspired dark theme defined in `ui/theme.rs` via `Theme::custom()`. Style functions accept `&Theme` and return `iced::widget::container::Style` or similar.

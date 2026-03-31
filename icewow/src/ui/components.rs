@@ -23,7 +23,7 @@ pub fn danger_button(label: &str) -> widget::Button<'_, Message> {
         .style(|theme, status| styles::danger_button(theme, status))
 }
 
-/// Secondary action button (Cancel, +) — purple themed.
+/// Secondary action button (Cancel, +) — secondary themed.
 pub fn secondary_button(label: &str) -> widget::Button<'_, Message> {
     button(label)
         .style(|theme, status| styles::secondary_button(theme, status))

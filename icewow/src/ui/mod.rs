@@ -3,6 +3,7 @@ pub mod main_panel;
 pub mod sidebar;
 pub mod styles;
 pub mod tabs;
+pub mod theme;
 
 use iced::widget::{column, container, opaque, row, text, Space};
 use iced::{Element, Length};

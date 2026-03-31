@@ -84,9 +84,9 @@ pub fn method_badge(theme: &Theme, method: HttpMethod) -> container::Style {
             palette.warning.base.color,
         ),
         HttpMethod::Put => (
-            palette.primary.strong.color,
-            palette.primary.weak.color,
-            palette.primary.base.color,
+            Color::from_rgb8(0x38, 0xbd, 0xf8), // sky-400
+            Color::from_rgb8(0x0c, 0x2a, 0x3d), // sky-950-ish (dark bg)
+            Color::from_rgb8(0x0e, 0xa5, 0xe9), // sky-500 (border)
         ),
         HttpMethod::Delete => (
             palette.danger.strong.color,
@@ -94,9 +94,9 @@ pub fn method_badge(theme: &Theme, method: HttpMethod) -> container::Style {
             palette.danger.base.color,
         ),
         HttpMethod::Patch => (
-            palette.secondary.strong.color,
-            palette.secondary.weak.color,
-            palette.secondary.base.color,
+            Color::from_rgb8(0xa7, 0x8b, 0xfa), // violet-400
+            Color::from_rgb8(0x2e, 0x1d, 0x4f), // violet-950-ish (dark bg)
+            Color::from_rgb8(0x8b, 0x5c, 0xf6), // violet-500 (border)
         ),
     };
 
