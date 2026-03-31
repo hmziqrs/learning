@@ -1831,8 +1831,15 @@ name = "icewow"
 version = "0.1.0"
 dependencies = [
  "iced",
- "reqwest",
+ "icewow-engine",
  "tokio",
+]
+
+[[package]]
+name = "icewow-engine"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
 ]
 
 [[package]]

@@ -1,0 +1,9 @@
+[package]
+name = "icewow-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Backend engine for IceWow API client"
+authors = ["hmziq"]
+
+[dependencies]
+reqwest = { version = "0.12", features = ["json"] }

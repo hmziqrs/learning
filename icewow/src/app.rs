@@ -346,7 +346,7 @@ impl PostmanUiApp {
                 self.state.response = None;
 
                 return Task::perform(
-                    send_request(url, method),
+                    send_engine_request(url, method),
                     Message::RequestFinished,
                 );
             }
@@ -713,28 +713,12 @@ impl PostmanUiApp {
     }
 }
 
-async fn send_request(url: String, method: HttpMethod) -> Result<ResponseData, String> {
-    let client = reqwest::Client::new();
-    let start = std::time::Instant::now();
-
-    let response = match method {
-        HttpMethod::Get => client.get(&url).send().await,
-        HttpMethod::Post => client.post(&url).send().await,
-        HttpMethod::Put => client.put(&url).send().await,
-        HttpMethod::Delete => client.delete(&url).send().await,
-        HttpMethod::Patch => client.patch(&url).send().await,
-    }
-    .map_err(|e| e.to_string())?;
-
-    let status_code = response.status().as_u16();
-    let body = response.text().await.map_err(|e| e.to_string())?;
-    let elapsed_ms = start.elapsed().as_millis() as u64;
-
-    Ok(ResponseData {
-        status_code,
-        body,
-        elapsed_ms,
-    })
+async fn send_engine_request(url: String, method: HttpMethod) -> Result<ResponseData, String> {
+    let client = icewow_engine::Client::new();
+    client
+        .send(url, method)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 pub fn sidebar_scroll_id() -> iced::widget::Id {

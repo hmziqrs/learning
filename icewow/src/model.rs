@@ -1,50 +1,10 @@
 use iced::Point;
 
+pub use icewow_engine::{HttpMethod, Response as ResponseData};
+
 pub type FolderId = u64;
 pub type RequestId = u64;
 pub type TabId = u64;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HttpMethod {
-    Get,
-    Post,
-    Put,
-    Delete,
-    Patch,
-}
-
-impl HttpMethod {
-    pub const ALL: [HttpMethod; 5] = [
-        HttpMethod::Get,
-        HttpMethod::Post,
-        HttpMethod::Put,
-        HttpMethod::Delete,
-        HttpMethod::Patch,
-    ];
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            HttpMethod::Get => "GET",
-            HttpMethod::Post => "POST",
-            HttpMethod::Put => "PUT",
-            HttpMethod::Delete => "DELETE",
-            HttpMethod::Patch => "PATCH",
-        }
-    }
-}
-
-impl std::fmt::Display for HttpMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResponseData {
-    pub status_code: u16,
-    pub body: String,
-    pub elapsed_ms: u64,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TreeNode {
