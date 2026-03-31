@@ -32,8 +32,20 @@ This means:
 - **Success badges (GET, 2xx)** → green
 - **Warning badges (POST, 4xx)** → amber/yellow
 - **Danger badges (DELETE, 5xx)** → red
-- **PUT badges** → white (was purple via primary — now neutral)
-- **Patch badges** → iced's auto-generated secondary from the palette
+
+### Vibrant Method Badge Colors
+
+Since `primary` is now white and `secondary` is auto-generated neutral gray, PUT and PATCH badges would lose their distinct identity if left on palette colors. Instead, use explicit vibrant colors for every HTTP method directly in `method_badge`:
+
+```
+GET     → #22c55e  (green-500)   — from palette success, no change
+POST    → #eab308  (yellow-500)  — from palette warning, no change
+PUT     → #38bdf8  (sky-400)     — vibrant blue, custom color
+DELETE  → #ef4444  (red-500)     — from palette danger, no change
+PATCH   → #a78bfa  (violet-400)  — vibrant purple, custom color
+```
+
+Each method gets a visually distinct, recognizable color — matching the convention users expect from API tools like Postman and Insomnia.
 
 ## Changes
 
@@ -74,16 +86,80 @@ pub fn theme(&self) -> Theme { crate::ui::theme::theme() }
 
 Add `pub mod theme;` to module declarations.
 
-### `src/ui/styles.rs` — NO CHANGES
+### `src/ui/styles.rs` — method_badge UPDATE
 
-All 18 style functions already use `theme.extended_palette()`. The custom theme's auto-generated extended palette will flow through automatically. This is the whole point of the palette-driven architecture.
+Replace the palette-derived colors for PUT and PATCH with explicit vibrant hex colors. GET/POST/DELETE continue to use the palette (green/amber/red match).
+
+```rust
+pub fn method_badge(theme: &Theme, method: HttpMethod) -> container::Style {
+    let palette = theme.extended_palette();
+
+    let (text, bg, border_color) = match method {
+        HttpMethod::Get => (
+            palette.success.strong.color,
+            palette.success.weak.color,
+            palette.success.base.color,
+        ),
+        HttpMethod::Post => (
+            palette.warning.strong.color,
+            palette.warning.weak.color,
+            palette.warning.base.color,
+        ),
+        HttpMethod::Put => (
+            Color::from_rgb8(0x38, 0xbd, 0xf8),  // sky-400
+            Color::from_rgb8(0x0c, 0x2a, 0x3d),  // sky-950-ish (dark bg)
+            Color::from_rgb8(0x0e, 0xa5, 0xe9),  // sky-500 (border)
+        ),
+        HttpMethod::Delete => (
+            palette.danger.strong.color,
+            palette.danger.weak.color,
+            palette.danger.base.color,
+        ),
+        HttpMethod::Patch => (
+            Color::from_rgb8(0xa7, 0x8b, 0xfa),  // violet-400
+            Color::from_rgb8(0x2e, 0x1d, 0x4f),  // violet-950-ish (dark bg)
+            Color::from_rgb8(0x8b, 0x5c, 0xf6),  // violet-500 (border)
+        ),
+    };
+
+    container::Style {
+        text_color: Some(text),
+        background: Some(Background::Color(bg)),
+        border: border::rounded(8).color(border_color).width(1),
+        ..container::Style::default()
+    }
+}
+```
+
+The dark background tints (`0x0c2a3d`, `0x2e1d4f`) follow the same pattern as the palette-generated weak colors — a dark desaturated shade of the accent.
 
 ### `src/ui/components.rs`
 
 Update the doc comment on `secondary_button` from "purple themed" to "secondary themed" since it will no longer be purple.
 
+### `CLAUDE.md`
+
+Update the styling description:
+```
+// Before:
+The app uses the Catppuccin Mocha dark theme via `iced::Theme::CatppuccinMocha`.
+// After:
+The app uses a custom shadcn-inspired dark theme defined in `ui/theme.rs` via `Theme::custom()`.
+```
+
+## Design Notes
+
+**Primary-as-white interactive states**: With white primary, the following use white-on-dark styling which gives a clean monochrome shadcn look:
+- Active tab chips — white border, light gray background
+- Body type buttons (active) — white text/border on gray
+- Tree row drop highlight — white border on gray
+- Drag preview border — white outline
+- Drop lines and tab insertion markers — white
+
+This is intentional and matches shadcn's minimal aesthetic. If these feel too subtle in practice during visual testing, the primary could be tinted slightly (e.g. `#e4e4e7` zinc-300) to add warmth without introducing a hue.
+
 ## Verification
 
 - `cargo check` — compiles
 - `cargo test` — tests pass
-- `cargo run` — visual check: dark zinc backgrounds, white primary accents, green/amber/red badges, no purple anywhere
+- `cargo run` — visual check: dark zinc backgrounds, white primary accents, vibrant colored method badges (green GET, amber POST, blue PUT, red DELETE, purple PATCH), no Catppuccin purple anywhere
