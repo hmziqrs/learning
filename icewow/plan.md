@@ -1,119 +1,89 @@
-# Plan: Component Wrappers & Request Builder
+# Plan: Custom Dark Theme (shadcn-inspired)
 
 ## Context
 
-Backend extraction into `icewow-engine` is complete. The engine currently supports only `Client::send(url, method)` — no body, headers, or content types. The UI has 17 centralized style functions in `ui/styles.rs` but no component abstractions — every call site manually wires widget + style closure, causing duplication (e.g., `handle_button` style applied 5 times across files).
+The app currently uses `Theme::CatppuccinMocha` — a dark theme with purple/magenta accents as the primary color. All style functions in `ui/styles.rs` read from `theme.extended_palette()`, so the purple bleeds into: send button, active tabs, drag highlights, drop lines, body type selectors, and method badges (PUT uses primary).
 
-Two tracks, in order: **component wrappers first** (cleans up the codebase and creates building blocks), then **request builder** (adds real functionality using those components).
+Iced supports custom themes via `Theme::custom(name, Palette)` where `Palette` has 6 colors: background, text, primary, success, warning, danger. The framework auto-generates the full extended palette (strong/weak/base variants) from those 6.
 
----
+## Design: shadcn-inspired Dark Theme
 
-## Track 1: Component Wrappers — DONE
+shadcn/ui uses a neutral zinc/slate dark palette with a white primary accent. Key characteristics:
+- Dark backgrounds using zinc/neutral tones (not blue or purple)
+- White/light text
+- White or near-white primary (for buttons, active states, highlights)
+- Subtle borders using slightly lighter zinc
+- Red for danger, green for success, amber for warning — standard and muted
 
-### Problem
+### Color Palette
 
-Repeated patterns across UI files:
-- `button("⋯").padding([2,6]).on_press(...).style(|t,s| styles::handle_button(t,s))` — 5 occurrences
-- `button(text).padding([...]).on_press(...).style(|t,s| styles::menu_button(t,s))` — 5 occurrences
-- `button(text).padding([...]).on_press(...).style(|t,s| styles::danger_button(t,s))` — 3 occurrences
-- `button(text).padding([...]).on_press(...).style(|t,s| styles::secondary_button(t,s))` — 2 occurrences
-- `container(content).padding([...]).style(|t| styles::method_badge(t, method))` — 2 occurrences
-- `container(text("")).height(Length::Fixed(...)).width(Length::Fill).style(...)` — drop_line pattern repeated
+```
+Background:  #09090b  (zinc-950 — near-black)
+Text:        #fafafa  (zinc-50 — near-white)
+Primary:     #fafafa  (zinc-50 — white accent, like shadcn)
+Success:     #22c55e  (green-500 — standard green)
+Warning:     #eab308  (yellow-500 — standard amber)
+Danger:      #ef4444  (red-500 — standard red)
+```
 
-### Implementation
+This means:
+- **Send button, active tabs, drag highlights** → white/near-white backgrounds with dark text
+- **Background panels** → dark zinc tones (iced generates weak/base/strong variants from #09090b)
+- **Success badges (GET, 2xx)** → green
+- **Warning badges (POST, 4xx)** → amber/yellow
+- **Danger badges (DELETE, 5xx)** → red
+- **PUT badges** → white (was purple via primary — now neutral)
+- **Patch badges** → iced's auto-generated secondary from the palette
 
-**`src/ui/components.rs`** (new file) — 6 component functions:
-| Component | Line | Purpose |
-|---|---|---|
-| `icon_button(label)` | :8 | Small icon button (⋯, ×, ▾, ▸) using `handle_button` style |
-| `menu_button(label)` | :15 | Context menu item using `menu_button` style |
-| `danger_button(label)` | :21 | Destructive action using `danger_button` style |
-| `secondary_button(label)` | :27 | Secondary action using `secondary_button` style |
-| `method_badge(method)` | :33 | HTTP method pill (GET, POST, etc.) using `method_badge` style |
-| `status_badge(status_code)` | :40 | Response status pill using `status_badge` style |
+## Changes
 
-**`src/ui/styles.rs`** — new style function:
-| Style | Line | Purpose |
-|---|---|---|
-| `body_type_button(theme, status, active)` | :372 | Body type selector button (active/hover/default states) |
+### `src/ui/theme.rs` (NEW FILE)
 
-**Files refactored** (all raw button/style patterns replaced with component calls):
-- `src/ui/sidebar.rs` — `icon_button` (×4), `menu_button` (×5), `danger_button` (×2)
-- `src/ui/tabs.rs` — `icon_button` (×1), `secondary_button` (×1)
-- `src/ui/mod.rs` — `secondary_button` (×1), `danger_button` (×1)
-- `src/ui/main_panel.rs` — `method_badge` (×1), `status_badge` (×1), `body_type_button` via styles (×1)
+Create a dedicated theme module with the palette definition:
 
-No raw `styles::handle_button`/`menu_button`/`danger_button`/`secondary_button` closures remain outside `components.rs`.
+```rust
+use iced::Theme;
 
----
+const ICEWOW_DARK: iced::Palette = iced::Palette {
+    background: iced::Color::from_rgb8(0x09, 0x09, 0x0b),  // zinc-950
+    text:       iced::Color::from_rgb8(0xfa, 0xfa, 0xfa),  // zinc-50
+    primary:    iced::Color::from_rgb8(0xfa, 0xfa, 0xfa),  // zinc-50 (white accent)
+    success:    iced::Color::from_rgb8(0x22, 0xc5, 0x5e),  // green-500
+    warning:    iced::Color::from_rgb8(0xea, 0xb3, 0x08),  // yellow-500
+    danger:     iced::Color::from_rgb8(0xef, 0x44, 0x44),  // red-500
+};
 
-## Track 2: Request Builder & Response Improvements — DONE
+pub fn theme() -> Theme {
+    Theme::custom("IceWow Dark", ICEWOW_DARK)
+}
+```
 
-### 2A: Engine — Request Builder — DONE
+Future theme variants (light mode, etc.) would live here as additional palette constants and functions.
 
-#### `engine/src/http/request.rs` (new file)
-| Item | Line | Description |
-|---|---|---|
-| `struct Request` | :3 | url, method, headers, body fields |
-| `enum RequestBody` | :10 | `Raw(String)`, `Json(serde_json::Value)`, `Form(Vec<(String, String)>)` |
-| `Request::new()` | :18 | Constructor with url + method |
-| `Request::header()` | :27 | Builder: add header pair |
-| `Request::body()` | :32 | Builder: set body from RequestBody |
-| `Request::json()` | :37 | Builder: set JSON body |
-| `Request::raw_body()` | :42 | Builder: set raw text body |
-| `Request::form()` | :47 | Builder: set form-encoded body |
+### `src/app.rs`
 
-#### `engine/src/http/client.rs`
-| Method | Line | Description |
-|---|---|---|
-| `Client::new()` | :11 | Wraps `reqwest::Client` |
-| `Client::send()` | :17 | Simple url+method, delegates to `execute()` |
-| `Client::execute()` | :22 | Full request with headers, body; extracts response headers |
+Change `theme()` method (line 508):
+```rust
+// Before:
+pub fn theme(&self) -> Theme { Theme::CatppuccinMocha }
+// After:
+pub fn theme(&self) -> Theme { crate::ui::theme::theme() }
+```
 
-#### `engine/src/http/response.rs`
-| Field | Line | Description |
-|---|---|---|
-| `headers: Vec<(String, String)>` | :6 | Response headers extracted from reqwest |
+### `src/ui/mod.rs`
 
-#### `engine/Cargo.toml`
-- `serde_json = "1"` added
+Add `pub mod theme;` to module declarations.
 
-#### Re-exports
-- `engine/src/http/mod.rs` (:8) — `pub use request::{RequestBody, Request}`
-- `engine/src/lib.rs` (:5) — `pub use http::{Client, HttpMethod, Request, RequestBody, Response}`
+### `src/ui/styles.rs` — NO CHANGES
 
-### 2B: UI — Request Editor — DONE
+All 18 style functions already use `theme.extended_palette()`. The custom theme's auto-generated extended palette will flow through automatically. This is the whole point of the palette-driven architecture.
 
-#### `src/model.rs`
-| Item | Line | Description |
-|---|---|---|
-| `Tab.body_type` | :38 | `BodyType` — which body editor to show |
-| `Tab.body_text` | :39 | `String` — raw/JSON body content |
-| `Tab.form_pairs` | :40 | `Vec<(String, String)>` — form key-value pairs |
-| `Tab.headers` | :41 | `Vec<(String, String)>` — request headers |
-| `enum BodyType` | :45 | `None`, `Raw`, `Json`, `Form` |
+### `src/ui/components.rs`
 
-All 3 `Tab` constructors updated with new fields: model.rs (:263-266, :274-277), app.rs (:172-176, :515-519).
+Update the doc comment on `secondary_button` from "purple themed" to "secondary themed" since it will no longer be purple.
 
-#### `src/app.rs`
-Message variants (lines :57-66):
-- `SetBodyType(BodyType)`, `UpdateBodyText(String)`, `AddFormPair`, `UpdateFormKey(usize, String)`, `UpdateFormValue(usize, String)`, `RemoveFormPair(usize)`
-- `AddHeader`, `UpdateHeaderKey(usize, String)`, `UpdateHeaderValue(usize, String)`, `RemoveHeader(usize)`
+## Verification
 
-All 10 message handlers implemented (lines :391-449).
-
-`send_engine_request()` (line :795) builds `icewow_engine::Request` from tab fields and calls `Client::execute()`. Auto-sets Content-Type for JSON and Form body types.
-
-#### `src/ui/main_panel.rs`
-| Function | Line | Description |
-|---|---|---|
-| `view_main_panel()` | :9 | Shows headers editor + body editor when tab is active |
-| `view_headers_editor()` | :88 | Key-value pair list with add/remove |
-| `view_body_editor()` | :125 | BodyType selector (None/Raw/JSON/Form) + appropriate editor |
-
-### 2C: UI — Response Display Improvements — DONE
-
-- Response headers displayed below status badge (main_panel.rs :56-69)
-- `components::method_badge()` used for request method badge (main_panel.rs :22)
-- `components::status_badge()` used for response status code (main_panel.rs :48)
-- `styles::body_type_button()` extracted to styles.rs (:372), replacing inline closure
+- `cargo check` — compiles
+- `cargo test` — tests pass
+- `cargo run` — visual check: dark zinc backgrounds, white primary accents, green/amber/red badges, no purple anywhere
