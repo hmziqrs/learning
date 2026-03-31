@@ -166,97 +166,282 @@ When no tab is selected, the right content area should show a centered empty sta
 - We'll show a simpler text-based placeholder: "Open a request or create a new tab to get started"
 - No URL bar, no section tabs — just the tab strip (with only the `+` button) and the empty state
 
-### Phase 7: Theme overhaul
+### Phase 7: Proper shadcn/Tailwind Theme System
 
-The current theme has several visual problems:
+The current theme relies on Iced's auto-generated palette (`palette.background.weak`, `palette.secondary.strong`, etc.) which produces muddy, low-contrast colors that don't match a real design system. We need to replace this with a proper shadcn-style token system using exact Tailwind color values.
 
-#### Problem 1: Badge text unreadable
-Method badges (GET, PUT, etc.) use `palette.success.strong.color` as text on `palette.success.weak.color` as background. Iced auto-generates `.strong` and `.weak` from the base palette color, but the auto-generated contrast ratios are poor — the text blends into the dark tinted background, especially for GET (green-on-dark-green) and PUT (sky-on-dark-sky).
+**Iced supports alpha/opacity** via `Color::from_rgba(r, g, b, a)` (f32 0.0–1.0) — we already use this for `modal_backdrop` and shadows. This lets us replicate shadcn v4's opacity-based borders (`white @ 10%`, `white @ 15%`).
 
-**Fix:** Stop relying on Iced's auto-generated strong/weak pairs for badges. Define explicit high-contrast text colors per method. Use bright/saturated text on a very subtle dark-tinted background:
+#### Current Problems
+
+1. **Badge text unreadable** — GET/PUT/PATCH text blends into dark tinted background. Auto-generated strong/weak pairs have poor contrast.
+2. **Sidebar tree rows invisible** — `palette.secondary.weak` is a muddy gray barely distinguishable from the near-black background.
+3. **No surface hierarchy** — sidebar, content area, and cards all use near-identical auto-generated grays.
+4. **Flat text hierarchy** — everything is either full white or nothing. No muted/secondary text.
+5. **Borders barely visible** — auto-generated `palette.background.strong` is too close to the background.
+
+#### Design: shadcn v4 Zinc Dark Token System
+
+shadcn maps Tailwind zinc shades to semantic roles. We port this directly to Rust constants.
+
+**shadcn dark theme variable → Tailwind shade → hex:**
 
 ```
-GET     → text: #4ade80 (green-400)   bg: #052e16 (green-950)   border: #16a34a (green-600)
-POST    → text: #facc15 (yellow-400)  bg: #422006 (yellow-950)  border: #ca8a04 (yellow-600)
-PUT     → text: #38bdf8 (sky-400)     bg: #082f49 (sky-950)     border: #0284c7 (sky-600)
-DELETE  → text: #f87171 (red-400)     bg: #450a0a (red-950)     border: #dc2626 (red-600)
-PATCH   → text: #a78bfa (violet-400)  bg: #2e1065 (violet-950)  border: #7c3aed (violet-600)
+--background          → zinc-950  → #09090b
+--foreground          → zinc-50   → #fafafa
+--card                → zinc-900  → #18181b
+--card-foreground     → zinc-50   → #fafafa
+--popover             → zinc-900  → #18181b
+--popover-foreground  → zinc-50   → #fafafa
+--primary             → zinc-200  → #e4e4e7   (v4 uses lighter primary)
+--primary-foreground  → zinc-900  → #18181b
+--secondary           → zinc-800  → #27272a
+--secondary-foreground→ zinc-50   → #fafafa
+--muted               → zinc-800  → #27272a
+--muted-foreground    → zinc-400  → #a1a1aa
+--accent              → zinc-800  → #27272a
+--accent-foreground   → zinc-50   → #fafafa
+--destructive         → red-400   → #f87171   (v4 uses bright red)
+--border              → white@10% → rgba(255,255,255,0.10)
+--input               → white@15% → rgba(255,255,255,0.15)
+--ring                → zinc-500  → #71717a
+--sidebar             → zinc-900  → #18181b
+--sidebar-foreground  → zinc-50   → #fafafa
+--sidebar-accent      → zinc-800  → #27272a
+--sidebar-border      → white@10% → rgba(255,255,255,0.10)
 ```
 
-The key: -400 shades for text (bright, saturated), -950 shades for background (very dark, barely tinted), -600 for borders. This gives clear contrast on the dark theme.
+#### Tailwind Zinc Scale (complete reference)
 
-#### Problem 2: Sidebar tree rows — hard gray on dark background
-The tree rows use `palette.secondary.weak.color` for selected state and `Color::TRANSPARENT` for unselected. The secondary palette is auto-generated from background (#09090b), which produces a muddy gray that barely differs from the background. The contrast between selected and unselected rows is almost invisible.
+```
+zinc-50:  #fafafa    zinc-500: #71717a
+zinc-100: #f4f4f5    zinc-600: #52525b
+zinc-200: #e4e4e7    zinc-700: #3f3f46
+zinc-300: #d4d4d8    zinc-800: #27272a
+zinc-400: #a1a1aa    zinc-900: #18181b
+                     zinc-950: #09090b
+```
 
-**Fix:** Define explicit surface colors in `theme.rs` for sidebar states:
+#### Tailwind Color Palettes (for method badges, status, accents)
+
+```
+Green (GET):
+  400: #4ade80   500: #22c55e   600: #16a34a   900: #14532d   950: #052e16
+
+Yellow (POST):
+  400: #facc15   500: #eab308   600: #ca8a04   900: #713f12   950: #422006
+
+Sky (PUT):
+  400: #38bdf8   500: #0ea5e9   600: #0284c7   900: #0c4a6e   950: #082f49
+
+Red (DELETE):
+  400: #f87171   500: #ef4444   600: #dc2626   900: #7f1d1d   950: #450a0a
+
+Violet (PATCH):
+  400: #a78bfa   500: #8b5cf6   600: #7c3aed   900: #4c1d95   950: #2e1065
+
+Blue (primary accent):
+  400: #60a5fa   500: #3b82f6   600: #2563eb   700: #1d4ed8   900: #1e3a8a   950: #172554
+
+Orange (warning alt):
+  400: #fb923c   500: #f97316   600: #ea580c   900: #7c2d12   950: #431407
+
+Emerald (success alt):
+  400: #34d399   500: #10b981   600: #059669   900: #064e3b   950: #022c22
+```
+
+### Changes to `theme.rs` — Full Rewrite
+
+Replace the minimal theme file with a comprehensive token system:
 
 ```rust
-pub const SURFACE_0: Color = Color::from_rgb8(0x0a, 0x0a, 0x0f);  // sidebar bg (near-black, slight blue)
-pub const SURFACE_1: Color = Color::from_rgb8(0x14, 0x14, 0x1b);  // content bg / card bg
-pub const SURFACE_2: Color = Color::from_rgb8(0x1e, 0x1e, 0x28);  // hover state / elevated
-pub const SURFACE_3: Color = Color::from_rgb8(0x2a, 0x2a, 0x35);  // selected / active state
-pub const BORDER:    Color = Color::from_rgb8(0x27, 0x27, 0x2f);  // subtle borders
-pub const TEXT_DIM:  Color = Color::from_rgb8(0x71, 0x71, 0x7a);  // secondary/muted text (zinc-500)
-pub const TEXT_BASE: Color = Color::from_rgb8(0xa1, 0xa1, 0xaa);  // normal text (zinc-400)
-pub const TEXT_BRIGHT: Color = Color::from_rgb8(0xfa, 0xfa, 0xfa); // emphasis text (zinc-50)
-```
-
-Use these directly in style functions instead of palette-derived values for:
-- `tree_row()`: use SURFACE_3 for selected, SURFACE_2 for hover, SURFACE_0 for default
-- `sidebar_panel()`: use SURFACE_0 as background
-- `panel()`: use SURFACE_1 as background
-- All borders: use BORDER instead of `palette.background.strong.color`
-
-#### Problem 3: Lack of visual hierarchy between surfaces
-Everything uses the auto-generated background palette which produces surfaces that are too similar. Postman has clear distinction between sidebar (darkest), content area (slightly lighter), and cards/editors (even lighter).
-
-**Fix:** The surface scale above (SURFACE_0 through SURFACE_3) creates a clear elevation hierarchy. Apply consistently:
-- SURFACE_0: sidebar, tab strip background
-- SURFACE_1: main content area, panels
-- SURFACE_2: hover states, input field backgrounds
-- SURFACE_3: selected/active states, pressed buttons
-
-#### Problem 4: Text hierarchy is flat
-All text is either the auto-generated `palette.background.base.text` (white) or nothing. No distinction between labels, content, and de-emphasized text.
-
-**Fix:** Use the three text levels:
-- TEXT_BRIGHT (#fafafa): titles, active tab labels, primary content
-- TEXT_BASE (#a1a1aa): body text, tree item labels, input values
-- TEXT_DIM (#71717a): secondary labels ("Headers", "Body"), placeholder text, timestamps
-
-### Changes to `theme.rs`
-
-Expand to export surface/text/border constants alongside the palette:
-
-```rust
-use iced::{Color, Theme};
+use iced::Color;
 use iced::theme::Palette;
+use iced::Theme;
 
-// --- Palette (feeds Iced's auto-generation) ---
+// ============================================================
+// Iced Palette (feeds auto-generation — we override most of it
+// in style functions, but Iced still needs this for defaults)
+// ============================================================
 const ICEWOW_DARK: Palette = Palette {
-    background: Color::from_rgb8(0x09, 0x09, 0x0b),
-    text:       Color::from_rgb8(0xfa, 0xfa, 0xfa),
-    primary:    Color::from_rgb8(0x3b, 0x82, 0xf6),
-    success:    Color::from_rgb8(0x22, 0xc5, 0x5e),
-    warning:    Color::from_rgb8(0xea, 0xb3, 0x08),
-    danger:     Color::from_rgb8(0xef, 0x44, 0x44),
+    background: Color::from_rgb8(0x09, 0x09, 0x0b),  // zinc-950
+    text:       Color::from_rgb8(0xfa, 0xfa, 0xfa),  // zinc-50
+    primary:    Color::from_rgb8(0x3b, 0x82, 0xf6),  // blue-500
+    success:    Color::from_rgb8(0x22, 0xc5, 0x5e),  // green-500
+    warning:    Color::from_rgb8(0xea, 0xb3, 0x08),  // yellow-500
+    danger:     Color::from_rgb8(0xef, 0x44, 0x44),  // red-500
 };
 
-// --- Surfaces (elevation scale) ---
-pub const SURFACE_0: Color = Color::from_rgb8(0x0a, 0x0a, 0x0f);
-pub const SURFACE_1: Color = Color::from_rgb8(0x14, 0x14, 0x1b);
-pub const SURFACE_2: Color = Color::from_rgb8(0x1e, 0x1e, 0x28);
-pub const SURFACE_3: Color = Color::from_rgb8(0x2a, 0x2a, 0x35);
+pub fn theme() -> Theme {
+    Theme::custom("IceWow Dark", ICEWOW_DARK)
+}
 
-// --- Borders ---
-pub const BORDER: Color = Color::from_rgb8(0x27, 0x27, 0x2f);
+// ============================================================
+// Tailwind Zinc Scale
+// ============================================================
+pub mod zinc {
+    use iced::Color;
+    pub const S50:  Color = Color::from_rgb8(0xfa, 0xfa, 0xfa);
+    pub const S100: Color = Color::from_rgb8(0xf4, 0xf4, 0xf5);
+    pub const S200: Color = Color::from_rgb8(0xe4, 0xe4, 0xe7);
+    pub const S300: Color = Color::from_rgb8(0xd4, 0xd4, 0xd8);
+    pub const S400: Color = Color::from_rgb8(0xa1, 0xa1, 0xaa);
+    pub const S500: Color = Color::from_rgb8(0x71, 0x71, 0x7a);
+    pub const S600: Color = Color::from_rgb8(0x52, 0x52, 0x5b);
+    pub const S700: Color = Color::from_rgb8(0x3f, 0x3f, 0x46);
+    pub const S800: Color = Color::from_rgb8(0x27, 0x27, 0x2a);
+    pub const S900: Color = Color::from_rgb8(0x18, 0x18, 0x1b);
+    pub const S950: Color = Color::from_rgb8(0x09, 0x09, 0x0b);
+}
 
-// --- Text hierarchy ---
-pub const TEXT_BRIGHT: Color = Color::from_rgb8(0xfa, 0xfa, 0xfa);
-pub const TEXT_BASE: Color   = Color::from_rgb8(0xa1, 0xa1, 0xaa);
-pub const TEXT_DIM: Color    = Color::from_rgb8(0x71, 0x71, 0x7a);
+// ============================================================
+// Tailwind Color Scales (shades used in the app)
+// ============================================================
+pub mod green {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0x4a, 0xde, 0x80);
+    pub const S500: Color = Color::from_rgb8(0x22, 0xc5, 0x5e);
+    pub const S600: Color = Color::from_rgb8(0x16, 0xa3, 0x4a);
+    pub const S950: Color = Color::from_rgb8(0x05, 0x2e, 0x16);
+}
 
-// --- Method colors (explicit, high-contrast) ---
+pub mod yellow {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0xfa, 0xcc, 0x15);
+    pub const S500: Color = Color::from_rgb8(0xea, 0xb3, 0x08);
+    pub const S600: Color = Color::from_rgb8(0xca, 0x8a, 0x04);
+    pub const S950: Color = Color::from_rgb8(0x42, 0x20, 0x06);
+}
+
+pub mod sky {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0x38, 0xbd, 0xf8);
+    pub const S500: Color = Color::from_rgb8(0x0e, 0xa5, 0xe9);
+    pub const S600: Color = Color::from_rgb8(0x02, 0x84, 0xc7);
+    pub const S950: Color = Color::from_rgb8(0x08, 0x2f, 0x49);
+}
+
+pub mod red {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0xf8, 0x71, 0x71);
+    pub const S500: Color = Color::from_rgb8(0xef, 0x44, 0x44);
+    pub const S600: Color = Color::from_rgb8(0xdc, 0x26, 0x26);
+    pub const S900: Color = Color::from_rgb8(0x7f, 0x1d, 0x1d);
+    pub const S950: Color = Color::from_rgb8(0x45, 0x0a, 0x0a);
+}
+
+pub mod violet {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0xa7, 0x8b, 0xfa);
+    pub const S500: Color = Color::from_rgb8(0x8b, 0x5c, 0xf6);
+    pub const S600: Color = Color::from_rgb8(0x7c, 0x3a, 0xed);
+    pub const S950: Color = Color::from_rgb8(0x2e, 0x10, 0x65);
+}
+
+pub mod blue {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0x60, 0xa5, 0xfa);
+    pub const S500: Color = Color::from_rgb8(0x3b, 0x82, 0xf6);
+    pub const S600: Color = Color::from_rgb8(0x25, 0x63, 0xeb);
+    pub const S700: Color = Color::from_rgb8(0x1d, 0x4e, 0xd8);
+    pub const S950: Color = Color::from_rgb8(0x17, 0x25, 0x54);
+}
+
+pub mod orange {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0xfb, 0x92, 0x3c);
+    pub const S500: Color = Color::from_rgb8(0xf9, 0x73, 0x16);
+    pub const S600: Color = Color::from_rgb8(0xea, 0x58, 0x0c);
+    pub const S950: Color = Color::from_rgb8(0x43, 0x14, 0x07);
+}
+
+pub mod emerald {
+    use iced::Color;
+    pub const S400: Color = Color::from_rgb8(0x34, 0xd3, 0x99);
+    pub const S500: Color = Color::from_rgb8(0x10, 0xb9, 0x81);
+    pub const S600: Color = Color::from_rgb8(0x05, 0x96, 0x69);
+    pub const S950: Color = Color::from_rgb8(0x02, 0x2c, 0x22);
+}
+
+// ============================================================
+// shadcn Semantic Tokens (mapped from zinc scale)
+// ============================================================
+
+/// App background — zinc-950
+pub const BACKGROUND: Color = zinc::S950;
+/// Primary text — zinc-50
+pub const FOREGROUND: Color = zinc::S50;
+
+/// Card / popover surface — zinc-900
+pub const CARD: Color = zinc::S900;
+/// Card text — zinc-50
+pub const CARD_FOREGROUND: Color = zinc::S50;
+
+/// Primary accent — blue-500 (we use blue, not white like shadcn default)
+pub const PRIMARY: Color = blue::S500;
+/// Text on primary — zinc-50
+pub const PRIMARY_FOREGROUND: Color = zinc::S50;
+
+/// Secondary surfaces — zinc-800
+pub const SECONDARY: Color = zinc::S800;
+/// Secondary text — zinc-50
+pub const SECONDARY_FOREGROUND: Color = zinc::S50;
+
+/// Muted surfaces — zinc-800
+pub const MUTED: Color = zinc::S800;
+/// Muted text — zinc-400
+pub const MUTED_FOREGROUND: Color = zinc::S400;
+
+/// Accent surface (hover bg) — zinc-800
+pub const ACCENT: Color = zinc::S800;
+/// Accent text — zinc-50
+pub const ACCENT_FOREGROUND: Color = zinc::S50;
+
+/// Destructive — red-500
+pub const DESTRUCTIVE: Color = red::S500;
+/// Destructive foreground — zinc-50
+pub const DESTRUCTIVE_FOREGROUND: Color = zinc::S50;
+
+/// Border — white at 10% opacity (shadcn v4 style)
+pub const BORDER: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.10 };
+/// Input border — white at 15% opacity
+pub const INPUT: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.15 };
+/// Focus ring — zinc-500
+pub const RING: Color = zinc::S500;
+
+/// Sidebar background — zinc-900
+pub const SIDEBAR: Color = zinc::S900;
+/// Sidebar text — zinc-50
+pub const SIDEBAR_FOREGROUND: Color = zinc::S50;
+/// Sidebar accent (hover/selected) — zinc-800
+pub const SIDEBAR_ACCENT: Color = zinc::S800;
+/// Sidebar border — white at 10%
+pub const SIDEBAR_BORDER: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.10 };
+
+// ============================================================
+// Opacity helpers — replicate shadcn's `hsl(var(--x) / 0.5)`
+// ============================================================
+
+/// Apply alpha to any color: `with_alpha(zinc::S50, 0.5)` = zinc-50 at 50%
+pub const fn with_alpha(c: Color, a: f32) -> Color {
+    Color { r: c.r, g: c.g, b: c.b, a }
+}
+
+// Pre-defined opacity variants used across styles
+/// White at 5% — very subtle hover highlights
+pub const WHITE_5: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.05 };
+/// White at 10% — borders (shadcn --border)
+pub const WHITE_10: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.10 };
+/// White at 15% — input borders (shadcn --input)
+pub const WHITE_15: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.15 };
+/// White at 20% — stronger borders, dividers
+pub const WHITE_20: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.20 };
+
+// ============================================================
+// Method badge colors (explicit high-contrast)
+// Pattern: -400 for text, -950 for bg, -600 for border
+// ============================================================
+
 pub struct MethodColors {
     pub text: Color,
     pub bg: Color,
@@ -267,54 +452,52 @@ pub fn method_colors(method: crate::model::HttpMethod) -> MethodColors {
     use crate::model::HttpMethod;
     match method {
         HttpMethod::Get => MethodColors {
-            text:   Color::from_rgb8(0x4a, 0xde, 0x80),  // green-400
-            bg:     Color::from_rgb8(0x05, 0x2e, 0x16),  // green-950
-            border: Color::from_rgb8(0x16, 0xa3, 0x4a),  // green-600
+            text: green::S400, bg: green::S950, border: green::S600,
         },
         HttpMethod::Post => MethodColors {
-            text:   Color::from_rgb8(0xfa, 0xcc, 0x15),  // yellow-400
-            bg:     Color::from_rgb8(0x42, 0x20, 0x06),  // yellow-950
-            border: Color::from_rgb8(0xca, 0x8a, 0x04),  // yellow-600
+            text: yellow::S400, bg: yellow::S950, border: yellow::S600,
         },
         HttpMethod::Put => MethodColors {
-            text:   Color::from_rgb8(0x38, 0xbd, 0xf8),  // sky-400
-            bg:     Color::from_rgb8(0x08, 0x2f, 0x49),  // sky-950
-            border: Color::from_rgb8(0x02, 0x84, 0xc7),  // sky-600
+            text: sky::S400, bg: sky::S950, border: sky::S600,
         },
         HttpMethod::Delete => MethodColors {
-            text:   Color::from_rgb8(0xf8, 0x71, 0x71),  // red-400
-            bg:     Color::from_rgb8(0x45, 0x0a, 0x0a),  // red-950
-            border: Color::from_rgb8(0xdc, 0x26, 0x26),  // red-600
+            text: red::S400, bg: red::S950, border: red::S600,
         },
         HttpMethod::Patch => MethodColors {
-            text:   Color::from_rgb8(0xa7, 0x8b, 0xfa),  // violet-400
-            bg:     Color::from_rgb8(0x2e, 0x10, 0x65),  // violet-950
-            border: Color::from_rgb8(0x7c, 0x3a, 0xed),  // violet-600
+            text: violet::S400, bg: violet::S950, border: violet::S600,
         },
     }
 }
 
-pub fn theme() -> Theme {
-    Theme::custom("IceWow Dark", ICEWOW_DARK)
+/// Just the text color for a method (for inline colored "GET" labels in tabs)
+pub fn method_text_color(method: crate::model::HttpMethod) -> Color {
+    method_colors(method).text
 }
 ```
 
 ### Changes to `styles.rs`
 
-Migrate all style functions to use `theme::SURFACE_*`, `theme::BORDER`, `theme::TEXT_*`, and `theme::method_colors()` instead of `palette.background.*` / `palette.secondary.*` / `palette.success.*` etc.
+Migrate **all** style functions away from `theme.extended_palette()` to use `theme::*` tokens directly. The `&Theme` parameter is kept for API compatibility but most functions will ignore the palette.
 
 Key rewrites:
-- `method_badge()` → use `theme::method_colors(method)` for text/bg/border
-- `status_badge()` → similar explicit colors for 2xx/4xx/5xx
-- `tree_row()` → SURFACE_3 selected, SURFACE_2 hover, transparent default
-- `sidebar_panel()` → SURFACE_0 bg, right-only border with BORDER color
-- `panel()` → SURFACE_1 bg, BORDER color, no rounded corners
-- `tab_chip()` → SURFACE_2 active bg with bottom border in primary, TEXT_BRIGHT for active text, TEXT_BASE for inactive
-- `tab_strip()` → SURFACE_0 bg, bottom border with BORDER
-- `handle_button()` → TEXT_DIM color, SURFACE_2 hover
-- All input fields → SURFACE_2 bg so they're visible against SURFACE_1 panels
-- `context_menu()` → SURFACE_2 bg, BORDER border
-- `modal_card()` → SURFACE_1 bg
+- `method_badge()` → `theme::method_colors(method)` for text/bg/border
+- `status_badge()` → explicit red/yellow/green -400/-950/-600 combos
+- `tree_row(selected, hover)` → `SIDEBAR_ACCENT` selected, `WHITE_5` hover, transparent default
+- `sidebar_panel()` → `SIDEBAR` bg, right-only border with `SIDEBAR_BORDER`
+- `panel()` → `CARD` bg, `BORDER` border, reduced corner radius
+- `tab_chip(active)` → transparent bg, `MUTED_FOREGROUND` text; active: `CARD` bg, `FOREGROUND` text, blue-500 bottom border
+- `tab_strip()` → `BACKGROUND` bg, bottom border with `BORDER`
+- `handle_button()` → `MUTED_FOREGROUND` text, `WHITE_5` hover bg
+- `send_button()` → `PRIMARY` bg, `PRIMARY_FOREGROUND` text, `blue::S600` hover
+- `secondary_button()` → `SECONDARY` bg, `SECONDARY_FOREGROUND` text, `ACCENT` hover
+- `danger_button()` → `red::S900` bg, `DESTRUCTIVE_FOREGROUND` text, `red::S600` hover
+- `context_menu()` → `CARD` bg, `BORDER` border
+- `modal_card()` → `CARD` bg, `BORDER` border
+- `modal_backdrop()` → `Color::from_rgba(0.0, 0.0, 0.0, 0.60)`
+- Input fields → `with_alpha(WHITE_15)` border, `CARD` bg (inputs are visible against `BACKGROUND`)
+- `body_type_button(active)` → active: `PRIMARY` text + blue-950 bg; inactive: `MUTED_FOREGROUND` text
+- `drop_line(active)` → `PRIMARY` when active, transparent when not
+- `drag_preview()` → `CARD` bg, `PRIMARY` border, shadow
 
 ## New Model Additions (`model.rs`)
 
@@ -394,25 +577,29 @@ Message::RemoveQueryParam(usize),
 - Reduce width to 280px
 - Change from rounded card to flat panel with right border only
 
-### `ui/theme.rs`
-- Add SURFACE_0/1/2/3 constants
-- Add BORDER constant
-- Add TEXT_BRIGHT/BASE/DIM constants
-- Add `MethodColors` struct and `method_colors()` function
-- Keep existing `theme()` function
+### `ui/theme.rs` — Full Rewrite
+- Complete Tailwind zinc scale (`zinc::S50` through `zinc::S950`)
+- Color modules: `green`, `yellow`, `sky`, `red`, `violet`, `blue`, `orange`, `emerald` with relevant shades
+- shadcn semantic tokens: `BACKGROUND`, `FOREGROUND`, `CARD`, `PRIMARY`, `SECONDARY`, `MUTED`, `ACCENT`, `DESTRUCTIVE`, `BORDER`, `INPUT`, `RING`, `SIDEBAR`, etc.
+- Opacity-based colors: `WHITE_5`, `WHITE_10`, `WHITE_15`, `WHITE_20` using `Color { r, g, b, a }`
+- `with_alpha(color, alpha)` const helper for ad-hoc opacity
+- `MethodColors` struct + `method_colors()` + `method_text_color()` for high-contrast badge/tab colors
+- Keep `theme()` function returning `Theme::custom()`
 
-### `ui/styles.rs`
-- Rewrite `method_badge()` → use `theme::method_colors()`
-- Rewrite `tree_row()` → use SURFACE constants
-- Rewrite `sidebar_panel()` → SURFACE_0, right border only
-- Rewrite `panel()` → SURFACE_1, no rounded corners
-- Rewrite `tab_chip()` → flat tab with bottom border
-- Rewrite `tab_strip()` → SURFACE_0, flat
-- Rewrite all button styles → use TEXT/SURFACE constants
-- Add `request_section_tab()` style for Params/Headers/Body
-- Add `response_section_tab()` style
-- Add `save_button()` style
-- Add `content_area()` style for right-side content background
+### `ui/styles.rs` — Full Rewrite
+- Migrate **every** style function from `theme.extended_palette()` to `theme::*` semantic tokens
+- `method_badge()` → `theme::method_colors()` for text/bg/border
+- `status_badge()` → explicit tailwind color combos for 2xx/4xx/5xx
+- `tree_row()` → `SIDEBAR_ACCENT` selected, `WHITE_5` hover, transparent default
+- `sidebar_panel()` → `SIDEBAR` bg, right-only border with `SIDEBAR_BORDER`
+- `panel()` → `CARD` bg, `BORDER`, reduced radius
+- `tab_chip()` → flat tab, `MUTED_FOREGROUND` inactive, `FOREGROUND` + blue bottom-border active
+- `tab_strip()` → `BACKGROUND` bg, `BORDER` bottom
+- All button styles → use semantic tokens (`PRIMARY`, `SECONDARY`, `DESTRUCTIVE`, etc.)
+- Input fields → `CARD` bg, `INPUT` border (white@15%)
+- Add `request_section_tab()`, `response_section_tab()`, `save_button()`, `content_area()`
+- `modal_backdrop()` → `rgba(0,0,0,0.60)`, `modal_card()` → `CARD` bg
+- `drop_line()` / `drag_preview()` → `PRIMARY` accent
 
 ### `ui/components.rs`
 - Add `save_button()` component
