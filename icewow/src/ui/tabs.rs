@@ -1,8 +1,9 @@
-use iced::widget::{button, container, mouse_area, row, text};
+use iced::widget::{container, mouse_area, row, text};
 use iced::{mouse, Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
 use crate::model::DragState;
+use crate::ui::components;
 
 pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut tabs_row = row![].spacing(4).align_y(iced::Alignment::Center);
@@ -15,10 +16,9 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         let chip_content = container(
             row![
                 container(text(tab.title.clone()).size(14)).width(Length::Fill),
-                button("×")
+                components::icon_button("×")
                     .padding([4, 6])
-                    .on_press(Message::AskDeleteTab(tab.id))
-                    .style(|theme, status| crate::ui::styles::handle_button(theme, status)),
+                    .on_press(Message::AskDeleteTab(tab.id)),
             ]
             .spacing(4)
             .align_y(iced::Alignment::Center),
@@ -41,10 +41,9 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     let container = container(
         row![
             tabs_row.width(Length::Fill),
-            button("+")
+            components::secondary_button("+")
                 .on_press(Message::NewTab)
-                .padding([6, 10])
-                .style(|theme, status| crate::ui::styles::secondary_button(theme, status)),
+                .padding([6, 10]),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),

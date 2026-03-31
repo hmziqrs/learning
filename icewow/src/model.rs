@@ -35,6 +35,18 @@ pub struct Tab {
     pub title: String,
     pub url_input: String,
     pub method: HttpMethod,
+    pub body_type: BodyType,
+    pub body_text: String,
+    pub form_pairs: Vec<(String, String)>,
+    pub headers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyType {
+    None,
+    Raw,
+    Json,
+    Form,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,6 +260,10 @@ impl AppState {
             title: get_users.1,
             url_input: get_users.2,
             method: get_users.3,
+            body_type: BodyType::None,
+            body_text: String::new(),
+            form_pairs: vec![],
+            headers: vec![],
         };
         let tab_b = Tab {
             id: state.alloc_tab_id(),
@@ -255,6 +271,10 @@ impl AppState {
             title: list_products.1,
             url_input: list_products.2,
             method: list_products.3,
+            body_type: BodyType::None,
+            body_text: String::new(),
+            form_pairs: vec![],
+            headers: vec![],
         };
 
         state.tabs = vec![tab_a, tab_b];

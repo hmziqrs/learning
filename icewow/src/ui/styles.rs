@@ -368,3 +368,32 @@ pub fn modal_card(theme: &Theme) -> container::Style {
         ..container::Style::default()
     }
 }
+
+pub fn body_type_button(theme: &Theme, status: button::Status, active: bool) -> button::Style {
+    let palette = theme.extended_palette();
+
+    let bg = if active {
+        palette.primary.weak.color
+    } else if matches!(status, button::Status::Hovered) {
+        palette.background.weak.color
+    } else {
+        palette.background.base.color
+    };
+
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: if active {
+            palette.primary.strong.color
+        } else {
+            palette.background.base.text
+        },
+        border: border::rounded(8)
+            .color(if active {
+                palette.primary.strong.color
+            } else {
+                palette.background.strong.color
+            })
+            .width(1),
+        ..button::Style::default()
+    }
+}

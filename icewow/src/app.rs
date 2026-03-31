@@ -3,7 +3,7 @@ use iced::{event, mouse, window, Element, Length, Subscription, Task, Theme};
 use std::time::Duration;
 
 use crate::model::{
-    AppState, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId,
+    AppState, BodyType, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId,
     HttpMethod, NodeRef, PendingLongPress, PressKind, RequestId, ResponseData, SidebarDropTarget,
     Tab,
 };
@@ -54,6 +54,16 @@ pub enum Message {
     SendRequest,
     RequestFinished(Result<ResponseData, String>),
     MethodChanged(HttpMethod),
+    SetBodyType(BodyType),
+    UpdateBodyText(String),
+    AddFormPair,
+    UpdateFormKey(usize, String),
+    UpdateFormValue(usize, String),
+    RemoveFormPair(usize),
+    AddHeader,
+    UpdateHeaderKey(usize, String),
+    UpdateHeaderValue(usize, String),
+    RemoveHeader(usize),
 }
 
 impl PostmanUiApp {
@@ -170,6 +180,10 @@ impl PostmanUiApp {
                     title: format!("New Tab {id}"),
                     url_input: String::new(),
                     method: HttpMethod::Get,
+                    body_type: crate::model::BodyType::None,
+                    body_text: String::new(),
+                    form_pairs: vec![],
+                    headers: vec![],
                 };
 
                 self.state.tabs.push(tab);
@@ -332,21 +346,23 @@ impl PostmanUiApp {
             }
             Message::SendRequest => {
                 let url = self.state.url_input.clone();
-                let method = self
-                    .state
-                    .active_tab_ref()
-                    .map(|t| t.method)
-                    .unwrap_or(HttpMethod::Get);
+                let tab = self.state.active_tab_ref();
 
                 if url.is_empty() {
                     return Task::none();
                 }
 
+                let method = tab.map(|t| t.method).unwrap_or(HttpMethod::Get);
+                let headers = tab.map(|t| t.headers.clone()).unwrap_or_default();
+                let body_type = tab.map(|t| t.body_type).unwrap_or(BodyType::None);
+                let body_text = tab.map(|t| t.body_text.clone()).unwrap_or_default();
+                let form_pairs = tab.map(|t| t.form_pairs.clone()).unwrap_or_default();
+
                 self.state.loading = true;
                 self.state.response = None;
 
                 return Task::perform(
-                    send_engine_request(url, method),
+                    send_engine_request(url, method, headers, body_type, body_text, form_pairs),
                     Message::RequestFinished,
                 );
             }
@@ -358,6 +374,7 @@ impl PostmanUiApp {
                         status_code: 0,
                         body: format!("Error: {e}"),
                         elapsed_ms: 0,
+                        headers: vec![],
                     }),
                 }
             }
@@ -369,6 +386,64 @@ impl PostmanUiApp {
                     if let Some(request_id) = tab.request_id {
                         self.update_request_method(request_id, method);
                     }
+                }
+            }
+            Message::SetBodyType(body_type) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.body_type = body_type;
+                }
+            }
+            Message::UpdateBodyText(text) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.body_text = text;
+                }
+            }
+            Message::AddFormPair => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.form_pairs.push((String::new(), String::new()));
+                }
+            }
+            Message::UpdateFormKey(index, key) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.form_pairs.get_mut(index) {
+                        pair.0 = key;
+                    }
+                }
+            }
+            Message::UpdateFormValue(index, value) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.form_pairs.get_mut(index) {
+                        pair.1 = value;
+                    }
+                }
+            }
+            Message::RemoveFormPair(index) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.form_pairs.remove(index);
+                }
+            }
+            Message::AddHeader => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.headers.push((String::new(), String::new()));
+                }
+            }
+            Message::UpdateHeaderKey(index, key) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.headers.get_mut(index) {
+                        pair.0 = key;
+                    }
+                }
+            }
+            Message::UpdateHeaderValue(index, value) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.headers.get_mut(index) {
+                        pair.1 = value;
+                    }
+                }
+            }
+            Message::RemoveHeader(index) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.headers.remove(index);
                 }
             }
         }
@@ -508,6 +583,10 @@ impl PostmanUiApp {
             title,
             url_input: url,
             method,
+            body_type: crate::model::BodyType::None,
+            body_text: String::new(),
+            form_pairs: vec![],
+            headers: vec![],
         };
 
         self.state.active_tab = Some(tab.id);
@@ -713,12 +792,39 @@ impl PostmanUiApp {
     }
 }
 
-async fn send_engine_request(url: String, method: HttpMethod) -> Result<ResponseData, String> {
+async fn send_engine_request(
+    url: String,
+    method: HttpMethod,
+    headers: Vec<(String, String)>,
+    body_type: BodyType,
+    body_text: String,
+    form_pairs: Vec<(String, String)>,
+) -> Result<ResponseData, String> {
     let client = icewow_engine::Client::new();
-    client
-        .send(url, method)
-        .await
-        .map_err(|e| e.to_string())
+
+    let mut request = icewow_engine::Request::new(url, method);
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+
+    match body_type {
+        BodyType::None => {}
+        BodyType::Raw => {
+            request = request.raw_body(body_text);
+        }
+        BodyType::Json => {
+            request = request.header(
+                "Content-Type".to_string(),
+                "application/json".to_string(),
+            );
+            request = request.raw_body(body_text);
+        }
+        BodyType::Form => {
+            request = request.form(form_pairs);
+        }
+    }
+
+    client.execute(request).await.map_err(|e| e.to_string())
 }
 
 pub fn sidebar_scroll_id() -> iced::widget::Id {

@@ -1,9 +1,10 @@
+pub mod components;
 pub mod main_panel;
 pub mod sidebar;
 pub mod styles;
 pub mod tabs;
 
-use iced::widget::{button, column, container, opaque, row, text, Space};
+use iced::widget::{column, container, opaque, row, text, Space};
 use iced::{Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
@@ -22,12 +23,10 @@ pub fn delete_modal(app: &PostmanUiApp) -> Element<'_, Message> {
             text("Confirm Delete").size(20),
             text(description).size(14),
             row![
-                button("Cancel")
-                    .on_press(Message::CancelDelete)
-                    .style(|theme, status| styles::secondary_button(theme, status)),
-                button("Delete")
-                    .on_press(Message::ConfirmDelete)
-                    .style(|theme, status| styles::danger_button(theme, status)),
+                components::secondary_button("Cancel")
+                    .on_press(Message::CancelDelete),
+                components::danger_button("Delete")
+                    .on_press(Message::ConfirmDelete),
             ]
             .spacing(8),
         ]
