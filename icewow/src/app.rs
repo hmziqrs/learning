@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use crate::model::{
     AppState, BodyType, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId,
-    HttpMethod, NodeRef, PendingLongPress, PressKind, RequestId, ResponseData, SidebarDropTarget,
-    Tab,
+    HttpMethod, NodeRef, PendingLongPress, PressKind, RequestId, RequestTab, ResponseData,
+    ResponseTab, SidebarDropTarget, Tab,
 };
 use crate::tree_ops;
 use crate::ui;
@@ -64,6 +64,14 @@ pub enum Message {
     UpdateHeaderKey(usize, String),
     UpdateHeaderValue(usize, String),
     RemoveHeader(usize),
+    SetRequestTab(RequestTab),
+    SetResponseTab(ResponseTab),
+    SaveRequest,
+    RequestNameChanged(String),
+    AddQueryParam,
+    UpdateQueryParamKey(usize, String),
+    UpdateQueryParamValue(usize, String),
+    RemoveQueryParam(usize),
 }
 
 impl PostmanUiApp {
@@ -184,6 +192,8 @@ impl PostmanUiApp {
                     body_text: String::new(),
                     form_pairs: vec![],
                     headers: vec![],
+                    active_request_tab: crate::model::RequestTab::Params,
+                    query_params: vec![],
                 };
 
                 self.state.tabs.push(tab);
@@ -446,6 +456,46 @@ impl PostmanUiApp {
                     tab.headers.remove(index);
                 }
             }
+            Message::SetRequestTab(request_tab) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.active_request_tab = request_tab;
+                }
+            }
+            Message::SetResponseTab(response_tab) => {
+                self.state.active_response_tab = response_tab;
+            }
+            Message::SaveRequest => {
+                // no-op placeholder
+            }
+            Message::RequestNameChanged(name) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.title = name;
+                }
+            }
+            Message::AddQueryParam => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.query_params.push((String::new(), String::new()));
+                }
+            }
+            Message::UpdateQueryParamKey(index, key) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.query_params.get_mut(index) {
+                        pair.0 = key;
+                    }
+                }
+            }
+            Message::UpdateQueryParamValue(index, value) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    if let Some(pair) = tab.query_params.get_mut(index) {
+                        pair.1 = value;
+                    }
+                }
+            }
+            Message::RemoveQueryParam(index) => {
+                if let Some(tab) = self.state.active_tab_mut() {
+                    tab.query_params.remove(index);
+                }
+            }
         }
 
         Task::none()
@@ -469,21 +519,49 @@ impl PostmanUiApp {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let url_bar = self.view_url_bar();
+        let right_content: Element<'_, Message> = if self.state.active_tab.is_some() {
+            let url_bar = self.view_url_bar();
+            let name_row = ui::main_panel::view_request_name_row(self);
+            let section_tabs = ui::main_panel::view_request_section_tabs(self);
+            let request_content = ui::main_panel::view_request_content(self);
+            let response_section = ui::main_panel::view_response_section(self);
 
-        let base = column![
-            ui::tabs::view_tabs(self),
-            url_bar,
-            row![
-                ui::sidebar::view_sidebar(self),
-                ui::main_panel::view_main_panel(self)
+            column![
+                ui::tabs::view_tabs(self),
+                name_row,
+                url_bar,
+                section_tabs,
+                request_content,
+                response_section,
             ]
             .height(Length::Fill)
-            .spacing(8),
+            .into()
+        } else {
+            column![
+                ui::tabs::view_tabs(self),
+                iced::widget::Space::new().height(Length::Fill),
+                container(
+                    column![
+                        iced::widget::text("Open a request or create a new tab to get started").size(16),
+                    ]
+                    .spacing(8)
+                    .align_x(iced::Alignment::Center),
+                )
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .width(Length::Fill)
+                .height(Length::Fill),
+            ]
+            .height(Length::Fill)
+            .into()
+        };
+
+        let base = row![
+            ui::sidebar::view_sidebar(self),
+            right_content,
         ]
         .height(Length::Fill)
-        .spacing(8)
-        .padding(8);
+        .spacing(0);
 
         let mut root: Element<'_, Message> = container(base)
             .width(Length::Fill)
@@ -587,6 +665,8 @@ impl PostmanUiApp {
             body_text: String::new(),
             form_pairs: vec![],
             headers: vec![],
+            active_request_tab: crate::model::RequestTab::Params,
+            query_params: vec![],
         };
 
         self.state.active_tab = Some(tab.id);

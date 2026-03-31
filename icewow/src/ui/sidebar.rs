@@ -15,7 +15,7 @@ pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let content = column(entries).spacing(4).padding(8);
 
     container(scrollable(content).id(sidebar_scroll_id()))
-        .width(Length::Fixed(320.0))
+        .width(Length::Fixed(280.0))
         .height(Length::Fill)
         .style(|theme| crate::ui::styles::sidebar_panel(theme))
         .into()

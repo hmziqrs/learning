@@ -39,6 +39,8 @@ pub struct Tab {
     pub body_text: String,
     pub form_pairs: Vec<(String, String)>,
     pub headers: Vec<(String, String)>,
+    pub active_request_tab: RequestTab,
+    pub query_params: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +49,20 @@ pub enum BodyType {
     Raw,
     Json,
     Form,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequestTab {
+    Params,
+    Headers,
+    Body,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseTab {
+    Body,
+    Cookies,
+    Headers,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +171,7 @@ pub struct AppState {
     pub next_tab_id: TabId,
     pub response: Option<ResponseData>,
     pub loading: bool,
+    pub active_response_tab: ResponseTab,
 }
 
 impl AppState {
@@ -178,6 +195,7 @@ impl AppState {
             next_tab_id: 1,
             response: None,
             loading: false,
+            active_response_tab: ResponseTab::Body,
         };
 
         let users_folder = FolderNode {
@@ -264,6 +282,8 @@ impl AppState {
             body_text: String::new(),
             form_pairs: vec![],
             headers: vec![],
+            active_request_tab: RequestTab::Params,
+            query_params: vec![],
         };
         let tab_b = Tab {
             id: state.alloc_tab_id(),
@@ -275,6 +295,8 @@ impl AppState {
             body_text: String::new(),
             form_pairs: vec![],
             headers: vec![],
+            active_request_tab: RequestTab::Params,
+            query_params: vec![],
         };
 
         state.tabs = vec![tab_a, tab_b];
