@@ -1,91 +1,212 @@
-# Plan: Extract Backend into `icewow-engine` Sub-Crate
+# Plan: Component Wrappers & Request Builder
 
 ## Context
 
-IceWow is a Postman-like API client with iced 0.14 UI. Currently a single crate mixing UI and backend (reqwest HTTP). The goal is to extract all backend logic into a separate `icewow-engine` crate that will house HTTP, GraphQL, Protocol Buffers, WebSocket, and local persistence — keeping the main crate as a pure iced UI layer.
+Backend extraction into `icewow-engine` is complete. The engine currently supports only `Client::send(url, method)` — no body, headers, or content types. The UI has 17 centralized style functions in `ui/styles.rs` but no component abstractions — every call site manually wires widget + style closure, causing duplication (e.g., `handle_button` style applied 5 times across files).
 
-## Target Structure
+Two tracks, in order: **component wrappers first** (cleans up the codebase and creates building blocks), then **request builder** (adds real functionality using those components).
+
+---
+
+## Track 1: Component Wrappers
+
+### Problem
+
+Repeated patterns across UI files:
+- `button("⋯").padding([2,6]).on_press(...).style(|t,s| styles::handle_button(t,s))` — 5 occurrences
+- `button(text).padding([...]).on_press(...).style(|t,s| styles::menu_button(t,s))` — 5 occurrences
+- `button(text).padding([...]).on_press(...).style(|t,s| styles::danger_button(t,s))` — 3 occurrences
+- `button(text).padding([...]).on_press(...).style(|t,s| styles::secondary_button(t,s))` — 2 occurrences
+- `container(content).padding([...]).style(|t| styles::method_badge(t, method))` — 2 occurrences
+- `container(text("")).height(Length::Fixed(...)).width(Length::Fill).style(...)` — drop_line pattern repeated
+
+### Target Structure
+
+Add a `ui/components.rs` module with small builder functions:
 
 ```
-icewow/
-  Cargo.toml              # workspace root
-  Cargo.lock
-  src/                     # UI crate stays at root (cargo run still works)
-    main.rs, app.rs, model.rs, tree_ops.rs, ui/
-  engine/                  # backend sub-crate
-    Cargo.toml
-    src/
-      lib.rs               # public API re-exports
-      error.rs             # Error type
-      http/
-        mod.rs             # re-exports
-        method.rs          # HttpMethod enum (moved from model.rs)
-        response.rs        # Response struct (moved from model.rs as ResponseData)
-        client.rs          # Client struct wrapping reqwest (new)
+ui/
+  mod.rs
+  components.rs    ← NEW: reusable widget builders
+  styles.rs        ← unchanged: raw style functions
+  sidebar.rs       ← uses components
+  tabs.rs          ← uses components
+  main_panel.rs    ← uses components
 ```
 
-The `engine/` crate has **ZERO UI framework dependencies** — no iced, no DRUID, nothing. It's a pure async Rust library with its own domain types for errors, requests, and responses. Any UI framework could consume it.
+### Components to Create
 
-## Framework-Agnostic Design Principles
+1. **Buttons** — each returns `Button<'a, Message>` pre-styled, caller adds `.on_press()`:
+   - `icon_button(label: &str) -> Button<Message>` — uses `handle_button` style, small padding
+   - `menu_button(label: &str) -> Button<Message>` — uses `menu_button` style
+   - `action_button(label: &str, style: ActionStyle) -> Button<Message>` — `ActionStyle` enum: `Secondary`, `Danger`, `Primary` (new, for send button)
 
-- **Own error types** — `engine::Error` is a proper enum (not `String`), with variants like `Http(reqwest::Error)`, `Timeout`, `InvalidUrl`. The UI crate maps these to `String` at the call site.
-- **Own response type** — `engine::Response` is a plain data struct. No UI-specific derives or traits.
-- **Clean public API** — `engine::Client` is the sole entry point. `Client::send(url, method)` mirrors the current `send_request` signature.
+These are thin wrappers — not a full component framework. Just enough to deduplicate the current codebase. Badge and panel wrappers are deferred to Track 2 where they'll have real motivation (multiple call sites).
 
-### Deferred (future enhancements, not part of this extraction)
-- `Request` builder (body, headers, content types)
-- GraphQL, Protocol Buffers, WebSocket support
-- Local persistence
+### Files Changed
 
-## What Moves to `engine/`
+- `ui/components.rs` — new file with component functions
+- `ui/mod.rs` — add `pub mod components;`
+- `ui/sidebar.rs` — replace raw button/style patterns with component calls
+- `ui/tabs.rs` — replace raw button/style patterns with component calls
+- `ui/main_panel.rs` — replace raw container/style patterns with component calls
+- `ui/mod.rs` (delete_modal, drag_preview_overlay) — replace patterns with component calls
 
-From `src/model.rs`:
-- `HttpMethod` enum, including `ALL` const, `as_str()`, and `Display` impl (lines 7-40) → `engine/src/http/method.rs`
-- `ResponseData` struct (lines 42-47) → `engine/src/http/response.rs`, renamed to `Response`
+### Verification
 
-Note: the remaining types in `model.rs` (`AppState`, `DragState`, `PendingLongPress`, etc.) stay in the UI crate — they depend on `iced::Point` and `iced::Size`.
+- `cargo check` — compiles
+- `cargo test` — tests pass
+- `cargo run` — visual regression: UI looks identical to before
 
-From `src/app.rs`:
-- `send_request()` async fn (lines 716-738) → `engine/src/http/client.rs` as `Client::send()`
+---
 
-From `Cargo.toml`:
-- `reqwest` dependency → `engine/Cargo.toml`
+## Track 2: Request Builder & Response Improvements
 
-## New Types in `engine/`
+### Problem
 
-- `Error` — proper enum: `Http(reqwest::Error)`, `Timeout`, `InvalidUrl(String)`. UI-friendly `Display` impl.
-- `Client` — wraps `reqwest::Client`, provides `send()` method that takes url + method (matching current `send_request` signature)
+Engine `Client::send()` only takes `url + method`. No way to set:
+- Request body (JSON, form data, raw text)
+- Headers (Content-Type, Authorization, custom)
+- Content type selection
 
-Note: a `Request` builder (body, headers, content types) is a future enhancement — not part of this extraction. Keep the initial API surface minimal: `Client::send(url, method) -> Result<Response, Error>`.
+Response only captures `status_code`, `body`, `elapsed_ms` — no response headers.
 
-## Changes to UI Crate (`src/`)
+### 2A: Engine — Request Builder
 
-1. **`Cargo.toml`** — add `icewow-engine = { path = "engine" }`, remove `reqwest`
-2. **`model.rs`** — remove `HttpMethod` and `ResponseData`, re-export from `icewow_engine` (e.g. `pub use icewow_engine::{HttpMethod, Response as ResponseData}`) so downstream `crate::model::HttpMethod` paths keep working
-3. **`app.rs`** — replace `send_request()` with `icewow_engine::Client::new().send()`, map `engine::Error` to `String` at the call site (preserving current `Result<ResponseData, String>` in the UI layer)
-4. **`ui/styles.rs`** — `HttpMethod` import unchanged (still `crate::model::HttpMethod` via re-export)
-5. **`ui/main_panel.rs`** — fully-qualified path `crate::model::HttpMethod::Get` (line 11) unchanged via re-export
-6. **`tree_ops.rs`** — test imports unchanged via re-export
+#### Target API
 
-## Steps
+```rust
+// engine/src/http/request.rs
+pub struct Request {
+    url: String,
+    method: HttpMethod,
+    headers: Vec<(String, String)>,
+    body: Option<RequestBody>,
+}
 
-1. Update root `Cargo.toml` to workspace (`members = [".", "engine"]`) and create `engine/Cargo.toml` (reqwest + tokio, no iced) — do both together so `cargo check` can resolve the subcrate
-2. Write `engine/src/error.rs` — `Error` enum
-3. Write `engine/src/http/method.rs` — move `HttpMethod` (including `ALL`, `as_str()`, `Display`)
-4. Write `engine/src/http/response.rs` — move `ResponseData` as `Response`
-5. Write `engine/src/http/client.rs` — `Client` with `send(url, method)` (extracted from `app.rs:send_request`)
-6. Write `engine/src/http/mod.rs` — re-exports
-7. Write `engine/src/lib.rs` — public API re-exports
-8. `cargo check -p icewow-engine` — verify engine crate compiles in isolation
-9. Update UI crate `Cargo.toml` — add `icewow-engine` dep, remove `reqwest`
-10. Update `src/model.rs` — remove `HttpMethod` and `ResponseData`, add `pub use icewow_engine::{HttpMethod, Response as ResponseData}`
-11. Update `src/app.rs` — use `icewow_engine::Client`, remove `send_request()`, map `engine::Error` → `String` at call site
-12. `cargo check` — verify both crates compile together
-13. `cargo test` — tree_ops tests still pass
-14. `cargo run` — manual smoke test: send a request, verify response displays
+pub enum RequestBody {
+    Raw(String),
+    Json(serde_json::Value),
+    Form(Vec<(String, String)>),
+}
 
-## Verification
+impl Request {
+    pub fn new(url: String, method: HttpMethod) -> Self { ... }
+    pub fn header(mut self, key: String, value: String) -> Self { ... }
+    pub fn body(mut self, body: RequestBody) -> Self { ... }
+    pub fn json(mut self, value: serde_json::Value) -> Self { ... }
+    pub fn raw_body(mut self, text: String) -> Self { ... }
+    pub fn form(mut self, pairs: Vec<(String, String)>) -> Self { ... }
+}
+```
 
+Client gets a new method alongside existing `send()`:
+```rust
+impl Client {
+    // Keep existing simple method
+    pub async fn send(&self, url: String, method: HttpMethod) -> Result<Response, Error> { ... }
+
+    // New: full request builder
+    pub async fn execute(&self, request: Request) -> Result<Response, Error> { ... }
+}
+```
+
+#### Engine Changes
+
+- `engine/Cargo.toml` — add `serde_json` dependency (for `RequestBody::Json`)
+- `engine/src/http/request.rs` — new file: `Request` struct, `RequestBody` enum, builder methods
+- `engine/src/http/client.rs` — add `execute(&self, request: Request)` method
+- `engine/src/http/response.rs` — add `headers: Vec<(String, String)>` to `Response`
+- `engine/src/http/mod.rs` — re-export `Request`, `RequestBody`
+- `engine/src/lib.rs` — re-export `Request`, `RequestBody`
+
+### 2B: UI — Request Editor
+
+#### Tab Struct Changes
+
+```rust
+pub struct Tab {
+    pub id: TabId,
+    pub request_id: Option<RequestId>,
+    pub title: String,
+    pub url_input: String,
+    pub method: HttpMethod,
+    // New fields:
+    pub body_type: BodyType,          // which body editor to show
+    pub body_text: String,            // raw/JSON body content
+    pub form_pairs: Vec<(String, String)>,  // form key-value pairs
+    pub headers: Vec<(String, String)>,     // request headers
+}
+
+pub enum BodyType {
+    None,
+    Raw,
+    Json,
+    Form,
+}
+```
+
+#### UI Design
+
+Below the URL bar in `main_panel.rs`, add two sections:
+
+**Headers editor** — key-value pair list:
+- Each row: `[key input] [value input] [× remove button]`
+- `[+ Add Header]` button at bottom
+- Empty by default
+
+**Body editor** — depends on `BodyType` selector:
+- Row of buttons: `None | Raw | JSON | Form` (only one active)
+- `None` → no editor shown (default, used for GET)
+- `Raw` → single `text_editor` area
+- `Json` → same `text_editor` area (Content-Type set automatically to `application/json`)
+- `Form` → key-value pair list like headers (Content-Type set to `application/x-www-form-urlencoded`)
+
+#### Message Variants
+
+```rust
+// Body
+Message::SetBodyType(BodyType)
+Message::UpdateBodyText(String)
+Message::AddFormPair
+Message::UpdateFormKey(usize, String)
+Message::UpdateFormValue(usize, String)
+Message::RemoveFormPair(usize)
+// Headers
+Message::AddHeader
+Message::UpdateHeaderKey(usize, String)
+Message::UpdateHeaderValue(usize, String)
+Message::RemoveHeader(usize)
+```
+
+#### SendRequest Update
+
+`SendRequest` handler builds a `Request` from the active tab's fields and calls `Client::execute()` instead of `Client::send()`. Content-Type header is auto-added based on `BodyType` if not already set by the user.
+
+### 2C: UI — Response Display Improvements
+
+Current response display is plain text in a scrollable container. Improvements:
+
+- Show response headers in a collapsible section below the status badge
+- Add `method_badge` component for the response status code (reuse `status_badge` style — color by status range: 2xx green, 3xx blue, 4xx orange, 5xx red)
+- Badge wrappers (`method_badge`, `status_badge`) are created here in `ui/components.rs` since now there are real use cases
+
+### Files Changed
+
+- `engine/Cargo.toml` — add `serde_json`
+- `engine/src/http/request.rs` — new file
+- `engine/src/http/client.rs` — add `execute()`
+- `engine/src/http/response.rs` — add `headers` field
+- `engine/src/http/mod.rs` — re-exports
+- `engine/src/lib.rs` — re-exports
+- `src/model.rs` — `Tab` struct new fields, `BodyType` enum
+- `src/app.rs` — new `Message` variants, updated `SendRequest` handler
+- `src/ui/main_panel.rs` — headers editor, body editor, improved response view
+- `src/ui/components.rs` — add `method_badge`, `status_badge` wrappers
+
+### Verification
+
+- `cargo check -p icewow-engine` — engine compiles with new types
 - `cargo check` — both crates compile
-- `cargo test` — tree_ops unit tests pass
-- `cargo run` — UI launches, can send HTTP requests, response displays correctly
+- `cargo test` — existing tests pass
+- `cargo run` — can send GET (unchanged), can type body text and send POST with body, response shows headers
