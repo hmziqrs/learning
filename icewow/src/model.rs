@@ -141,6 +141,7 @@ pub enum PressKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClickAction {
     SelectRequest(RequestId),
+    SelectFolder(FolderId),
     SelectTab(TabId),
 }
 
@@ -172,6 +173,7 @@ pub struct AppState {
     pub response: Option<ResponseData>,
     pub loading: bool,
     pub active_response_tab: ResponseTab,
+    pub selected_folder: Option<FolderId>,
 }
 
 impl AppState {
@@ -196,6 +198,7 @@ impl AppState {
             response: None,
             loading: false,
             active_response_tab: ResponseTab::Body,
+            selected_folder: None,
         };
 
         let users_folder = FolderNode {
@@ -241,6 +244,13 @@ impl AppState {
             })],
         };
 
+        let empty_folder = FolderNode {
+            id: state.alloc_folder_id(),
+            name: "New Folder".to_string(),
+            expanded: true,
+            children: vec![],
+        };
+
         state.tree_root = vec![
             TreeNode::Folder(users_folder),
             TreeNode::Folder(catalog_folder),
@@ -250,6 +260,7 @@ impl AppState {
                 url: "https://api.example.com/health".to_string(),
                 method: HttpMethod::Get,
             }),
+            TreeNode::Folder(empty_folder),
         ];
 
         let get_users = state

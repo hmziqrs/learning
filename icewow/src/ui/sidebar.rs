@@ -1,18 +1,18 @@
 use iced::widget::{column, container, mouse_area, row, scrollable, stack, text, Space};
-use iced::{mouse, Element, Length};
+use iced::{mouse, Background, Element, Length};
 
 use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
 use crate::model::{
     ClickAction, ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
 };
-use crate::ui::{components, icons};
+use crate::ui::{components, icons, theme};
 
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
 
     render_nodes(app, None, &app.state.tree_root, 1, &mut entries);
 
-    let content = column(entries).spacing(4).padding(8);
+    let content = column(entries).spacing(0).padding(8);
 
     container(scrollable(content).id(sidebar_scroll_id()))
         .width(Length::Fixed(280.0))
@@ -128,6 +128,9 @@ fn render_nodes<'a>(
             SidebarDropTarget::Before { parent, index: 0 },
             depth,
         ));
+        if let Some(folder_id) = parent {
+            out.push(empty_folder_state(depth, folder_id));
+        }
         return;
     }
 
@@ -172,6 +175,7 @@ fn folder_row<'a>(
     };
 
     let inside_active = is_sidebar_hover(app, inside_target);
+    let selected = app.state.selected_folder == Some(folder.id);
 
     let chevron = if folder.expanded {
         icons::lucide_icon("chevron-down", 16.0)
@@ -179,7 +183,7 @@ fn folder_row<'a>(
         icons::lucide_icon("chevron-right", 16.0)
     };
 
-    let row = row![
+    let content = row![
         components::icon_button(chevron)
             .on_press(Message::ToggleFolder(folder.id)),
         container(text(folder.name.clone()).size(14)).width(Length::Fill),
@@ -189,26 +193,30 @@ fn folder_row<'a>(
             ))),
     ]
     .spacing(4)
-    .align_y(iced::Alignment::Center);
+    .align_y(iced::Alignment::Center)
+    .width(Length::Fill);
 
-    let inner: Element<'a, Message> = mouse_area(
-        container(row)
+    let mut items = indent_guides(depth);
+    items.push(content.into());
+
+    let full_row = row(items).align_y(iced::Alignment::Center);
+
+    mouse_area(
+        container(full_row)
             .padding([4, 6])
             .width(Length::Fill)
-            .style(move |theme| crate::ui::styles::tree_row(theme, false, inside_active)),
+            .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
     .on_press(Message::BeginLongPressSidebar {
         kind: DragKind::Folder(folder.id),
         source_parent: parent,
         source_index: index,
-        click_action: None,
+        click_action: Some(ClickAction::SelectFolder(folder.id)),
     })
     .on_enter(Message::HoverSidebarTarget(inside_target))
     .on_exit(Message::ClearSidebarHover)
     .interaction(mouse::Interaction::Grab)
-    .into();
-
-    indent(depth, inner)
+    .into()
 }
 
 fn request_row<'a>(
@@ -223,19 +231,36 @@ fn request_row<'a>(
         .active_tab_ref()
         .is_some_and(|tab| tab.request_id == Some(request.id));
 
-    let row = row![
-        container(icons::lucide_icon("circle", 8.0)).width(Length::Fixed(18.0)),
+    let method_color = theme::method_text_color(request.method);
+    let method_label = text(request.method.as_str())
+        .size(10)
+        .color(method_color)
+        .font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..iced::Font::default()
+        });
+
+    let content = row![
+        container(method_label)
+            .width(Length::Fixed(36.0))
+            .align_x(iced::Alignment::End),
         container(text(request.name.clone()).size(14)).width(Length::Fill),
         components::icon_button(icons::lucide_icon("ellipsis", 16.0))
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
                 request.id,
             ))),
     ]
-    .spacing(4)
-    .align_y(iced::Alignment::Center);
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .width(Length::Fill);
 
-    let inner: Element<'a, Message> = mouse_area(
-        container(row)
+    let mut items = indent_guides(depth);
+    items.push(content.into());
+
+    let full_row = row(items).align_y(iced::Alignment::Center);
+
+    mouse_area(
+        container(full_row)
             .padding([4, 6])
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
@@ -247,34 +272,81 @@ fn request_row<'a>(
         click_action: Some(ClickAction::SelectRequest(request.id)),
     })
     .interaction(mouse::Interaction::Grab)
-    .into();
-
-    indent(depth, inner)
+    .into()
 }
 
-fn indent<'a>(depth: u16, inner: Element<'a, Message>) -> Element<'a, Message> {
-    row![
-        Space::new().width(Length::Fixed((depth as f32) * 16.0)),
-        inner
+fn empty_folder_state(depth: u16, folder_id: FolderId) -> Element<'static, Message> {
+    let hint = column![
+        text("This folder is empty.")
+            .size(12)
+            .color(theme::MUTED_FOREGROUND),
+        mouse_area(
+            text("Add a request")
+                .size(12)
+                .color(theme::PRIMARY),
+        )
+        .on_press(Message::CreateRequest {
+            parent: Some(folder_id),
+        })
+        .interaction(mouse::Interaction::Pointer),
     ]
-    .align_y(iced::Alignment::Center)
-    .into()
+    .spacing(2)
+    .width(Length::Fill);
+
+    let mut items = indent_guides(depth);
+    items.push(hint.into());
+
+    container(row(items))
+        .padding([4, 6])
+        .width(Length::Fill)
+        .into()
+}
+
+fn indent_guides<'a>(depth: u16) -> Vec<Element<'a, Message>> {
+    let mut items = Vec::new();
+
+    for level in 0..depth {
+        if level == 0 {
+            // Root-level padding — no guide line
+            items.push(Space::new().width(Length::Fixed(16.0)).into());
+        } else {
+            // Vertical guide line (1px) + remaining padding = 16px per level
+            items.push(
+                container(Space::new())
+                    .width(Length::Fixed(1.0))
+                    .height(Length::Fill)
+                    .style(|_: &iced::Theme| container::Style {
+                        background: Some(Background::Color(theme::WHITE_10)),
+                        ..container::Style::default()
+                    })
+                    .into(),
+            );
+            items.push(Space::new().width(Length::Fixed(15.0)).into());
+        }
+    }
+
+    items
 }
 
 fn drop_line(app: &PostmanUiApp, target: SidebarDropTarget, depth: u16) -> Element<'_, Message> {
     let active = is_sidebar_hover(app, target);
 
-    let line: Element<'_, Message> = mouse_area(
-        container(text(""))
-            .height(Length::Fixed(if active { 22.0 } else { 4.0 }))
-            .width(Length::Fill)
-            .style(move |theme| crate::ui::styles::drop_line(theme, active)),
+    let line_bar = container(text(""))
+        .height(Length::Fixed(if active { 22.0 } else { 2.0 }))
+        .width(Length::Fill)
+        .style(move |theme| crate::ui::styles::drop_line(theme, active));
+
+    let mut items = indent_guides(depth);
+    items.push(line_bar.into());
+
+    mouse_area(
+        container(row(items))
+            .padding([0, 6])
+            .width(Length::Fill),
     )
     .on_enter(Message::HoverSidebarTarget(target))
     .on_exit(Message::ClearSidebarHover)
-    .into();
-
-    indent(depth, line)
+    .into()
 }
 
 fn is_sidebar_hover(app: &PostmanUiApp, target: SidebarDropTarget) -> bool {

@@ -341,6 +341,10 @@ impl PostmanUiApp {
                             match click_action {
                                 ClickAction::SelectRequest(request_id) => {
                                     self.open_request_tab(request_id);
+                                    self.state.selected_folder = None;
+                                }
+                                ClickAction::SelectFolder(folder_id) => {
+                                    self.state.selected_folder = Some(folder_id);
                                 }
                                 ClickAction::SelectTab(tab_id) => {
                                     self.state.active_tab = Some(tab_id);
