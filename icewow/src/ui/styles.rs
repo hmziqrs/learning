@@ -137,7 +137,7 @@ pub fn tree_row(_theme: &Theme, selected: bool, drop_inside: bool) -> container:
 
     container::Style {
         background: Some(Background::Color(background)),
-        border: border::rounded(4)
+        border: border::rounded(0)
             .color(if drop_inside { PRIMARY } else { Color::TRANSPARENT })
             .width(if drop_inside { 1 } else { 0 }),
         ..container::Style::default()

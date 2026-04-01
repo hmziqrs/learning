@@ -345,6 +345,11 @@ impl PostmanUiApp {
                                 }
                                 ClickAction::SelectFolder(folder_id) => {
                                     self.state.selected_folder = Some(folder_id);
+                                    tree_ops::set_folder_expanded(
+                                        &mut self.state.tree_root,
+                                        folder_id,
+                                        true,
+                                    );
                                 }
                                 ClickAction::SelectTab(tab_id) => {
                                     self.state.active_tab = Some(tab_id);

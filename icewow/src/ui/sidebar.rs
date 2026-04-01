@@ -10,9 +10,9 @@ use crate::ui::{components, icons, theme};
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
 
-    render_nodes(app, None, &app.state.tree_root, 1, &mut entries);
+    render_nodes(app, None, &app.state.tree_root, &[], &mut entries);
 
-    let content = column(entries).spacing(0).padding(8);
+    let content = column(entries).spacing(0).padding([4, 0]);
 
     container(scrollable(content).id(sidebar_scroll_id()))
         .width(Length::Fixed(280.0))
@@ -109,7 +109,7 @@ fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
     .align_y(iced::Alignment::Center);
 
     container(row)
-        .padding([6, 6])
+        .padding([4, 6])
         .width(Length::Fill)
         .style(|theme| crate::ui::styles::tree_row(theme, true, false))
         .into()
@@ -119,45 +119,60 @@ fn render_nodes<'a>(
     app: &'a PostmanUiApp,
     parent: Option<FolderId>,
     nodes: &'a [TreeNode],
-    depth: u16,
+    ancestors: &[bool],
     out: &mut Vec<Element<'a, Message>>,
 ) {
+    let len = nodes.len();
+
     if nodes.is_empty() {
         out.push(drop_line(
             app,
             SidebarDropTarget::Before { parent, index: 0 },
-            depth,
+            ancestors,
+            false,
         ));
         if let Some(folder_id) = parent {
-            out.push(empty_folder_state(depth, folder_id));
+            out.push(empty_folder_state(ancestors, folder_id));
         }
         return;
     }
 
     for (index, node) in nodes.iter().enumerate() {
+        let is_last = index == len - 1;
+
         out.push(drop_line(
             app,
             SidebarDropTarget::Before { parent, index },
-            depth,
+            ancestors,
+            index > 0, // pipe between items, not before first
         ));
 
         match node {
             TreeNode::Folder(folder) => {
-                out.push(folder_row(app, parent, index, depth, folder));
+                out.push(folder_row(app, parent, index, ancestors, is_last, folder));
 
                 if folder.expanded {
-                    render_nodes(app, Some(folder.id), &folder.children, depth + 1, out);
+                    let mut child_ancestors = ancestors.to_vec();
+                    child_ancestors.push(!is_last);
+                    render_nodes(
+                        app,
+                        Some(folder.id),
+                        &folder.children,
+                        &child_ancestors,
+                        out,
+                    );
                 }
             }
             TreeNode::Request(request) => {
-                out.push(request_row(app, parent, index, depth, request));
+                out.push(request_row(app, parent, index, ancestors, is_last, request));
             }
         }
 
         out.push(drop_line(
             app,
             SidebarDropTarget::After { parent, index },
-            depth,
+            ancestors,
+            !is_last, // pipe between items, not after last
         ));
     }
 }
@@ -166,7 +181,8 @@ fn folder_row<'a>(
     app: &'a PostmanUiApp,
     parent: Option<FolderId>,
     index: usize,
-    depth: u16,
+    ancestors: &[bool],
+    is_last: bool,
     folder: &'a crate::model::FolderNode,
 ) -> Element<'a, Message> {
     let inside_target = SidebarDropTarget::InsideFolder {
@@ -183,27 +199,32 @@ fn folder_row<'a>(
         icons::lucide_icon("chevron-right", 16.0)
     };
 
-    let content = row![
-        components::icon_button(chevron)
-            .on_press(Message::ToggleFolder(folder.id)),
-        container(text(folder.name.clone()).size(14)).width(Length::Fill),
-        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
-            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
-                folder.id
-            ))),
-    ]
-    .spacing(4)
-    .align_y(iced::Alignment::Center)
+    let content = container(
+        row![
+            container(icons::lucide_icon("folder", 14.0).color(theme::MUTED_FOREGROUND))
+                .width(Length::Fixed(18.0)),
+            components::icon_button(chevron)
+                .on_press(Message::ToggleFolder(folder.id)),
+            container(text(folder.name.clone()).size(14)).width(Length::Fill),
+            components::icon_button(icons::lucide_icon("ellipsis", 16.0))
+                .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
+                    folder.id
+                ))),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([3, 0])
     .width(Length::Fill);
 
-    let mut items = indent_guides(depth);
+    let mut items = item_guides(ancestors, is_last);
     items.push(content.into());
 
-    let full_row = row(items).align_y(iced::Alignment::Center);
+    let full_row = row(items);
 
     mouse_area(
         container(full_row)
-            .padding([4, 6])
+            .padding([0, 6])
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
@@ -223,7 +244,8 @@ fn request_row<'a>(
     app: &'a PostmanUiApp,
     parent: Option<FolderId>,
     index: usize,
-    depth: u16,
+    ancestors: &[bool],
+    is_last: bool,
     request: &'a crate::model::RequestNode,
 ) -> Element<'a, Message> {
     let selected = app.state.selected_folder.is_none()
@@ -241,28 +263,31 @@ fn request_row<'a>(
             ..iced::Font::default()
         });
 
-    let content = row![
-        container(method_label)
-            .width(Length::Fixed(36.0))
-            .align_x(iced::Alignment::End),
-        container(text(request.name.clone()).size(14)).width(Length::Fill),
-        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
-            .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
-                request.id,
-            ))),
-    ]
-    .spacing(6)
-    .align_y(iced::Alignment::Center)
+    let content = container(
+        row![
+            container(method_label)
+                .width(Length::Fixed(36.0))
+                .align_x(iced::Alignment::End),
+            container(text(request.name.clone()).size(14)).width(Length::Fill),
+            components::icon_button(icons::lucide_icon("ellipsis", 16.0))
+                .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
+                    request.id,
+                ))),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([3, 0])
     .width(Length::Fill);
 
-    let mut items = indent_guides(depth);
+    let mut items = item_guides(ancestors, is_last);
     items.push(content.into());
 
-    let full_row = row(items).align_y(iced::Alignment::Center);
+    let full_row = row(items);
 
     mouse_area(
         container(full_row)
-            .padding([4, 6])
+            .padding([0, 6])
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
     )
@@ -276,60 +301,204 @@ fn request_row<'a>(
     .into()
 }
 
-fn empty_folder_state(depth: u16, folder_id: FolderId) -> Element<'static, Message> {
-    let hint = column![
-        text("This folder is empty.")
-            .size(12)
-            .color(theme::MUTED_FOREGROUND),
-        mouse_area(
-            text("Add a request")
+fn empty_folder_state(ancestors: &[bool], folder_id: FolderId) -> Element<'static, Message> {
+    let hint = container(
+        column![
+            text("This folder is empty.")
                 .size(12)
-                .color(theme::PRIMARY),
-        )
-        .on_press(Message::CreateRequest {
-            parent: Some(folder_id),
-        })
-        .interaction(mouse::Interaction::Pointer),
-    ]
-    .spacing(2)
+                .color(theme::MUTED_FOREGROUND),
+            mouse_area(
+                text("Add a request")
+                    .size(12)
+                    .color(theme::PRIMARY),
+            )
+            .on_press(Message::CreateRequest {
+                parent: Some(folder_id),
+            })
+            .interaction(mouse::Interaction::Pointer),
+        ]
+        .spacing(2),
+    )
+    .padding([3, 0])
     .width(Length::Fill);
 
-    let mut items = indent_guides(depth);
+    let mut items = continuation_guides(ancestors);
     items.push(hint.into());
 
     container(row(items))
-        .padding([4, 6])
+        .padding([0, 6])
         .width(Length::Fill)
         .into()
 }
 
-fn indent_guides<'a>(depth: u16) -> Vec<Element<'a, Message>> {
+// ── Tree guide rendering ────────────────────────────────────
+
+/// Guides for item rows: pass-through pipes at ancestor levels + ├─ or └─ connector.
+fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message>> {
+    let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
-    for level in 0..depth {
-        if level == 0 {
-            // Root-level padding — no guide line
-            items.push(Space::new().width(Length::Fixed(16.0)).into());
+    // Column 0: root padding (no guide at root level)
+    items.push(Space::new().width(Length::Fixed(16.0)).into());
+
+    if depth <= 1 {
+        return items; // root-level items have no connectors
+    }
+
+    // Pass-through columns: 1..depth-2
+    // Column c uses ancestors[c] — whether the parent at that depth has more siblings.
+    for c in 1..depth.saturating_sub(1) {
+        if c < ancestors.len() && ancestors[c] {
+            items.push(pipe_guide());
         } else {
-            // Vertical guide line (1px) + remaining padding = 16px per level
-            items.push(
-                container(Space::new())
-                    .width(Length::Fixed(1.0))
-                    .height(Length::Fill)
-                    .style(|_: &iced::Theme| container::Style {
-                        background: Some(Background::Color(theme::WHITE_10)),
-                        ..container::Style::default()
-                    })
-                    .into(),
-            );
-            items.push(Space::new().width(Length::Fixed(15.0)).into());
+            items.push(Space::new().width(Length::Fixed(16.0)).into());
+        }
+    }
+
+    // Connector column
+    if is_last {
+        items.push(corner_guide());
+    } else {
+        items.push(tee_guide());
+    }
+
+    items
+}
+
+/// Guides for drop lines and empty-folder hints: pipes only, no connector.
+fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
+    let depth = ancestors.len() + 1;
+    let mut items = Vec::new();
+
+    items.push(Space::new().width(Length::Fixed(16.0)).into());
+
+    for c in 1..depth {
+        if c < ancestors.len() && ancestors[c] {
+            items.push(pipe_guide());
+        } else {
+            items.push(Space::new().width(Length::Fixed(16.0)).into());
         }
     }
 
     items
 }
 
-fn drop_line(app: &PostmanUiApp, target: SidebarDropTarget, depth: u16) -> Element<'_, Message> {
+/// Guides for drop lines: continuation pipes + optional pipe at the connector column.
+fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Element<'a, Message>> {
+    let depth = ancestors.len() + 1;
+    let mut items = Vec::new();
+
+    items.push(Space::new().width(Length::Fixed(16.0)).into());
+
+    if depth <= 1 {
+        return items;
+    }
+
+    // Pass-through columns
+    for c in 1..depth.saturating_sub(1) {
+        if c < ancestors.len() && ancestors[c] {
+            items.push(pipe_guide());
+        } else {
+            items.push(Space::new().width(Length::Fixed(16.0)).into());
+        }
+    }
+
+    // Connector column: pipe if between siblings, else empty
+    if pipe_at_connector {
+        items.push(pipe_guide());
+    } else {
+        items.push(Space::new().width(Length::Fixed(16.0)).into());
+    }
+
+    items
+}
+
+/// │ — vertical line running full height of the row.
+fn pipe_guide<'a>() -> Element<'a, Message> {
+    row![
+        container(Space::new())
+            .width(Length::Fixed(1.0))
+            .height(Length::Fill)
+            .style(guide_style),
+        Space::new().width(Length::Fixed(15.0)),
+    ]
+    .width(Length::Fixed(16.0))
+    .height(Length::Fill)
+    .into()
+}
+
+/// ├─ — vertical line full height + horizontal branch at center.
+fn tee_guide<'a>() -> Element<'a, Message> {
+    let top = row![
+        container(Space::new())
+            .width(Length::Fixed(1.0))
+            .height(Length::Fill)
+            .style(guide_style),
+        Space::new().width(Length::Fixed(15.0)),
+    ]
+    .height(Length::Fill);
+
+    let mid = container(Space::new())
+        .width(Length::Fixed(16.0))
+        .height(Length::Fixed(1.0))
+        .style(guide_style);
+
+    let bot = row![
+        container(Space::new())
+            .width(Length::Fixed(1.0))
+            .height(Length::Fill)
+            .style(guide_style),
+        Space::new().width(Length::Fixed(15.0)),
+    ]
+    .height(Length::Fill);
+
+    column![top, mid, bot]
+        .width(Length::Fixed(16.0))
+        .height(Length::Fill)
+        .into()
+}
+
+/// └─ — vertical line top half + horizontal branch at center.
+fn corner_guide<'a>() -> Element<'a, Message> {
+    let top = row![
+        container(Space::new())
+            .width(Length::Fixed(1.0))
+            .height(Length::Fill)
+            .style(guide_style),
+        Space::new().width(Length::Fixed(15.0)),
+    ]
+    .height(Length::Fill);
+
+    let mid = container(Space::new())
+        .width(Length::Fixed(16.0))
+        .height(Length::Fixed(1.0))
+        .style(guide_style);
+
+    let bot = Space::new()
+        .width(Length::Fixed(16.0))
+        .height(Length::Fill);
+
+    column![top, mid, bot]
+        .width(Length::Fixed(16.0))
+        .height(Length::Fill)
+        .into()
+}
+
+fn guide_style(_: &iced::Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(theme::WHITE_10)),
+        ..container::Style::default()
+    }
+}
+
+// ── Drop line ───────────────────────────────────────────────
+
+fn drop_line<'a>(
+    app: &'a PostmanUiApp,
+    target: SidebarDropTarget,
+    ancestors: &[bool],
+    pipe_at_connector: bool,
+) -> Element<'a, Message> {
     let active = is_sidebar_hover(app, target);
 
     let line_bar = container(text(""))
@@ -337,7 +506,7 @@ fn drop_line(app: &PostmanUiApp, target: SidebarDropTarget, depth: u16) -> Eleme
         .width(Length::Fill)
         .style(move |theme| crate::ui::styles::drop_line(theme, active));
 
-    let mut items = indent_guides(depth);
+    let mut items = drop_line_guides(ancestors, pipe_at_connector);
     items.push(line_bar.into());
 
     mouse_area(
