@@ -226,10 +226,11 @@ fn request_row<'a>(
     depth: u16,
     request: &'a crate::model::RequestNode,
 ) -> Element<'a, Message> {
-    let selected = app
-        .state
-        .active_tab_ref()
-        .is_some_and(|tab| tab.request_id == Some(request.id));
+    let selected = app.state.selected_folder.is_none()
+        && app
+            .state
+            .active_tab_ref()
+            .is_some_and(|tab| tab.request_id == Some(request.id));
 
     let method_color = theme::method_text_color(request.method);
     let method_label = text(request.method.as_str())
