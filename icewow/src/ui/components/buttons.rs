@@ -2,12 +2,16 @@ use iced::widget::{self, button};
 use iced::Element;
 
 use crate::app::Message;
+use crate::ui::scale::UiScale;
 use crate::ui::styles;
 
 /// Small icon-style button — transparent with hover highlight.
-pub fn icon_button<'a>(icon: impl Into<Element<'a, Message>>) -> widget::Button<'a, Message> {
+pub fn icon_button<'a>(
+    icon: impl Into<Element<'a, Message>>,
+    scale: &UiScale,
+) -> widget::Button<'a, Message> {
     button(icon)
-        .padding([2, 6])
+        .padding(scale.pad_icon())
         .style(|theme, status| styles::handle_button(theme, status))
 }
 

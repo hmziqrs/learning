@@ -4,3 +4,4 @@ pub mod overlays;
 
 pub use badges::*;
 pub use buttons::*;
+pub use overlays::*;

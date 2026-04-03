@@ -21,8 +21,8 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         let chip_content = container(
             row![
                 row![method_label, title_label].spacing(scale.space_sm()).align_y(iced::Alignment::Center),
-                components::icon_button(icons::lucide_icon("x", scale.icon_sm()))
-                    .padding([2, 4])
+                components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
+                    .padding([scale.space_xs(), scale.space_sm()])
                     .on_press(Message::AskDeleteTab(tab.id)),
             ]
             .spacing(scale.space_sm())

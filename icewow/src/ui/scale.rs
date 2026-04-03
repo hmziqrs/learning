@@ -95,6 +95,9 @@ impl UiScale {
     pub fn pad_panel(&self) -> f32 {
         (10.0 * self.density_factor()).round()
     }
+    pub fn pad_icon(&self) -> [f32; 2] {
+        [2.0 * self.density_factor(), 6.0 * self.density_factor()]
+    }
 
     // --- Layout constants (not scaled -- structural) ---
 

@@ -527,16 +527,30 @@ Likely shape: `state/notifications.rs` with a `Vec<Notification>` that auto-dism
 
 Each phase produces a compiling, working app.
 
-### Phase 1: UiScale + Component Split (low risk, immediate cleanup)
-- Create `ui/scale.rs` with `UiScale`, `Density` struct
-- Add `ui_scale: UiScale` field to `AppState` (defaults to `Comfortable`, `font_scale: 1.0`)
-- Split `components.rs` into `components/` directory: `buttons.rs`, `badges.rs`, `editors.rs`, `overlays.rs`
-- Move `delete_modal` and `drag_preview_overlay` from `ui/mod.rs` into `components/overlays.rs`
-- Replace all 35+ `.padding(...)` literals to read from `&UiScale`
-- Replace all 40+ `.size(...)` literals to read from `&UiScale`
-- Replace all 12 `lucide_icon("...", 14.0/16.0)` calls to use `scale.icon_sm()`/`scale.icon_md()`
-- Pass `&UiScale` through view functions (can pass alongside `&PostmanUiApp` for now, narrow later)
-- Zero functional change at default scale, pure refactor
+### Phase 1: UiScale + Component Split (low risk, immediate cleanup) ✅ COMPLETED
+
+- [x] Create `ui/scale.rs` with `UiScale`, `Density` struct
+- [x] Add `ui_scale: UiScale` field to `AppState` (defaults to `Comfortable`, `font_scale: 1.0`)
+- [x] Split `components.rs` into `components/` directory: `buttons.rs`, `badges.rs`, `overlays.rs`
+- [x] `components/mod.rs` re-exports all submodules including `overlays`
+- [ ] Move `delete_modal` and `drag_preview_overlay` from `ui/mod.rs` into `components/overlays.rs` *(deferred to Phase 4 — they use `app` directly)*
+- [x] Replace all `.size(...)` text/icon literals to read from `&UiScale` *(view files: sidebar, main_panel, tabs, mod, app)*
+- [x] Replace all `.padding(...)` literals to read from `&UiScale` *(major view functions)*
+- [x] Replace all `lucide_icon("...", 14.0/16.0)` calls to use `scale.icon_sm()`/`scale.icon_md()`
+- [x] `icon_button` takes `scale: &UiScale` and uses `scale.pad_icon()` — all 8 call sites updated; `pad_icon()` added to `UiScale`
+- [x] `tabs.rs` tab-close button padding override updated to `[scale.space_xs(), scale.space_sm()]`
+- [x] Pass `&UiScale` through view functions (accessed via `app.state.ui_scale`, no signature changes)
+- [x] Zero functional change at default scale, pure refactor
+
+**Remaining minor literals (deferred to Phase 4):**
+- `badges.rs`: `.size(13)` and `.padding([6, 10])` / `.padding([4, 8])` — badges have no `&UiScale` access yet; wire up when component signatures narrow in Phase 4
+- `buttons.rs` `menu_button`, `danger_button`, `secondary_button`: no explicit padding set (Iced default); add `&UiScale` and `pad_button()` in Phase 4
+- `styles.rs`: `border::rounded(4)` / `border::rounded(6)` — replace with `UiScale::RADIUS_SM`/`RADIUS_MD` when style functions gain `&UiScale` in Phase 4
+- `sidebar.rs` `empty_folder_state`: `.size(12)`, `.spacing(2)`, `.padding([0.0, 6.0])` — static function with no app access; low priority
+- `tabs.rs` method label: `.size(11)` — unique size between caption (10) and small (12); add `text_xs()` to `UiScale` when needed
+- Structural widths (`20.0`, `18.0`, `36.0`, `28.0`, `240.0`) — layout dimensions, not user-facing text, kept as-is
+
+**Verification:** `cargo check` ✅ `cargo test` 7/7 ✅ `cargo build` ✅
 
 ### Phase 2: Data Model (medium risk, highest value)
 - Build `TreeArena` in `state/tree.rs` with methods: `get`, `get_mut`, `insert`, `remove`, `move_node`, `is_ancestor`, `children`, `walk`

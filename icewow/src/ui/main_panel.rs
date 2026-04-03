@@ -223,7 +223,7 @@ fn view_params_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Elemen
             .width(Length::Fill)
             .size(scale.text_body());
 
-        let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()))
+        let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
             .on_press(Message::RemoveQueryParam(i));
 
         rows = rows.push(
@@ -256,7 +256,7 @@ fn view_headers_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Eleme
             .width(Length::Fill)
             .size(scale.text_body());
 
-        let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()))
+        let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
             .on_press(Message::RemoveHeader(i));
 
         rows = rows.push(
@@ -317,7 +317,7 @@ fn view_body_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Element<
                     .width(Length::Fill)
                     .size(scale.text_body());
 
-                let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()))
+                let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
                     .on_press(Message::RemoveFormPair(i));
 
                 editor = editor.push(

@@ -105,7 +105,7 @@ fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
     let row = row![
         container(icons::lucide_icon("package", scale.icon_sm())).width(Length::Fixed(20.0)),
         container(text(app.state.project_name.clone()).size(scale.text_label())).width(Length::Fill),
-        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
+        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
     ]
     .spacing(scale.space_sm())
@@ -207,10 +207,10 @@ fn folder_row<'a>(
         row![
             container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
-            components::icon_button(chevron)
+            components::icon_button(chevron, scale)
                 .on_press(Message::ToggleFolder(folder.id)),
             container(text(folder.name.clone()).size(scale.text_label())).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
+            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
                     folder.id
                 ))),
@@ -274,7 +274,7 @@ fn request_row<'a>(
                 .width(Length::Fixed(36.0))
                 .align_x(iced::Alignment::End),
             container(text(request.name.clone()).size(scale.text_label())).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
+            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
                     request.id,
                 ))),
@@ -307,6 +307,8 @@ fn request_row<'a>(
 }
 
 fn empty_folder_state(ancestors: &[bool], folder_id: FolderId) -> Element<'static, Message> {
+    // Note: UiScale not available here (no app reference), using small fixed sizes.
+    // These are tiny tree-internal hints, not primary UI — acceptable to keep as literals.
     let hint = container(
         column![
             text("This folder is empty.")
