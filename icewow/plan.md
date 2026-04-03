@@ -83,7 +83,26 @@ IceWow is a Postman-like API client built with Iced 0.14 (Elm architecture). Cur
 - All 25 functions accept `_theme: &Theme` but use hardcoded constants from `theme.rs`
 - Works fine for single theme, but blocks runtime theme switching
 
+**17. Single `components.rs` will become a dumping ground**
+- Currently 51 lines with 6 components: `icon_button`, `menu_button`, `danger_button`, `secondary_button`, `method_badge`, `status_badge`
+- Adding `kv_editor`, `modal`, `tooltip`, `dropdown`, `toggle`, `tab_chip`, `tree_row`, `search_input`, etc. would push this past 500 lines fast
+- No grouping by component category -- buttons, badges, editors, overlays all mixed
+
+**18. Sizes/padding/icon sizes hardcoded at every call site -- blocks user customization**
+- 35+ `.padding(...)` calls with 12 distinct values scattered across 6 files
+- 40+ `.size(...)` calls with 8 distinct text sizes across 7 files
+- Icon sizes (`14.0`, `16.0`) passed as raw literals at 12 call sites
+- Current `tokens.rs` plan uses `const` -- good for developer consistency but **can't be changed at runtime**
+- No way for users to adjust text size (accessibility), UI density (compact/comfortable), or icon scale
+- Example: changing "body text = 13px" requires editing 15+ call sites today
+
 ### Tier 4: Missing Infrastructure
+
+**19. No persistence** -- state lost on close, `sample()` recreated each session
+**20. No undo/redo** -- all mutations irreversible
+**21. No validation** -- URLs not parsed, JSON not validated, IDs not verified before use
+**22. HTTP engine incomplete** -- `Error::Timeout` defined but never raised (`engine/src/error.rs`), no retry, no connection pooling config, response always loaded fully into memory
+**23. Cookies tab shown in UI but no cookie extraction** (`ResponseTab::Cookies` exists, no handler)
 
 **17. No persistence** -- state lost on close, `sample()` recreated each session
 **18. No undo/redo** -- all mutations irreversible
@@ -129,11 +148,16 @@ src/
 |
 |-- ui/                        # Stateless shared primitives (no feature/state imports)
 |   |-- mod.rs                 # Re-exports
-|   |-- tokens.rs              # NEW: spacing scale, text sizes, layout constants, radii
+|   |-- scale.rs               # NEW: UiScale struct (runtime-configurable sizes, padding, density)
 |   |-- theme.rs               # Color palette (unchanged)
-|   |-- styles.rs              # Style functions (use tokens instead of magic numbers)
-|   |-- components.rs          # Reusable widgets: kv_editor, method_badge, modal, etc.
-|   +-- icons.rs               # Icon helpers
+|   |-- styles.rs              # Style functions (use UiScale instead of magic numbers)
+|   |-- icons.rs               # Icon helpers
+|   +-- components/            # Split by component category
+|       |-- mod.rs             # Re-exports all component modules
+|       |-- buttons.rs         # icon_button, menu_button, danger_button, secondary_button, save_button
+|       |-- badges.rs          # method_badge, status_badge
+|       |-- editors.rs         # kv_editor (generic key-value pair editor)
+|       +-- overlays.rs        # delete_modal, drag_preview, context_menu shell
 |
 engine/                        # HTTP engine crate (unchanged)
 ```
@@ -228,53 +252,140 @@ impl TabStore {
 
 **Why**: `active_tab_mut()` goes from O(n) linear scan to O(1) HashMap lookup.
 
-#### E. Design tokens replace magic numbers
+#### E. Runtime-configurable UiScale replaces magic numbers
+
+`const` tokens solve developer consistency but can't be changed at runtime. Users need to adjust text size for accessibility, switch UI density (compact/comfortable/spacious), and scale icons. `UiScale` is a struct that lives in `AppState` and gets passed to all view functions.
 
 ```rust
-// ui/tokens.rs
-pub mod text {
-    pub const CAPTION: f32 = 10.0;
-    pub const SMALL: f32 = 12.0;
-    pub const BODY: f32 = 13.0;
-    pub const LABEL: f32 = 14.0;
-    pub const TITLE: f32 = 16.0;
-    pub const HEADING: f32 = 20.0;
+// ui/scale.rs
+
+/// UI density preset -- controls padding and spacing multipliers
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Density {
+    Compact,      // tight UI, power users
+    Comfortable,  // default
+    Spacious,     // accessibility, touch
 }
 
-pub mod spacing {
-    pub const XS: f32 = 2.0;
-    pub const SM: f32 = 4.0;
-    pub const MD: f32 = 8.0;
-    pub const LG: f32 = 12.0;
-    pub const XL: f32 = 16.0;
+/// All configurable UI dimensions in one place.
+/// Stored in AppState, passed to view functions via &UiScale.
+/// Can be serialized to disk for persistence.
+#[derive(Debug, Clone)]
+pub struct UiScale {
+    pub density: Density,
+    pub font_scale: f32,   // 1.0 = default, 1.25 = 125%, etc.
 }
 
-pub mod layout {
+impl UiScale {
+    // --- Text sizes (scaled by font_scale) ---
+    pub fn text_caption(&self) -> f32  { 10.0 * self.font_scale }
+    pub fn text_small(&self) -> f32    { 12.0 * self.font_scale }
+    pub fn text_body(&self) -> f32     { 13.0 * self.font_scale }
+    pub fn text_label(&self) -> f32    { 14.0 * self.font_scale }
+    pub fn text_title(&self) -> f32    { 16.0 * self.font_scale }
+    pub fn text_heading(&self) -> f32  { 20.0 * self.font_scale }
+
+    // --- Icon sizes (scaled by font_scale) ---
+    pub fn icon_sm(&self) -> f32 { 14.0 * self.font_scale }
+    pub fn icon_md(&self) -> f32 { 16.0 * self.font_scale }
+    pub fn icon_lg(&self) -> f32 { 20.0 * self.font_scale }
+
+    // --- Spacing (scaled by density) ---
+    fn density_factor(&self) -> f32 {
+        match self.density {
+            Density::Compact     => 0.75,
+            Density::Comfortable => 1.0,
+            Density::Spacious    => 1.35,
+        }
+    }
+    pub fn space_xs(&self) -> f32 { (2.0 * self.density_factor()).round() }
+    pub fn space_sm(&self) -> f32 { (4.0 * self.density_factor()).round() }
+    pub fn space_md(&self) -> f32 { (8.0 * self.density_factor()).round() }
+    pub fn space_lg(&self) -> f32 { (12.0 * self.density_factor()).round() }
+    pub fn space_xl(&self) -> f32 { (16.0 * self.density_factor()).round() }
+
+    // --- Padding presets (scaled by density) ---
+    pub fn pad_chip(&self) -> [f32; 2]   { [4.0 * self.density_factor(), 10.0 * self.density_factor()] }
+    pub fn pad_button(&self) -> [f32; 2] { [6.0 * self.density_factor(), 12.0 * self.density_factor()] }
+    pub fn pad_input(&self) -> f32       { (10.0 * self.density_factor()).round() }
+    pub fn pad_panel(&self) -> f32       { (10.0 * self.density_factor()).round() }
+
+    // --- Layout constants (not scaled -- structural) ---
     pub const SIDEBAR_WIDTH: f32 = 280.0;
     pub const TREE_INDENT: f32 = 16.0;
     pub const RESPONSE_MIN_HEIGHT: f32 = 200.0;
     pub const MODAL_WIDTH: f32 = 380.0;
     pub const CONTEXT_MENU_WIDTH: f32 = 210.0;
+
+    // --- Border radii (not scaled) ---
+    pub const RADIUS_SM: f32 = 4.0;
+    pub const RADIUS_MD: f32 = 6.0;
+    pub const RADIUS_LG: f32 = 8.0;
 }
 
-pub mod radius {
-    pub const SM: f32 = 4.0;
-    pub const MD: f32 = 6.0;
-    pub const LG: f32 = 8.0;
-}
-
-pub mod pad {
-    pub const CHIP: [u16; 2] = [4, 10];
-    pub const BUTTON: [u16; 2] = [6, 12];
-    pub const INPUT: u16 = 10;
-    pub const PANEL: u16 = 10;
+impl Default for UiScale {
+    fn default() -> Self {
+        Self { density: Density::Comfortable, font_scale: 1.0 }
+    }
 }
 ```
 
-#### F. Generic key-value editor eliminates copy-paste
+**Usage in view code**:
+```rust
+// Before (hardcoded everywhere):
+text(request.name.clone()).size(14)
+lucide_icon("folder", 14.0)
+container(content).padding([6, 12])
+
+// After (reads from UiScale):
+text(request.name.clone()).size(scale.text_label())
+lucide_icon("folder", scale.icon_sm())
+container(content).padding(scale.pad_button())
+```
+
+**Why**: Single struct controls all dimensions. Changing `font_scale` to 1.25 makes the entire UI 25% larger text. Switching `density` to `Compact` tightens all padding. Serializable to disk for persistence. Future settings panel just mutates `UiScale` fields.
+
+#### F. Split components/ into category files
 
 ```rust
-// ui/components.rs
+// Current: one flat file (components.rs) with everything mixed
+// Proposed: components/ directory split by category
+
+// ui/components/buttons.rs   -- icon_button, menu_button, danger_button, secondary_button, save_button
+// ui/components/badges.rs    -- method_badge, status_badge
+// ui/components/editors.rs   -- kv_editor (generic key-value pair editor)
+// ui/components/overlays.rs  -- delete_modal, drag_preview, context_menu container
+
+// ui/components/mod.rs re-exports everything:
+pub mod badges;
+pub mod buttons;
+pub mod editors;
+pub mod overlays;
+pub use badges::*;
+pub use buttons::*;
+pub use editors::*;
+pub use overlays::*;
+```
+
+**Why**: Adding new components goes to the right file by category. `buttons.rs` can grow to 10 button variants without polluting badges or editors. Call sites don't change -- `components::icon_button(...)` still works via re-exports.
+
+**All component functions take `&UiScale`** so they read sizes from the central config:
+```rust
+// ui/components/buttons.rs
+pub fn icon_button<'a>(
+    icon: impl Into<Element<'a, Message>>,
+    scale: &UiScale,
+) -> widget::Button<'a, Message> {
+    button(icon)
+        .padding(scale.pad_chip())
+        .style(|theme, status| styles::handle_button(theme, status))
+}
+```
+
+#### G. Generic key-value editor eliminates copy-paste
+
+```rust
+// ui/components/editors.rs
 pub fn kv_editor<'a, M: Clone + 'a>(
     pairs: &'a [(String, String)],
     key_placeholder: &str,
@@ -288,7 +399,7 @@ pub fn kv_editor<'a, M: Clone + 'a>(
 
 Replaces `view_params_editor`, `view_headers_editor`, and the form pair editor body.
 
-#### G. Narrow view function signatures
+#### H. Narrow view function signatures
 
 ```rust
 // Before (every function sees everything):
@@ -306,10 +417,16 @@ Each feature's view returns `Element<FeatureMsg>`. Root `view()` maps them: `.ma
 
 Each phase produces a compiling, working app.
 
-### Phase 1: Design Tokens (low risk, immediate cleanup)
-- Create `ui/tokens.rs` with all constants
-- Replace every magic number across `sidebar.rs`, `main_panel.rs`, `styles.rs`, `mod.rs`, `tabs.rs`
-- Zero functional change, pure refactor
+### Phase 1: UiScale + Component Split (low risk, immediate cleanup)
+- Create `ui/scale.rs` with `UiScale`, `Density` struct
+- Add `ui_scale: UiScale` field to `AppState` (defaults to `Comfortable`, `font_scale: 1.0`)
+- Split `components.rs` into `components/` directory: `buttons.rs`, `badges.rs`, `editors.rs`, `overlays.rs`
+- Move `delete_modal` and `drag_preview_overlay` from `ui/mod.rs` into `components/overlays.rs`
+- Replace all 35+ `.padding(...)` literals to read from `&UiScale`
+- Replace all 40+ `.size(...)` literals to read from `&UiScale`
+- Replace all 12 `lucide_icon("...", 14.0/16.0)` calls to use `scale.icon_sm()`/`scale.icon_md()`
+- Pass `&UiScale` through view functions (can pass alongside `&PostmanUiApp` for now, narrow later)
+- Zero functional change at default scale, pure refactor
 
 ### Phase 2: Data Model (medium risk, highest value)
 - Build `TreeArena` in `state/tree.rs` with methods: `get`, `get_mut`, `insert`, `remove`, `move_node`, `is_ancestor`, `children`, `walk`
@@ -327,14 +444,15 @@ Each phase produces a compiling, working app.
 
 ### Phase 4: View Decoupling
 - Move view functions into feature `view.rs` files
-- Narrow signatures from `&PostmanUiApp` to specific state slices
-- Extract generic `kv_editor` component
+- Narrow signatures from `&PostmanUiApp` to specific state slices (`&Tab`, `&TreeArena`, `&UiScale`, etc.)
+- Extract generic `kv_editor` into `components/editors.rs`
 - Each feature view returns `Element<FeatureMsg>`, root maps with `.map()`
 
 ### Phase 5: Polish
 - Gate pointer subscription on `drag.is_active()` to avoid idle message spam
 - Add depth limit to `TreeArena` insert (prevent runaway nesting)
 - Clean up dead code (`find_parent_and_index`)
+- Add `Message::SetDensity(Density)` and `Message::SetFontScale(f32)` for future settings panel
 
 ---
 
