@@ -20,9 +20,12 @@ IceWow is a Postman-like API client built with Iced 0.14 (Elm architecture). Cur
 - Send request on Tab A, switch to Tab B, response arrives -> overwrites Tab B's view
 - `loading: bool` is also global -- can't show per-tab loading spinners
 
-**3. Orphaned tab->request references** (`model.rs:34`)
-- `Tab.request_id: Option<RequestId>` can point to deleted requests
-- Deletion at `app.rs:157-159` uses `retain()` to clean up, but only catches the delete path -- any other code that removes tree nodes (future refactors) must remember to also clean tabs
+**3. Tab duplicates request data with no ownership model** (`model.rs:32-44`)
+- `Tab` copies `url_input`, `method`, `headers`, `body_text`, `form_pairs`, `query_params` from `RequestNode` at open time
+- Nothing enforces one-tab-per-request -- `open_request_tab()` (`app.rs:648`) checks for existing tabs but nothing prevents future code from breaking this
+- `Tab.request_id: Option<RequestId>` can point to deleted requests (orphaned refs)
+- Deletion at `app.rs:157-159` uses `retain()` to clean up, but only catches the delete path
+- No "dirty" indicator -- user can't tell if tab has unsaved changes
 
 **4. `#[allow(dead_code)]` on `find_parent_and_index`** (`tree_ops.rs:68`)
 - Suggests incomplete refactoring -- function exists but is unused
@@ -96,19 +99,24 @@ IceWow is a Postman-like API client built with Iced 0.14 (Elm architecture). Cur
 - No way for users to adjust text size (accessibility), UI density (compact/comfortable), or icon scale
 - Example: changing "body text = 13px" requires editing 15+ call sites today
 
+**19. `styles.rs` doesn't scale and can't respond to UiScale** (`ui/styles.rs`)
+- 25 style functions, all standalone with no shared base/builder
+- Duplication: `send_button()` and `save_button()` near-identical, `secondary_button()` and `danger_button()` share hover logic
+- None take sizing info -- border radius, shadow blur, padding inside styles are all hardcoded
+- When UiScale is introduced, styles that use radius/shadow need access to it too
+
+**20. No error/notification system**
+- HTTP failures show in response panel, but validation errors, save failures, and engine errors have nowhere to go
+- No toast/snackbar/notification pattern exists in the architecture
+- Will be needed for any real feature (auth failures, import errors, timeout warnings)
+
 ### Tier 4: Missing Infrastructure
 
-**19. No persistence** -- state lost on close, `sample()` recreated each session
-**20. No undo/redo** -- all mutations irreversible
-**21. No validation** -- URLs not parsed, JSON not validated, IDs not verified before use
-**22. HTTP engine incomplete** -- `Error::Timeout` defined but never raised (`engine/src/error.rs`), no retry, no connection pooling config, response always loaded fully into memory
-**23. Cookies tab shown in UI but no cookie extraction** (`ResponseTab::Cookies` exists, no handler)
-
-**17. No persistence** -- state lost on close, `sample()` recreated each session
-**18. No undo/redo** -- all mutations irreversible
-**19. No validation** -- URLs not parsed, JSON not validated, IDs not verified before use
-**20. HTTP engine incomplete** -- `Error::Timeout` defined but never raised (`engine/src/error.rs`), no retry, no connection pooling config, response always loaded fully into memory
-**21. Cookies tab shown in UI but no cookie extraction** (`ResponseTab::Cookies` exists, no handler)
+**21. No persistence** -- state lost on close, `sample()` recreated each session
+**22. No undo/redo** -- all mutations irreversible
+**23. No validation** -- URLs not parsed, JSON not validated, IDs not verified before use
+**24. HTTP engine incomplete** -- `Error::Timeout` defined but never raised (`engine/src/error.rs`), no retry, no connection pooling config, response always loaded fully into memory
+**25. Cookies tab shown in UI but no cookie extraction** (`ResponseTab::Cookies` exists, no handler)
 
 ---
 
@@ -214,19 +222,60 @@ pub fn update(&mut self, message: Message) -> Task<Message> {
 
 **Why**: Each feature module can grow independently. Adding "environments" is a new `features/environments/` directory with its own `EnvironmentsMsg` -- zero changes to other features.
 
-#### C. Per-tab response & loading state
+#### C. One-tab-per-request with draft state
+
+A request can only be open in one tab at a time. The tab holds a **draft** (editing state) that is initialized from the `RequestNode` when opened. "Save" writes the draft back to the tree. This gives us dirty tracking and discard capability without any sync/divergence bugs.
 
 ```rust
 // state/tabs.rs
+
 pub struct Tab {
-    // ... existing fields ...
-    pub response: Option<ResponseData>,  // MOVED from AppState
-    pub loading: bool,                   // MOVED from AppState
-    pub active_response_tab: ResponseTab, // MOVED from AppState
+    pub id: TabId,
+    pub request_id: Option<RequestId>,    // None = standalone/new-request tab
+    pub title: String,
+
+    // --- Draft fields (editing surface) ---
+    pub url_input: String,
+    pub method: HttpMethod,
+    pub body_type: BodyType,
+    pub body_text: String,
+    pub form_pairs: Vec<(String, String)>,
+    pub headers: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
+
+    // --- Per-tab state (MOVED from AppState) ---
+    pub response: Option<ResponseData>,
+    pub loading: bool,
+    pub active_request_tab: RequestTab,
+    pub active_response_tab: ResponseTab,
+    pub dirty: bool,                      // NEW: true if draft differs from saved request
 }
 ```
 
-**Why**: Fixes the race condition. Each tab tracks its own response independently. Remove `AppState.url_input` entirely -- always read from active tab.
+**Enforced invariant**: `TabStore::open_for_request()` checks if any existing tab already references the `request_id`. If yes, activate it. If no, create a new tab. This is a method on `TabStore`, not scattered logic in `app.rs`.
+
+```rust
+impl TabStore {
+    /// Opens a tab for the given request. If already open, activates it.
+    /// Returns the TabId (existing or newly created).
+    pub fn open_for_request(&mut self, request_id: RequestId, /* init data */) -> TabId {
+        if let Some(existing) = self.find_by_request(request_id) {
+            self.active = Some(existing);
+            return existing;
+        }
+        // create new tab, set active, return id
+    }
+
+    fn find_by_request(&self, request_id: RequestId) -> Option<TabId> {
+        self.tabs.values().find(|t| t.request_id == Some(request_id)).map(|t| t.id)
+    }
+}
+```
+
+**Remove `AppState.url_input`** entirely -- always read from `tabs.active().url_input`.
+
+**Save flow**: `SaveRequest` copies tab draft fields back to `TreeArena` node, sets `tab.dirty = false`.
+**Dirty tracking**: Any edit message (`UrlChanged`, `MethodChanged`, etc.) sets `tab.dirty = true`. UI shows indicator (dot on tab chip).
 
 #### D. TabStore with O(1) lookup
 
@@ -411,6 +460,67 @@ pub fn view_request_name_row(tab: &Tab) -> Element<EditorMsg>
 
 Each feature's view returns `Element<FeatureMsg>`. Root `view()` maps them: `.map(Message::Editor)`.
 
+#### I. Cross-feature communication via Task chaining
+
+Features don't import each other's modules. When one feature needs to trigger another (sidebar delete -> close tabs, sidebar select -> open tab, HTTP response -> land in specific tab), it returns a `Task::done()` targeting the root `Message` enum.
+
+```rust
+// In features/sidebar/mod.rs:
+pub fn update(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
+    match msg {
+        SidebarMsg::SelectRequest(id) => {
+            // Sidebar does its own work (expand parent, highlight)...
+            // Then tells tabs to open this request:
+            Task::done(Message::Tabs(TabsMsg::OpenForRequest(id)))
+        }
+        SidebarMsg::ConfirmDeleteFolder(id) => {
+            let request_ids = state.tree.collect_request_ids(id);
+            state.tree.remove(id);
+            // Tell tabs to close any tabs referencing deleted requests:
+            Task::batch(
+                request_ids.into_iter()
+                    .map(|rid| Task::done(Message::Tabs(TabsMsg::CloseByRequest(rid))))
+            )
+        }
+        // ...
+    }
+}
+```
+
+**Rules**:
+- Feature update functions return `Task<Message>` (the ROOT type), not `Task<FeatureMsg>`
+- This is the ONLY way features communicate -- no direct imports between feature modules
+- Root `update()` re-dispatches chained messages automatically (Iced processes returned Tasks)
+- Keeps the dependency graph clean: `features/*` depend on `state/` and `ui/`, never on each other
+
+#### J. Styles take `&UiScale` for density-aware sizing
+
+```rust
+// ui/styles.rs -- style functions gain a scale parameter where needed
+
+pub fn drag_preview(_theme: &Theme, scale: &UiScale) -> container::Style {
+    container::Style {
+        border: border::rounded(UiScale::RADIUS_MD).color(PRIMARY).width(1),
+        shadow: Shadow {
+            blur_radius: scale.space_xl(),  // scales with density
+            ..
+        },
+        ..
+    }
+}
+```
+
+- Style functions that only use colors (e.g. `panel()`, `sidebar_panel()`) keep `_theme` only -- no `&UiScale` needed
+- Style functions that use sizing (radius, shadow, padding-inside-style) take `&UiScale`
+- Keep all 25 functions in one `styles.rs` file -- they're short return-value builders, not complex logic. Splitting would add navigation overhead without reducing complexity
+- The `_theme` parameter stays unused for now (Iced closures require it). Wire it up when multi-theme support is needed
+
+#### K. Error/notification system (TODO -- to be planned later)
+
+The app needs a toast/notification pattern for errors (HTTP failures, validation, save errors, timeout warnings) and success messages. This is deferred from the current refactor but should be addressed before adding features like auth, import/export, or environments.
+
+Likely shape: `state/notifications.rs` with a `Vec<Notification>` that auto-dismisses, rendered as an overlay in root `view()`. Each feature emits notifications via `Task::done(Message::Notify(...))`.
+
 ---
 
 ## Part 3: Implementation Phases
@@ -430,9 +540,11 @@ Each phase produces a compiling, working app.
 
 ### Phase 2: Data Model (medium risk, highest value)
 - Build `TreeArena` in `state/tree.rs` with methods: `get`, `get_mut`, `insert`, `remove`, `move_node`, `is_ancestor`, `children`, `walk`
-- Build `TabStore` in `state/tabs.rs` with HashMap + ordered vec
+- Build `TabStore` in `state/tabs.rs` with HashMap + ordered vec + `open_for_request()` enforcing one-tab-per-request
 - Move `response`, `loading`, `active_response_tab` into `Tab`
-- Remove `AppState.url_input`
+- Add `dirty: bool` to `Tab`, set on any edit, clear on save
+- Remove `AppState.url_input` -- always read from active tab
+- Wire `SaveRequest` to copy tab draft -> TreeArena node + clear dirty flag
 - Delete `tree_ops.rs` entirely -- all logic now in `TreeArena` methods
 - Update `app.rs` update/view to use new data structures
 
@@ -441,12 +553,15 @@ Each phase produces a compiling, working app.
 - Extract sub-enums: `SidebarMsg`, `EditorMsg`, `ResponseMsg`, `TabsMsg`, `HttpMsg`
 - Extract update handlers into feature modules
 - Root `update()` becomes thin delegation
+- Cross-feature communication via `Task::done(Message::OtherFeature(...))` -- no direct feature imports
 
 ### Phase 4: View Decoupling
 - Move view functions into feature `view.rs` files
 - Narrow signatures from `&PostmanUiApp` to specific state slices (`&Tab`, `&TreeArena`, `&UiScale`, etc.)
 - Extract generic `kv_editor` into `components/editors.rs`
 - Each feature view returns `Element<FeatureMsg>`, root maps with `.map()`
+- Add `&UiScale` parameter to style functions that use sizing (shadow, radius in `drag_preview`, `modal_card`, etc.)
+- Show dirty indicator (dot/icon) on tab chip when `tab.dirty == true`
 
 ### Phase 5: Polish
 - Gate pointer subscription on `drag.is_active()` to avoid idle message spam
