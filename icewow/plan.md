@@ -1,284 +1,346 @@
-# Plan: Add `iconflow` with `lucide_icon` and `raw_icon`
+# IceWow Architecture Review & Scaling Recommendations
 
-## Goal
+## Context
 
-Integrate `iconflow` into the UI without introducing an enum bottleneck for every new icon.
+IceWow is a Postman-like API client built with Iced 0.14 (Elm architecture). Currently ~3,580 lines across 19 files. The app works well at its current scope but several architectural decisions will become painful as features grow (environments, auth, collections, history, workspaces, pre-request scripts, etc.).
 
-The current UI hardcodes glyphs like `"⋯"`, `"×"`, `"▾"`, and `"▸"` directly in view code. We want to replace that with reusable icon components that fit the existing `src/ui/` architecture, while keeping icon usage low-friction.
+---
 
-## Direction
+## Part 1: Shortcomings & Scaling Pitfalls
 
-Use Lucide only for now. Enable only `pack-lucide` via feature flag to avoid bundling unused icon packs.
+### Tier 1: Data Bugs (will cause incorrect behavior)
 
-Do not introduce a required app-wide `AppIcon` enum. That adds friction without much benefit if feature code regularly needs new icons by name.
+**1. Duplicated URL state** (`model.rs:161` + `model.rs:36`)
+- `AppState.url_input` duplicates `Tab.url_input`
+- `UrlChanged` at `app.rs:205-209` writes to both, but `sync_url_input_from_active_tab()` only copies tab->global
+- Risk: desync on tab switch if any code path forgets to sync
 
-Instead, use a two-layer structure:
+**2. Global response shared across tabs** (`model.rs:173`)
+- Single `Option<ResponseData>` for all tabs
+- Send request on Tab A, switch to Tab B, response arrives -> overwrites Tab B's view
+- `loading: bool` is also global -- can't show per-tab loading spinners
 
-```text
-lucide_icon(name) -> raw_icon(glyph, family)
+**3. Orphaned tab->request references** (`model.rs:34`)
+- `Tab.request_id: Option<RequestId>` can point to deleted requests
+- Deletion at `app.rs:157-159` uses `retain()` to clean up, but only catches the delete path -- any other code that removes tree nodes (future refactors) must remember to also clean tabs
+
+**4. `#[allow(dead_code)]` on `find_parent_and_index`** (`tree_ops.rs:68`)
+- Suggests incomplete refactoring -- function exists but is unused
+
+### Tier 2: Performance (degrades with scale)
+
+**5. O(n) tab lookup every frame** (`model.rs:344-352`)
+- `active_tab_mut()`/`active_tab_ref()` linear-scan `Vec<Tab>` by ID
+- Called from `view()` (every frame) and most `update()` arms
+- With 50+ open tabs, this adds up
+
+**6. O(n) tree search for every request lookup** (`model.rs:372-389`)
+- `find_request()` does full recursive traversal
+- Called on tab open (`app.rs:661`), drag preview (`app.rs:700`), etc.
+
+**7. O(3n) drag-drop move** (`tree_ops.rs:104-145`)
+- `move_node()` does: `remove_folder/request` (scan 1) -> `is_descendant` (scan 2) -> `insert_node` (scan 3)
+- Three full tree traversals per drop operation
+
+**8. Unfiltered pointer subscription** (`app.rs:516-524`)
+- Every mouse move dispatches `PointerMoved` even when nothing is being dragged
+- At 60fps = 3,600 messages/minute doing nothing useful when idle
+
+**9. Recursive tree with no depth limit**
+- `FolderNode.children: Vec<TreeNode>` is unbounded recursion
+- Deep nesting (100+ levels) risks stack overflow in all 8 recursive `tree_ops` functions
+
+### Tier 3: Maintainability (slows development)
+
+**10. Monolithic Message enum -- 58 variants flat** (`app.rs:18-76`)
+- Adding one new key-value collection (like auth params) requires 4+ new variants
+- No grouping -- tree ops, HTTP config, drag-drop, UI state all mixed
+
+**11. Monolithic update() -- 425 lines** (`app.rs:88-513`)
+- Single match statement handles everything
+- Repeated patterns: `UpdateFormKey/Value`, `UpdateHeaderKey/Value`, `UpdateQueryParamKey/Value` are copy-paste at `app.rs:426-507`
+
+**12. 8+ recursive tree traversals, each reimplements recursion** (`tree_ops.rs` + `app.rs:805-883`)
+- `tree_ops.rs`: `insert_node`, `remove_folder`, `remove_request`, `is_descendant`, `find_parent_and_index`, `move_node`, `collect_request_ids`, `set_folder_expanded` -- all manual recursion
+- `app.rs` adds 4 more private helpers: `children_len`, `folder_expanded`, `find_folder_name`, `update_request_method`
+- No shared visitor/iterator pattern
+
+**13. 3 identical key-value editors copy-pasted** (`ui/main_panel.rs:208-239, 241-272, 305-329`)
+- Params, headers, and form pairs are structurally identical but each is its own function with its own message variants
+
+**14. Magic numbers scattered everywhere**
+- Sidebar width `280.0` (only in `sidebar.rs:18`)
+- Response height `200.0` (`main_panel.rs:188`)
+- Tree indent `16.0` (11 locations in `sidebar.rs`)
+- 8 different text sizes (10, 11, 12, 13, 14, 15, 16, 20) across all files
+- Padding tuples `[4,12]`, `[6,10]`, `[8,12]`, `[4,10]` -- no consistent scale
+
+**15. All view functions take `&PostmanUiApp`** (full state access)
+- Can't test or reuse components in isolation
+- `view_request_name_row(app)` only needs current tab, but can read anything
+
+**16. Style functions ignore `&Theme` parameter** (`ui/styles.rs`)
+- All 25 functions accept `_theme: &Theme` but use hardcoded constants from `theme.rs`
+- Works fine for single theme, but blocks runtime theme switching
+
+### Tier 4: Missing Infrastructure
+
+**17. No persistence** -- state lost on close, `sample()` recreated each session
+**18. No undo/redo** -- all mutations irreversible
+**19. No validation** -- URLs not parsed, JSON not validated, IDs not verified before use
+**20. HTTP engine incomplete** -- `Error::Timeout` defined but never raised (`engine/src/error.rs`), no retry, no connection pooling config, response always loaded fully into memory
+**21. Cookies tab shown in UI but no cookie extraction** (`ResponseTab::Cookies` exists, no handler)
+
+---
+
+## Part 2: Recommended Architecture
+
+### Folder Structure
+
+```
+src/
+|-- main.rs                    # Entry point (unchanged)
+|-- app.rs                     # Thin router: delegates to feature handlers
+|
+|-- state/                     # All data structures & indexed stores
+|   |-- mod.rs                 # Re-exports AppState
+|   |-- tree.rs                # TreeArena (HashMap-based tree with O(1) lookup)
+|   |-- tabs.rs                # TabStore (HashMap<TabId, Tab> + ordered Vec<TabId>)
+|   |-- workspace.rs           # WorkspaceState (project name, selected folder, UI flags)
+|   |-- drag.rs                # DragState, PendingLongPress, drop targets
+|   +-- ids.rs                 # IdAllocator (unified ID generation, persistence-ready)
+|
+|-- features/                  # One module per domain, each owns Message + update + view
+|   |-- sidebar/
+|   |   |-- mod.rs             # pub SidebarMsg enum + update fn
+|   |   |-- view.rs            # view_sidebar(), context_menu, tree rendering
+|   |   +-- drag.rs            # Sidebar drag-drop logic (finish_sidebar_drag, auto-scroll)
+|   |-- editor/
+|   |   |-- mod.rs             # pub EditorMsg enum + update fn
+|   |   +-- view.rs            # URL bar, request tabs, body/headers/params editors
+|   |-- response/
+|   |   |-- mod.rs             # pub ResponseMsg enum + update fn
+|   |   +-- view.rs            # Response display (body, headers, cookies)
+|   |-- tabs/
+|   |   |-- mod.rs             # pub TabsMsg enum + update fn
+|   |   +-- view.rs            # Tab strip rendering + tab drag
+|   +-- http/
+|       +-- mod.rs             # pub HttpMsg enum + update fn (send request, handle result)
+|
+|-- ui/                        # Stateless shared primitives (no feature/state imports)
+|   |-- mod.rs                 # Re-exports
+|   |-- tokens.rs              # NEW: spacing scale, text sizes, layout constants, radii
+|   |-- theme.rs               # Color palette (unchanged)
+|   |-- styles.rs              # Style functions (use tokens instead of magic numbers)
+|   |-- components.rs          # Reusable widgets: kv_editor, method_badge, modal, etc.
+|   +-- icons.rs               # Icon helpers
+|
+engine/                        # HTTP engine crate (unchanged)
 ```
 
-This keeps the public API simple:
+### Key Design Decisions
 
-- `lucide_icon(...)` is the ergonomic wrapper used throughout the app
-- `raw_icon(...)` is the low-level renderer for a resolved glyph and font family
-
-The component names should explicitly reflect Lucide, since that is the only supported pack in this iteration.
-
-## Architecture
-
-### `src/ui/icons.rs`
-
-This module owns all `iconflow` integration.
-
-Responsibilities:
-
-- expose Lucide font bytes for startup loading
-- resolve a Lucide icon name into glyph metadata using `iconflow`
-- provide the low-level `raw_icon(...)` renderer
-- provide the `lucide_icon(...)` wrapper used by the rest of the UI
-
-This keeps `Pack`, `Style`, `Size`, and `try_icon(...)` out of screen modules.
-
-### `src/ui/components.rs`
-
-This remains the reusable widget layer.
-
-Responsibilities:
-
-- build a generic `icon_button(...)` that accepts already-built icon content
-- keep styling and widget composition centralized
-
-### Screen modules
-
-Modules like `sidebar.rs`, `tabs.rs`, and `main_panel.rs` should consume `lucide_icon(...)` and pass that into `icon_button(...)`, not raw Unicode glyphs and not direct `iconflow` calls.
-
-## Proposed API
-
-### `src/ui/icons.rs`
+#### A. TreeArena replaces recursive `Vec<TreeNode>`
 
 ```rust
-use iced::widget::Text;
-
-pub fn lucide_icon(name: &str, size: u16) -> Text<'static>;
-
-pub fn raw_icon(glyph: char, family: &'static str, size: u16) -> Text<'static>;
-```
-
-Return `Text<'static>`, not `Element`. The icon name is consumed during lookup — the returned widget owns a `String` from `glyph.to_string()` and does not borrow from `name`. Returning `Text` rather than `Element` lets callers compose directly inside `button(...)` and `row![...]` without `.into()`.
-
-Font loading uses `iconflow::fonts()` directly — with the `pack-lucide` feature flag, this already returns only Lucide font assets. No wrapper needed.
-
-## Behavior
-
-### `lucide_icon(...)`
-
-- accepts a Lucide icon name like `"ellipsis"`, `"x"`, `"chevron-down"`, `"chevron-right"`
-- resolves it with `Pack::Lucide`
-- uses a single default `Style` and `Size` unless a real need emerges for variants
-- passes the resolved glyph and family to `raw_icon(...)`
-- returns `Text<'static>` — the name is consumed during lookup, the widget owns the glyph string
-
-### `raw_icon(...)`
-
-- accepts the final `glyph` and `family`
-- renders the actual `iced::widget::text(glyph.to_string())`
-- applies `iced::font::Font::with_name(family)`
-- returns `Text<'static>`
-
-This split is useful because `raw_icon(...)` stays generic, while `lucide_icon(...)` owns the library-specific lookup.
-
-## Failure Model
-
-Do not add a silent fallback for bad icon names.
-
-If a Lucide icon name is wrong or missing, fail fast at the lookup boundary with an explicit `expect(...)` or similarly strict handling. The icon name is developer-authored input, not user input, so hiding mistakes behind fallback glyphs is not helpful.
-
-That means:
-
-- no ASCII fallback glyphs
-- no automatic substitution logic
-- clear failure when a referenced icon does not exist
-
-## Implementation Steps
-
-### 1. Add the dependency
-
-Update [Cargo.toml](/Users/hmziq/os/learning/icewow/Cargo.toml):
-
-```toml
-iconflow = { version = "1", features = ["pack-lucide"] }
-```
-
-Using `pack-lucide` only avoids bundling fonts for Bootstrap, Heroicons, and other unused packs. No engine changes are needed.
-
-### 2. Add the icon module
-
-Create [src/ui/icons.rs](/Users/hmziq/os/learning/icewow/src/ui/icons.rs).
-
-Implement:
-
-- `raw_icon(...)`
-- `lucide_icon(...)`
-
-Suggested internal flow:
-
-```rust
-pub fn lucide_icon(name: &str, size: u16) -> Text<'static> {
-    let icon = try_icon(Pack::Lucide, name, Style::Regular, Size::Regular)
-        .expect("missing lucide icon");
-
-    let glyph = char::from_u32(icon.codepoint)
-        .expect("invalid lucide codepoint");
-
-    raw_icon(glyph, icon.family, size)
+// state/tree.rs
+pub struct TreeArena {
+    nodes: HashMap<NodeId, TreeEntry>,
+    root_children: Vec<NodeId>,    // ordered display list
+    next_id: u64,
 }
 
-pub fn raw_icon(glyph: char, family: &'static str, size: u16) -> Text<'static> {
-    text(glyph.to_string())
-        .size(size)
-        .font(iced::font::Font::with_name(family))
-}
-```
-
-### 3. Export through `ui`
-
-Update [src/ui/mod.rs](/Users/hmziq/os/learning/icewow/src/ui/mod.rs):
-
-- add `pub mod icons;`
-
-### 4. Load Lucide fonts at app startup
-
-Update [src/app.rs](/Users/hmziq/os/learning/icewow/src/app.rs).
-
-Add a free function:
-
-```rust
-fn load_icon_fonts() -> Task<Message> {
-    Task::batch(
-        iconflow::fonts()
-            .iter()
-            .map(|f| font::load(f.bytes).map(Message::IconFontLoaded)),
-    )
+pub struct TreeEntry {
+    pub data: NodeData,            // Folder { name, expanded } | Request { name, url, method }
+    pub parent: Option<NodeId>,    // back-pointer for O(depth) ancestor check
+    pub children: Vec<NodeId>,     // ordered children (empty for requests)
 }
 ```
 
-With `pack-lucide` enabled, `iconflow::fonts()` returns only Lucide font assets — no filtering needed.
+**Why**: Eliminates all 12 recursive traversal functions. `find_request` becomes `self.nodes.get(&id)` -- O(1). `is_ancestor` walks parent pointers -- O(depth) not O(n). `move_node` removes from source parent's `children` vec and inserts into target's -- O(children_count) not O(tree_size). No more `node.clone()` during recursion.
 
-Add a message variant:
-
-```rust
-IconFontLoaded(Result<(), font::Error>)
-```
-
-Handle it in `update()` — no app state change needed, just accept the result:
+#### B. Split Message enum into feature sub-enums
 
 ```rust
-Message::IconFontLoaded(_) => Task::none(),
-```
+// app.rs -- thin router
+pub enum Message {
+    Sidebar(SidebarMsg),
+    Editor(EditorMsg),
+    Response(ResponseMsg),
+    Tabs(TabsMsg),
+    Http(HttpMsg),
+    // 3-4 truly global variants
+    PointerMoved(Point),
+    PointerReleased,
+    WindowResized(Size),
+    IconFontLoaded(Result<(), font::Error>),
+}
 
-Update `PostmanUiApp::new()` to return the font-loading task instead of `Task::none()`:
-
-```rust
-pub fn new() -> (Self, Task<Message>) {
-    (
-        Self { state: AppState::new() },
-        load_icon_fonts(),
-    )
+// Root update() shrinks to ~30 lines of delegation:
+pub fn update(&mut self, message: Message) -> Task<Message> {
+    match message {
+        Message::Sidebar(msg) => sidebar::update(&mut self.state, msg),
+        Message::Editor(msg) => editor::update(&mut self.state, msg),
+        // ...
+        Message::PointerMoved(pos) => { self.state.drag.pointer = pos; Task::none() }
+        Message::PointerReleased => self.handle_pointer_release(),
+    }
 }
 ```
 
-This keeps font bootstrap in the app layer and icon lookup in the UI layer.
+**Why**: Each feature module can grow independently. Adding "environments" is a new `features/environments/` directory with its own `EnvironmentsMsg` -- zero changes to other features.
 
-### 5. Refactor reusable icon widgets
-
-Update [src/ui/components.rs](/Users/hmziq/os/learning/icewow/src/ui/components.rs).
-
-Replace the current string-glyph `icon_button` with one that accepts pre-built content:
+#### C. Per-tab response & loading state
 
 ```rust
-pub fn icon_button<'a>(
-    icon: impl Into<Element<'a, Message>>,
-) -> widget::Button<'a, Message> {
-    button(icon)
-        .padding([2, 6])
-        .style(|theme, status| styles::handle_button(theme, status))
+// state/tabs.rs
+pub struct Tab {
+    // ... existing fields ...
+    pub response: Option<ResponseData>,  // MOVED from AppState
+    pub loading: bool,                   // MOVED from AppState
+    pub active_response_tab: ResponseTab, // MOVED from AppState
 }
 ```
 
-Using `impl Into<Element>` instead of `Text<'a>` directly avoids fighting iced's `Text<'a, Theme, Renderer>` generic params — `Text` already implements `Into<Element>`.
+**Why**: Fixes the race condition. Each tab tracks its own response independently. Remove `AppState.url_input` entirely -- always read from active tab.
 
-Typical usage:
+#### D. TabStore with O(1) lookup
 
 ```rust
-components::icon_button(icons::lucide_icon("ellipsis", 16))
-components::icon_button(icons::lucide_icon("x", 16))
+pub struct TabStore {
+    tabs: HashMap<TabId, Tab>,
+    order: Vec<TabId>,            // display order
+    active: Option<TabId>,
+}
+
+impl TabStore {
+    pub fn active(&self) -> Option<&Tab> {
+        self.active.and_then(|id| self.tabs.get(&id))
+    }
+    pub fn active_mut(&mut self) -> Option<&mut Tab> {
+        self.active.and_then(|id| self.tabs.get_mut(&id))
+    }
+    pub fn ordered(&self) -> impl Iterator<Item = &Tab> {
+        self.order.iter().filter_map(|id| self.tabs.get(id))
+    }
+}
 ```
 
-No other button helpers (`menu_button`, `danger_button`, `secondary_button`) need changes — they accept string labels for text content, which is correct for their use cases.
+**Why**: `active_tab_mut()` goes from O(n) linear scan to O(1) HashMap lookup.
 
-This keeps:
+#### E. Design tokens replace magic numbers
 
-- `icon_button(...)` generic as a reusable UI primitive
-- `lucide_icon(...)` as the convenience wrapper that hides family and pack details
-- `raw_icon(...)` as the only place that renders by glyph and family
+```rust
+// ui/tokens.rs
+pub mod text {
+    pub const CAPTION: f32 = 10.0;
+    pub const SMALL: f32 = 12.0;
+    pub const BODY: f32 = 13.0;
+    pub const LABEL: f32 = 14.0;
+    pub const TITLE: f32 = 16.0;
+    pub const HEADING: f32 = 20.0;
+}
 
-### 6. Replace hardcoded glyph usage
+pub mod spacing {
+    pub const XS: f32 = 2.0;
+    pub const SM: f32 = 4.0;
+    pub const MD: f32 = 8.0;
+    pub const LG: f32 = 12.0;
+    pub const XL: f32 = 16.0;
+}
 
-Update:
+pub mod layout {
+    pub const SIDEBAR_WIDTH: f32 = 280.0;
+    pub const TREE_INDENT: f32 = 16.0;
+    pub const RESPONSE_MIN_HEIGHT: f32 = 200.0;
+    pub const MODAL_WIDTH: f32 = 380.0;
+    pub const CONTEXT_MENU_WIDTH: f32 = 210.0;
+}
 
-- [src/ui/sidebar.rs](/Users/hmziq/os/learning/icewow/src/ui/sidebar.rs)
-- [src/ui/tabs.rs](/Users/hmziq/os/learning/icewow/src/ui/tabs.rs)
-- [src/ui/main_panel.rs](/Users/hmziq/os/learning/icewow/src/ui/main_panel.rs) if needed
+pub mod radius {
+    pub const SM: f32 = 4.0;
+    pub const MD: f32 = 6.0;
+    pub const LG: f32 = 8.0;
+}
 
-Complete glyph inventory and replacements:
+pub mod pad {
+    pub const CHIP: [u16; 2] = [4, 10];
+    pub const BUTTON: [u16; 2] = [6, 12];
+    pub const INPUT: u16 = 10;
+    pub const PANEL: u16 = 10;
+}
+```
 
-| Glyph | File(s) | Lucide replacement |
-|-------|---------|-------------------|
-| `"⋯"` | `sidebar.rs` (×3) | `"ellipsis"` |
-| `"×"` | `tabs.rs` (×1), `main_panel.rs` (×3) | `"x"` |
-| `"▾"` | `sidebar.rs` (×1) | `"chevron-down"` |
-| `"▸"` | `sidebar.rs` (×1) | `"chevron-right"` |
-| `"•"` | `sidebar.rs` (×1) | `"circle"` |
-| `"📦"` | `sidebar.rs` (×1) | `"package"` |
+#### F. Generic key-value editor eliminates copy-paste
 
-## Naming Recommendation
+```rust
+// ui/components.rs
+pub fn kv_editor<'a, M: Clone + 'a>(
+    pairs: &'a [(String, String)],
+    key_placeholder: &str,
+    value_placeholder: &str,
+    on_key: impl Fn(usize, String) -> M + 'a,
+    on_value: impl Fn(usize, String) -> M + 'a,
+    on_remove: impl Fn(usize) -> M + 'a,
+    on_add: M,
+) -> Element<'a, M>
+```
 
-To reflect the current scope clearly:
+Replaces `view_params_editor`, `view_headers_editor`, and the form pair editor body.
 
-- use `lucide_icon(...)`, not `icon(...)`
-- use `icon_button(...)` as the generic component primitive
-- use `load_icon_fonts()` — with `pack-lucide` feature flag scoping is handled at the dependency level, not the function name
+#### G. Narrow view function signatures
 
-`raw_icon(...)` can stay generic because it is below the pack-specific wrapper.
+```rust
+// Before (every function sees everything):
+pub fn view_request_name_row(app: &PostmanUiApp) -> Element<Message>
 
-## Acceptance Criteria
+// After (only what's needed):
+pub fn view_request_name_row(tab: &Tab) -> Element<EditorMsg>
+```
 
-The work is complete when:
+Each feature's view returns `Element<FeatureMsg>`. Root `view()` maps them: `.map(Message::Editor)`.
 
-- `iconflow` is declared in [Cargo.toml](/Users/hmziq/os/learning/icewow/Cargo.toml) with `features = ["pack-lucide"]`
-- Lucide fonts load from [src/app.rs](/Users/hmziq/os/learning/icewow/src/app.rs) during startup via `load_icon_fonts()`
-- [src/ui/icons.rs](/Users/hmziq/os/learning/icewow/src/ui/icons.rs) is the only place that directly uses `iconflow::{fonts, try_icon, Pack, Size, Style}`
-- the UI can render a Lucide icon by string name without adding enum entries
-- [src/ui/components.rs](/Users/hmziq/os/learning/icewow/src/ui/components.rs) exposes a reusable generic `icon_button(impl Into<Element>)`
-- all 11 hardcoded Unicode glyph instances across sidebar, tabs, and main_panel are replaced
-- bad icon names fail clearly instead of silently degrading
+---
 
-## Non-Goals
+## Part 3: Implementation Phases
 
-This plan does not include:
+Each phase produces a compiling, working app.
 
-- multi-pack support
-- a generic pack abstraction
-- icon fallback behavior
-- replacing every text button with an icon
+### Phase 1: Design Tokens (low risk, immediate cleanup)
+- Create `ui/tokens.rs` with all constants
+- Replace every magic number across `sidebar.rs`, `main_panel.rs`, `styles.rs`, `mod.rs`, `tabs.rs`
+- Zero functional change, pure refactor
 
-## Recommended Order
+### Phase 2: Data Model (medium risk, highest value)
+- Build `TreeArena` in `state/tree.rs` with methods: `get`, `get_mut`, `insert`, `remove`, `move_node`, `is_ancestor`, `children`, `walk`
+- Build `TabStore` in `state/tabs.rs` with HashMap + ordered vec
+- Move `response`, `loading`, `active_response_tab` into `Tab`
+- Remove `AppState.url_input`
+- Delete `tree_ops.rs` entirely -- all logic now in `TreeArena` methods
+- Update `app.rs` update/view to use new data structures
 
-1. add `iconflow = { version = "1", features = ["pack-lucide"] }` to [Cargo.toml](/Users/hmziq/os/learning/icewow/Cargo.toml)
-2. create [src/ui/icons.rs](/Users/hmziq/os/learning/icewow/src/ui/icons.rs)
-3. wire `load_icon_fonts()` and `Message::IconFontLoaded` into [src/app.rs](/Users/hmziq/os/learning/icewow/src/app.rs)
-4. refactor [src/ui/components.rs](/Users/hmziq/os/learning/icewow/src/ui/components.rs) so `icon_button(...)` accepts `impl Into<Element>` instead of `&str`
-5. replace all 11 raw glyph instances in [src/ui/sidebar.rs](/Users/hmziq/os/learning/icewow/src/ui/sidebar.rs), [src/ui/tabs.rs](/Users/hmziq/os/learning/icewow/src/ui/tabs.rs), and [src/ui/main_panel.rs](/Users/hmziq/os/learning/icewow/src/ui/main_panel.rs)
-6. `cargo check` to verify compilation
-7. run the app and confirm Lucide icons render correctly
+### Phase 3: Message Split & Feature Modules
+- Create `features/` directory structure
+- Extract sub-enums: `SidebarMsg`, `EditorMsg`, `ResponseMsg`, `TabsMsg`, `HttpMsg`
+- Extract update handlers into feature modules
+- Root `update()` becomes thin delegation
+
+### Phase 4: View Decoupling
+- Move view functions into feature `view.rs` files
+- Narrow signatures from `&PostmanUiApp` to specific state slices
+- Extract generic `kv_editor` component
+- Each feature view returns `Element<FeatureMsg>`, root maps with `.map()`
+
+### Phase 5: Polish
+- Gate pointer subscription on `drag.is_active()` to avoid idle message spam
+- Add depth limit to `TreeArena` insert (prevent runaway nesting)
+- Clean up dead code (`find_parent_and_index`)
+
+---
+
+## Verification
+
+After each phase:
+- `cargo check` -- compiles
+- `cargo test` -- tree operation tests pass (Phase 2 requires rewriting tests for TreeArena)
+- `cargo run` -- visual smoke test: create folders/requests, drag-drop, open tabs, switch tabs, delete items, send request
