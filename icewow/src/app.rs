@@ -3,11 +3,11 @@ use iced::{event, font, mouse, window, Element, Length, Subscription, Task, Them
 use std::time::Duration;
 
 use crate::model::{
-    AppState, BodyType, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, FolderId,
-    HttpMethod, NodeRef, PendingLongPress, PressKind, RequestId, RequestTab, ResponseData,
-    ResponseTab, SidebarDropTarget, Tab,
+    AppState, BodyType, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, HttpMethod,
+    NodeId, PendingLongPress, PressKind, RequestTab, ResponseData, ResponseTab, SidebarDropTarget, Tab,
+    TabId,
 };
-use crate::tree_ops;
+use crate::state::tree::NodeData;
 use crate::ui;
 
 pub struct PostmanUiApp {
@@ -19,28 +19,28 @@ pub enum Message {
     ToggleContextMenu(ContextMenuTarget),
     CloseContextMenu,
     CreateFolder {
-        parent: Option<FolderId>,
+        parent: Option<NodeId>,
     },
     CreateRequest {
-        parent: Option<FolderId>,
+        parent: Option<NodeId>,
     },
-    AskDeleteFolder(FolderId),
-    AskDeleteRequest(RequestId),
-    AskDeleteTab(u64),
+    AskDeleteFolder(NodeId),
+    AskDeleteRequest(NodeId),
+    AskDeleteTab(TabId),
     ConfirmDelete,
     CancelDelete,
-    SelectRequest(RequestId),
+    SelectRequest(NodeId),
     NewTab,
     UrlChanged(String),
-    ToggleFolder(FolderId),
+    ToggleFolder(NodeId),
     BeginLongPressSidebar {
         kind: DragKind,
-        source_parent: Option<FolderId>,
+        source_parent: Option<NodeId>,
         source_index: usize,
         click_action: Option<ClickAction>,
     },
     BeginLongPressTab {
-        tab_id: u64,
+        tab_id: TabId,
         source_index: usize,
     },
     LongPressElapsed(u64),
@@ -101,34 +101,32 @@ impl PostmanUiApp {
                 self.state.context_menu_position = None;
             }
             Message::CreateFolder { parent } => {
-                let id = self.state.alloc_folder_id();
+                let id = self.state.tree.alloc_folder_id();
                 let name = format!("New Folder {id}");
-
-                let folder = crate::model::TreeNode::Folder(crate::model::FolderNode {
+                let index = self.state.tree.children_len(parent);
+                self.state.tree.insert(
+                    parent,
+                    index,
                     id,
-                    name,
-                    expanded: true,
-                    children: vec![],
-                });
-
-                let index = self.children_len(parent);
-                let _ = tree_ops::insert_node(&mut self.state.tree_root, parent, index, folder);
+                    NodeData::Folder { name, expanded: true },
+                );
                 self.state.open_context_menu = None;
                 self.state.context_menu_position = None;
             }
             Message::CreateRequest { parent } => {
-                let id = self.state.alloc_request_id();
+                let id = self.state.tree.alloc_request_id();
                 let name = format!("New Request {id}");
-
-                let request = crate::model::TreeNode::Request(crate::model::RequestNode {
+                let index = self.state.tree.children_len(parent);
+                self.state.tree.insert(
+                    parent,
+                    index,
                     id,
-                    name,
-                    url: "https://api.example.com/new".to_string(),
-                    method: HttpMethod::Get,
-                });
-
-                let index = self.children_len(parent);
-                let _ = tree_ops::insert_node(&mut self.state.tree_root, parent, index, request);
+                    NodeData::Request {
+                        name,
+                        url: "https://api.example.com/new".to_string(),
+                        method: HttpMethod::Get,
+                    },
+                );
                 self.state.open_context_menu = None;
                 self.state.context_menu_position = None;
             }
@@ -149,28 +147,18 @@ impl PostmanUiApp {
                 if let Some(dialog) = self.state.delete_dialog.take() {
                     match dialog {
                         DeleteDialog::Folder(folder_id) => {
-                            if let Some(removed) =
-                                tree_ops::remove_folder(&mut self.state.tree_root, folder_id)
-                            {
-                                let mut request_ids = vec![];
-                                tree_ops::collect_request_ids(&removed, &mut request_ids);
-                                self.state.tabs.retain(|tab| {
-                                    !tab.request_id.is_some_and(|id| request_ids.contains(&id))
-                                });
-                            }
+                            let request_ids = self.state.tree.collect_request_ids(folder_id);
+                            self.state.tree.remove(folder_id);
+                            self.state.tabs.close_by_requests(&request_ids);
                         }
                         DeleteDialog::Request(request_id) => {
-                            let _ = tree_ops::remove_request(&mut self.state.tree_root, request_id);
-                            self.state
-                                .tabs
-                                .retain(|tab| tab.request_id != Some(request_id));
+                            self.state.tree.remove(request_id);
+                            self.state.tabs.close_by_request(request_id);
                         }
                         DeleteDialog::Tab(tab_id) => {
-                            self.state.tabs.retain(|tab| tab.id != tab_id);
+                            self.state.tabs.close_by_tab(tab_id);
                         }
                     }
-
-                    self.state.fallback_active_tab();
                 }
             }
             Message::CancelDelete => {
@@ -182,39 +170,17 @@ impl PostmanUiApp {
                 self.state.context_menu_position = None;
             }
             Message::NewTab => {
-                let id = self.state.alloc_tab_id();
-                let tab = Tab {
-                    id,
-                    request_id: None,
-                    title: format!("New Tab {id}"),
-                    url_input: String::new(),
-                    method: HttpMethod::Get,
-                    body_type: crate::model::BodyType::None,
-                    body_text: String::new(),
-                    form_pairs: vec![],
-                    headers: vec![],
-                    active_request_tab: crate::model::RequestTab::Params,
-                    query_params: vec![],
-                };
-
-                self.state.tabs.push(tab);
-                self.state.active_tab = Some(id);
-                self.state.sync_url_input_from_active_tab();
-                self.state.response = None;
+                self.state.tabs.new_tab();
             }
             Message::UrlChanged(value) => {
-                self.state.url_input = value.clone();
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.url_input = value;
+                    tab.dirty = true;
                 }
             }
             Message::ToggleFolder(folder_id) => {
-                if let Some(current) = self.folder_expanded(folder_id) {
-                    let _ = tree_ops::set_folder_expanded(
-                        &mut self.state.tree_root,
-                        folder_id,
-                        !current,
-                    );
+                if let Some(current) = self.state.tree.is_expanded(folder_id) {
+                    self.state.tree.set_expanded(folder_id, !current);
                 }
             }
             Message::BeginLongPressSidebar {
@@ -345,16 +311,10 @@ impl PostmanUiApp {
                                 }
                                 ClickAction::SelectFolder(folder_id) => {
                                     self.state.selected_folder = Some(folder_id);
-                                    tree_ops::set_folder_expanded(
-                                        &mut self.state.tree_root,
-                                        folder_id,
-                                        true,
-                                    );
+                                    self.state.tree.set_expanded(folder_id, true);
                                 }
                                 ClickAction::SelectTab(tab_id) => {
-                                    self.state.active_tab = Some(tab_id);
-                                    self.state.sync_url_input_from_active_tab();
-                                    self.state.response = None;
+                                    self.state.tabs.set_active(tab_id);
                                 }
                             }
                         }
@@ -365,21 +325,27 @@ impl PostmanUiApp {
                 self.state.window_size = size;
             }
             Message::SendRequest => {
-                let url = self.state.url_input.clone();
-                let tab = self.state.active_tab_ref();
+                let tab = match self.state.tabs.active() {
+                    Some(tab) => tab,
+                    None => return Task::none(),
+                };
 
-                if url.is_empty() {
+                if tab.url_input.is_empty() {
                     return Task::none();
                 }
 
-                let method = tab.map(|t| t.method).unwrap_or(HttpMethod::Get);
-                let headers = tab.map(|t| t.headers.clone()).unwrap_or_default();
-                let body_type = tab.map(|t| t.body_type).unwrap_or(BodyType::None);
-                let body_text = tab.map(|t| t.body_text.clone()).unwrap_or_default();
-                let form_pairs = tab.map(|t| t.form_pairs.clone()).unwrap_or_default();
+                let url = tab.url_input.clone();
+                let method = tab.method;
+                let headers = tab.headers.clone();
+                let body_type = tab.body_type;
+                let body_text = tab.body_text.clone();
+                let form_pairs = tab.form_pairs.clone();
 
-                self.state.loading = true;
-                self.state.response = None;
+                // Set loading on the active tab
+                if let Some(tab) = self.state.tabs.active_mut() {
+                    tab.loading = true;
+                    tab.response = None;
+                }
 
                 return Task::perform(
                     send_engine_request(url, method, headers, body_type, body_text, form_pairs),
@@ -387,123 +353,161 @@ impl PostmanUiApp {
                 );
             }
             Message::RequestFinished(result) => {
-                self.state.loading = false;
-                match result {
-                    Ok(response) => self.state.response = Some(response),
-                    Err(e) => self.state.response = Some(ResponseData {
-                        status_code: 0,
-                        body: format!("Error: {e}"),
-                        elapsed_ms: 0,
-                        headers: vec![],
-                    }),
+                if let Some(tab) = self.state.tabs.active_mut() {
+                    tab.loading = false;
+                    match result {
+                        Ok(response) => tab.response = Some(response),
+                        Err(e) => tab.response = Some(ResponseData {
+                            status_code: 0,
+                            body: format!("Error: {e}"),
+                            elapsed_ms: 0,
+                            headers: vec![],
+                        }),
+                    }
                 }
             }
             Message::MethodChanged(method) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.method = method;
-                }
-                if let Some(tab) = self.state.active_tab_ref() {
+                    tab.dirty = true;
                     if let Some(request_id) = tab.request_id {
-                        self.update_request_method(request_id, method);
+                        self.state.tree.set_request_method(request_id, method);
                     }
                 }
             }
             Message::SetBodyType(body_type) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.body_type = body_type;
+                    tab.dirty = true;
                 }
             }
             Message::UpdateBodyText(text) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.body_text = text;
+                    tab.dirty = true;
                 }
             }
             Message::AddFormPair => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.form_pairs.push((String::new(), String::new()));
+                    tab.dirty = true;
                 }
             }
             Message::UpdateFormKey(index, key) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.form_pairs.get_mut(index) {
                         pair.0 = key;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::UpdateFormValue(index, value) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.form_pairs.get_mut(index) {
                         pair.1 = value;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::RemoveFormPair(index) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.form_pairs.remove(index);
+                    tab.dirty = true;
                 }
             }
             Message::AddHeader => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.headers.push((String::new(), String::new()));
+                    tab.dirty = true;
                 }
             }
             Message::UpdateHeaderKey(index, key) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.headers.get_mut(index) {
                         pair.0 = key;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::UpdateHeaderValue(index, value) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.headers.get_mut(index) {
                         pair.1 = value;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::RemoveHeader(index) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.headers.remove(index);
+                    tab.dirty = true;
                 }
             }
             Message::SetRequestTab(request_tab) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.active_request_tab = request_tab;
                 }
             }
             Message::SetResponseTab(response_tab) => {
-                self.state.active_response_tab = response_tab;
+                if let Some(tab) = self.state.tabs.active_mut() {
+                    tab.active_response_tab = response_tab;
+                }
             }
             Message::SaveRequest => {
-                // no-op placeholder
+                let tab = match self.state.tabs.active() {
+                    Some(tab) => tab,
+                    None => return Task::none(),
+                };
+
+                if let Some(request_id) = tab.request_id {
+                    let name = tab.title.clone();
+                    let url = tab.url_input.clone();
+                    let method = tab.method;
+
+                    self.state.tree.update_request_from_draft(
+                        request_id,
+                        &name,
+                        &url,
+                        method,
+                    );
+
+                    if let Some(tab) = self.state.tabs.active_mut() {
+                        tab.dirty = false;
+                    }
+                }
             }
             Message::RequestNameChanged(name) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.title = name;
+                    tab.dirty = true;
                 }
             }
             Message::AddQueryParam => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.query_params.push((String::new(), String::new()));
+                    tab.dirty = true;
                 }
             }
             Message::UpdateQueryParamKey(index, key) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.query_params.get_mut(index) {
                         pair.0 = key;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::UpdateQueryParamValue(index, value) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     if let Some(pair) = tab.query_params.get_mut(index) {
                         pair.1 = value;
+                        tab.dirty = true;
                     }
                 }
             }
             Message::RemoveQueryParam(index) => {
-                if let Some(tab) = self.state.active_tab_mut() {
+                if let Some(tab) = self.state.tabs.active_mut() {
                     tab.query_params.remove(index);
+                    tab.dirty = true;
                 }
             }
             Message::IconFontLoaded(_) => {}
@@ -530,7 +534,7 @@ impl PostmanUiApp {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let right_content: Element<'_, Message> = if self.state.active_tab.is_some() {
+        let right_content: Element<'_, Message> = if self.state.tabs.active_id().is_some() {
             let url_bar = self.view_url_bar();
             let name_row = ui::main_panel::view_request_name_row(self);
             let section_tabs = ui::main_panel::view_request_section_tabs(self);
@@ -602,7 +606,8 @@ impl PostmanUiApp {
         let scale = &self.state.ui_scale;
         let current_method = self
             .state
-            .active_tab_ref()
+            .tabs
+            .active()
             .map(|t| t.method)
             .unwrap_or(HttpMethod::Get);
 
@@ -614,20 +619,28 @@ impl PostmanUiApp {
         .padding(scale.pad_button())
         .style(|theme, status| ui::styles::method_pick_list(theme, status));
 
-        let input = text_input("https://api.example.com", &self.state.url_input)
+        let url_value = self
+            .state
+            .tabs
+            .active()
+            .map(|t| t.url_input.clone())
+            .unwrap_or_default();
+
+        let input = text_input("https://api.example.com", &url_value)
             .on_input(Message::UrlChanged)
             .padding(scale.pad_input())
             .size(scale.text_title())
             .width(Length::Fill);
 
-        let send_label = if self.state.loading {
+        let loading = self.state.tabs.active().is_some_and(|t| t.loading);
+        let send_label = if loading {
             "Sending..."
         } else {
             "Send"
         };
 
         let send_btn = iced::widget::button(text(send_label).size(scale.text_label()))
-            .on_press_maybe(if self.state.loading {
+            .on_press_maybe(if loading {
                 None
             } else {
                 Some(Message::SendRequest)
@@ -645,68 +658,44 @@ impl PostmanUiApp {
             .into()
     }
 
-    fn open_request_tab(&mut self, request_id: RequestId) {
-        if let Some(existing) = self
-            .state
-            .tabs
-            .iter()
-            .find(|tab| tab.request_id == Some(request_id))
-            .map(|tab| tab.id)
-        {
-            self.state.active_tab = Some(existing);
-            self.state.sync_url_input_from_active_tab();
-            self.state.response = None;
-            return;
+    fn open_request_tab(&mut self, request_id: NodeId) {
+        let info = self.state.tree.get(request_id).and_then(|entry| match &entry.data {
+            NodeData::Request { name, url, method } => {
+                Some((name.clone(), url.clone(), *method))
+            }
+            _ => None,
+        });
+
+        if let Some((name, url, method)) = info {
+            self.state.tabs.open_for_request(request_id, name, url, method);
         }
-
-        let Some(request) = self.state.find_request(request_id) else {
-            return;
-        };
-
-        let title = request.name.clone();
-        let url = request.url.clone();
-        let method = request.method;
-
-        let tab = Tab {
-            id: self.state.alloc_tab_id(),
-            request_id: Some(request_id),
-            title,
-            url_input: url,
-            method,
-            body_type: crate::model::BodyType::None,
-            body_text: String::new(),
-            form_pairs: vec![],
-            headers: vec![],
-            active_request_tab: crate::model::RequestTab::Params,
-            query_params: vec![],
-        };
-
-        self.state.active_tab = Some(tab.id);
-        self.state.tabs.push(tab);
-        self.state.sync_url_input_from_active_tab();
-        self.state.response = None;
     }
 
     pub fn drag_preview_text(&self) -> Option<String> {
-        match self.state.drag_state {
+        match &self.state.drag_state {
             Some(DragState::Sidebar {
                 kind: DragKind::Folder(folder_id),
                 ..
             }) => self
-                .find_folder_name(folder_id)
+                .state
+                .tree
+                .folder_name(*folder_id)
                 .map(|name| format!("Folder: {name}")),
             Some(DragState::Sidebar {
                 kind: DragKind::Request(request_id),
                 ..
             }) => self
                 .state
-                .find_request(request_id)
-                .map(|request| format!("Request: {}", request.name)),
+                .tree
+                .get(*request_id)
+                .and_then(|e| match &e.data {
+                    NodeData::Request { name, .. } => Some(format!("Request: {name}")),
+                    _ => None,
+                }),
             Some(DragState::Tabs { tab_id, .. }) => self
                 .state
                 .tabs
-                .iter()
-                .find(|tab| tab.id == tab_id)
+                .get(*tab_id)
                 .map(|tab| format!("Tab: {}", tab.title)),
             None => None,
         }
@@ -725,18 +714,11 @@ impl PostmanUiApp {
         };
 
         if let Some(target) = hover {
-            let source_ref = match kind {
-                DragKind::Folder(folder_id) => NodeRef::Folder(folder_id),
-                DragKind::Request(request_id) => NodeRef::Request(request_id),
+            let source_id = match kind {
+                DragKind::Folder(id) => id,
+                DragKind::Request(id) => id,
             };
-
-            let _ = tree_ops::move_node(
-                &mut self.state.tree_root,
-                source_ref,
-                source_parent,
-                source_index,
-                target,
-            );
+            let _ = self.state.tree.move_node(source_id, target);
         }
 
         self.state.drag_state = None;
@@ -753,18 +735,8 @@ impl PostmanUiApp {
             return;
         };
 
-        if let Some(mut target_index) = hover_index {
-            if let Some(source_index) = self.state.tabs.iter().position(|tab| tab.id == tab_id) {
-                target_index = target_index.min(self.state.tabs.len());
-
-                let tab = self.state.tabs.remove(source_index);
-
-                if source_index < target_index {
-                    target_index = target_index.saturating_sub(1);
-                }
-
-                self.state.tabs.insert(target_index, tab);
-            }
+        if let Some(target_index) = hover_index {
+            self.state.tabs.reorder(tab_id, target_index);
         }
 
         self.state.drag_state = None;
@@ -801,86 +773,6 @@ impl PostmanUiApp {
             sidebar_scroll_id(),
             iced::widget::operation::AbsoluteOffset { x: 0.0, y: delta_y },
         ))
-    }
-
-    fn children_len(&self, parent: Option<FolderId>) -> usize {
-        fn recurse(nodes: &[crate::model::TreeNode], id: FolderId) -> Option<usize> {
-            for node in nodes {
-                if let crate::model::TreeNode::Folder(folder) = node {
-                    if folder.id == id {
-                        return Some(folder.children.len());
-                    }
-
-                    if let Some(found) = recurse(&folder.children, id) {
-                        return Some(found);
-                    }
-                }
-            }
-            None
-        }
-
-        match parent {
-            None => self.state.tree_root.len(),
-            Some(folder_id) => recurse(&self.state.tree_root, folder_id).unwrap_or(0),
-        }
-    }
-
-    fn folder_expanded(&self, folder_id: FolderId) -> Option<bool> {
-        fn recurse(nodes: &[crate::model::TreeNode], id: FolderId) -> Option<bool> {
-            for node in nodes {
-                if let crate::model::TreeNode::Folder(folder) = node {
-                    if folder.id == id {
-                        return Some(folder.expanded);
-                    }
-
-                    if let Some(found) = recurse(&folder.children, id) {
-                        return Some(found);
-                    }
-                }
-            }
-
-            None
-        }
-
-        recurse(&self.state.tree_root, folder_id)
-    }
-
-    fn find_folder_name(&self, folder_id: FolderId) -> Option<&str> {
-        fn recurse(nodes: &[crate::model::TreeNode], folder_id: FolderId) -> Option<&str> {
-            for node in nodes {
-                if let crate::model::TreeNode::Folder(folder) = node {
-                    if folder.id == folder_id {
-                        return Some(folder.name.as_str());
-                    }
-
-                    if let Some(found) = recurse(&folder.children, folder_id) {
-                        return Some(found);
-                    }
-                }
-            }
-
-            None
-        }
-
-        recurse(&self.state.tree_root, folder_id)
-    }
-
-    fn update_request_method(&mut self, request_id: RequestId, method: HttpMethod) {
-        fn recurse(nodes: &mut [crate::model::TreeNode], request_id: RequestId, method: HttpMethod) {
-            for node in nodes.iter_mut() {
-                if let crate::model::TreeNode::Request(ref mut req) = node {
-                    if req.id == request_id {
-                        req.method = method;
-                        return;
-                    }
-                }
-                if let crate::model::TreeNode::Folder(ref mut folder) = node {
-                    recurse(&mut folder.children, request_id, method);
-                }
-            }
-        }
-
-        recurse(&mut self.state.tree_root, request_id, method);
     }
 }
 

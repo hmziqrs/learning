@@ -3,15 +3,16 @@ use iced::{mouse, Background, Element, Length};
 
 use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
 use crate::model::{
-    ClickAction, ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
+    ClickAction, ContextMenuTarget, DragKind, DragState, SidebarDropTarget,
 };
+use crate::state::tree::{NodeData, NodeId};
 use crate::ui::{components, icons, scale::UiScale, theme};
 
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
     let scale = &app.state.ui_scale;
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
 
-    render_nodes(app, None, &app.state.tree_root, &[], &mut entries);
+    render_nodes(app, None, app.state.tree.root_children(), &[], &mut entries);
 
     let content = column(entries).spacing(0).padding([scale.space_sm(), 0.0]);
 
@@ -120,14 +121,14 @@ fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
 
 fn render_nodes<'a>(
     app: &'a PostmanUiApp,
-    parent: Option<FolderId>,
-    nodes: &'a [TreeNode],
+    parent: Option<NodeId>,
+    node_ids: &'a [NodeId],
     ancestors: &[bool],
     out: &mut Vec<Element<'a, Message>>,
 ) {
-    let len = nodes.len();
+    let len = node_ids.len();
 
-    if nodes.is_empty() {
+    if node_ids.is_empty() {
         out.push(drop_line(
             app,
             SidebarDropTarget::Before { parent, index: 0 },
@@ -140,34 +141,37 @@ fn render_nodes<'a>(
         return;
     }
 
-    for (index, node) in nodes.iter().enumerate() {
+    for (index, &node_id) in node_ids.iter().enumerate() {
         let is_last = index == len - 1;
+        let entry = match app.state.tree.get(node_id) {
+            Some(e) => e,
+            None => continue,
+        };
 
         out.push(drop_line(
             app,
             SidebarDropTarget::Before { parent, index },
             ancestors,
-            index > 0, // pipe between items, not before first
+            index > 0,
         ));
 
-        match node {
-            TreeNode::Folder(folder) => {
-                out.push(folder_row(app, parent, index, ancestors, is_last, folder));
-
-                if folder.expanded {
+        match &entry.data {
+            NodeData::Folder { name, expanded } => {
+                out.push(folder_row(app, parent, index, ancestors, is_last, node_id, name, *expanded, &entry.children));
+                if *expanded {
                     let mut child_ancestors = ancestors.to_vec();
                     child_ancestors.push(!is_last);
                     render_nodes(
                         app,
-                        Some(folder.id),
-                        &folder.children,
+                        Some(node_id),
+                        &entry.children,
                         &child_ancestors,
                         out,
                     );
                 }
             }
-            TreeNode::Request(request) => {
-                out.push(request_row(app, parent, index, ancestors, is_last, request));
+            NodeData::Request { name, method, .. } => {
+                out.push(request_row(app, parent, index, ancestors, is_last, node_id, name, *method));
             }
         }
 
@@ -175,29 +179,32 @@ fn render_nodes<'a>(
             app,
             SidebarDropTarget::After { parent, index },
             ancestors,
-            !is_last, // pipe between items, not after last
+            !is_last,
         ));
     }
 }
 
 fn folder_row<'a>(
     app: &'a PostmanUiApp,
-    parent: Option<FolderId>,
+    parent: Option<NodeId>,
     index: usize,
     ancestors: &[bool],
     is_last: bool,
-    folder: &'a crate::model::FolderNode,
+    folder_id: NodeId,
+    folder_name: &'a str,
+    expanded: bool,
+    children: &[NodeId],
 ) -> Element<'a, Message> {
     let scale = &app.state.ui_scale;
     let inside_target = SidebarDropTarget::InsideFolder {
-        folder_id: folder.id,
-        index: folder.children.len(),
+        folder_id,
+        index: children.len(),
     };
 
     let inside_active = is_sidebar_hover(app, inside_target);
-    let selected = app.state.selected_folder == Some(folder.id);
+    let selected = app.state.selected_folder == Some(folder_id);
 
-    let chevron = if folder.expanded {
+    let chevron = if expanded {
         icons::lucide_icon("chevron-down", scale.icon_md())
     } else {
         icons::lucide_icon("chevron-right", scale.icon_md())
@@ -208,11 +215,11 @@ fn folder_row<'a>(
             container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
             components::icon_button(chevron, scale)
-                .on_press(Message::ToggleFolder(folder.id)),
-            container(text(folder.name.clone()).size(scale.text_label())).width(Length::Fill),
+                .on_press(Message::ToggleFolder(folder_id)),
+            container(text(folder_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
-                    folder.id
+                    folder_id
                 ))),
         ]
         .spacing(scale.space_sm())
@@ -233,10 +240,10 @@ fn folder_row<'a>(
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
     .on_press(Message::BeginLongPressSidebar {
-        kind: DragKind::Folder(folder.id),
+        kind: DragKind::Folder(folder_id),
         source_parent: parent,
         source_index: index,
-        click_action: Some(ClickAction::SelectFolder(folder.id)),
+        click_action: Some(ClickAction::SelectFolder(folder_id)),
     })
     .on_enter(Message::HoverSidebarTarget(inside_target))
     .on_exit(Message::ClearSidebarHover)
@@ -246,21 +253,24 @@ fn folder_row<'a>(
 
 fn request_row<'a>(
     app: &'a PostmanUiApp,
-    parent: Option<FolderId>,
+    parent: Option<NodeId>,
     index: usize,
     ancestors: &[bool],
     is_last: bool,
-    request: &'a crate::model::RequestNode,
+    request_id: NodeId,
+    request_name: &'a str,
+    method: crate::model::HttpMethod,
 ) -> Element<'a, Message> {
     let scale = &app.state.ui_scale;
     let selected = app.state.selected_folder.is_none()
         && app
             .state
-            .active_tab_ref()
-            .is_some_and(|tab| tab.request_id == Some(request.id));
+            .tabs
+            .active()
+            .is_some_and(|tab| tab.request_id == Some(request_id));
 
-    let method_color = theme::method_text_color(request.method);
-    let method_label = text(request.method.as_str())
+    let method_color = theme::method_text_color(method);
+    let method_label = text(method.as_str())
         .size(scale.text_caption())
         .color(method_color)
         .font(iced::Font {
@@ -273,10 +283,10 @@ fn request_row<'a>(
             container(method_label)
                 .width(Length::Fixed(36.0))
                 .align_x(iced::Alignment::End),
-            container(text(request.name.clone()).size(scale.text_label())).width(Length::Fill),
+            container(text(request_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
-                    request.id,
+                    request_id,
                 ))),
         ]
         .spacing(scale.space_sm())
@@ -297,18 +307,16 @@ fn request_row<'a>(
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
     )
     .on_press(Message::BeginLongPressSidebar {
-        kind: DragKind::Request(request.id),
+        kind: DragKind::Request(request_id),
         source_parent: parent,
         source_index: index,
-        click_action: Some(ClickAction::SelectRequest(request.id)),
+        click_action: Some(ClickAction::SelectRequest(request_id)),
     })
     .interaction(mouse::Interaction::Grab)
     .into()
 }
 
-fn empty_folder_state(ancestors: &[bool], folder_id: FolderId) -> Element<'static, Message> {
-    // Note: UiScale not available here (no app reference), using small fixed sizes.
-    // These are tiny tree-internal hints, not primary UI — acceptable to keep as literals.
+fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static, Message> {
     let hint = container(
         column![
             text("This folder is empty.")
@@ -340,20 +348,16 @@ fn empty_folder_state(ancestors: &[bool], folder_id: FolderId) -> Element<'stati
 
 // ── Tree guide rendering ────────────────────────────────────
 
-/// Guides for item rows: pass-through pipes at ancestor levels + ├─ or └─ connector.
 fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
-    // Column 0: root padding (no guide at root level)
     items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
 
     if depth <= 1 {
-        return items; // root-level items have no connectors
+        return items;
     }
 
-    // Pass-through columns: 1..depth-2
-    // Column c uses ancestors[c] — whether the parent at that depth has more siblings.
     for c in 1..depth.saturating_sub(1) {
         if c < ancestors.len() && ancestors[c] {
             items.push(pipe_guide());
@@ -362,7 +366,6 @@ fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message
         }
     }
 
-    // Connector column
     if is_last {
         items.push(corner_guide());
     } else {
@@ -372,7 +375,6 @@ fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message
     items
 }
 
-/// Guides for drop lines and empty-folder hints: pipes only, no connector.
 fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
@@ -390,7 +392,6 @@ fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
     items
 }
 
-/// Guides for drop lines: continuation pipes + optional pipe at the connector column.
 fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Element<'a, Message>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
@@ -401,7 +402,6 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
         return items;
     }
 
-    // Pass-through columns
     for c in 1..depth.saturating_sub(1) {
         if c < ancestors.len() && ancestors[c] {
             items.push(pipe_guide());
@@ -410,7 +410,6 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
         }
     }
 
-    // Connector column: pipe if between siblings, else empty
     if pipe_at_connector {
         items.push(pipe_guide());
     } else {
@@ -420,7 +419,6 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
     items
 }
 
-/// | vertical line running full height of the row.
 fn pipe_guide<'a>() -> Element<'a, Message> {
     let indent = UiScale::TREE_INDENT;
     row![
@@ -435,7 +433,6 @@ fn pipe_guide<'a>() -> Element<'a, Message> {
     .into()
 }
 
-/// +-- vertical line full height + horizontal branch at center.
 fn tee_guide<'a>() -> Element<'a, Message> {
     let indent = UiScale::TREE_INDENT;
     let top = row![
@@ -467,7 +464,6 @@ fn tee_guide<'a>() -> Element<'a, Message> {
         .into()
 }
 
-/// \-- vertical line top half + horizontal branch at center.
 fn corner_guide<'a>() -> Element<'a, Message> {
     let indent = UiScale::TREE_INDENT;
     let top = row![

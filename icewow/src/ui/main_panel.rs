@@ -2,34 +2,41 @@ use iced::widget::{button, column, container, row, scrollable, text, text_input,
 use iced::{Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
-use crate::model::{BodyType, RequestTab, ResponseTab};
+use crate::model::{BodyType, HttpMethod, RequestTab, ResponseTab};
 use crate::ui::{components, icons, scale::UiScale, styles};
 
 /// Request name row: [method badge] Request Name                    [Save]
 pub fn view_request_name_row(app: &PostmanUiApp) -> Element<'_, Message> {
     let scale = &app.state.ui_scale;
-    let active_tab = app.state.active_tab_ref();
+    let active_tab = app.state.tabs.active();
 
     let method = active_tab
         .map(|tab| tab.method)
-        .unwrap_or(crate::model::HttpMethod::Get);
+        .unwrap_or(HttpMethod::Get);
 
     let title = active_tab
         .map(|tab| tab.title.clone())
         .unwrap_or_else(|| "Untitled Request".to_string());
+
+    let dirty = active_tab.is_some_and(|tab| tab.dirty);
 
     let name_input = text_input("Request name", &title)
         .on_input(Message::RequestNameChanged)
         .size(scale.text_label())
         .width(Length::Fill);
 
+    let mut save_btn = button(text("Save").size(scale.text_body()))
+        .padding([scale.space_sm(), scale.space_lg()])
+        .style(|theme, status| styles::save_button(theme, status));
+
+    if dirty {
+        save_btn = save_btn.on_press(Message::SaveRequest);
+    }
+
     let content = row![
         components::method_badge(method),
         name_input,
-        button(text("Save").size(scale.text_body()))
-            .on_press(Message::SaveRequest)
-            .padding([scale.space_sm(), scale.space_lg()])
-            .style(|theme, status| styles::save_button(theme, status)),
+        save_btn,
     ]
     .spacing(scale.space_md())
     .align_y(iced::Alignment::Center);
@@ -44,7 +51,7 @@ pub fn view_request_name_row(app: &PostmanUiApp) -> Element<'_, Message> {
 /// Request section tabs: [Params] [Headers (N)] [Body]
 pub fn view_request_section_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
     let scale = &app.state.ui_scale;
-    let active_tab = match app.state.active_tab_ref() {
+    let active_tab = match app.state.tabs.active() {
         Some(tab) => tab,
         None => return container(Space::new()).into(),
     };
@@ -90,7 +97,7 @@ fn section_tab_button(label: String, tab: RequestTab, active: RequestTab, scale:
 /// Request tab content — renders content for the active request tab
 pub fn view_request_content(app: &PostmanUiApp) -> Element<'_, Message> {
     let scale = &app.state.ui_scale;
-    let active_tab = match app.state.active_tab_ref() {
+    let active_tab = match app.state.tabs.active() {
         Some(tab) => tab,
         None => return container(Space::new()).into(),
     };
@@ -116,7 +123,23 @@ pub fn view_response_section(app: &PostmanUiApp) -> Element<'_, Message> {
         .width(Length::Fill)
         .style(|theme| styles::section_divider(theme));
 
-    if app.state.loading {
+    let active_tab = match app.state.tabs.active() {
+        Some(tab) => tab,
+        None => {
+            let content = column![
+                divider,
+                text("Enter a URL and press Send to get a response").size(scale.text_body()),
+            ]
+            .spacing(scale.space_md());
+            return container(content)
+                .padding(scale.space_lg())
+                .width(Length::Fill)
+                .height(Length::Shrink)
+                .into();
+        }
+    };
+
+    if active_tab.loading {
         let content = column![divider, text("Sending request...").size(scale.text_label())]
             .spacing(scale.space_md());
         return container(content)
@@ -126,7 +149,7 @@ pub fn view_response_section(app: &PostmanUiApp) -> Element<'_, Message> {
             .into();
     }
 
-    let Some(response) = &app.state.response else {
+    let Some(response) = &active_tab.response else {
         let content = column![
             divider,
             text("Enter a URL and press Send to get a response").size(scale.text_body()),
@@ -146,7 +169,7 @@ pub fn view_response_section(app: &PostmanUiApp) -> Element<'_, Message> {
     .spacing(scale.space_md())
     .align_y(iced::Alignment::Center);
 
-    let active = app.state.active_response_tab;
+    let active = active_tab.active_response_tab;
     let response_tabs = row![
         response_tab_button("Body".to_string(), ResponseTab::Body, active, scale),
         response_tab_button("Cookies".to_string(), ResponseTab::Cookies, active, scale),

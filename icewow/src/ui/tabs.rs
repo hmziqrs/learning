@@ -11,8 +11,8 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
 
     tabs_row = tabs_row.push(tab_drop_zone(app, 0));
 
-    for (index, tab) in app.state.tabs.iter().enumerate() {
-        let active = app.state.active_tab == Some(tab.id);
+    for (index, tab_id, tab) in app.state.tabs.ordered_enumerate() {
+        let active = app.state.tabs.active_id() == Some(tab_id);
 
         let method_text_color = theme::method_text_color(tab.method);
         let method_label = text(tab.method.as_str()).size(11).color(method_text_color);
@@ -20,10 +20,11 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
 
         let chip_content = container(
             row![
-                row![method_label, title_label].spacing(scale.space_sm()).align_y(iced::Alignment::Center),
+                method_label,
+                title_label,
                 components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
                     .padding([scale.space_xs(), scale.space_sm()])
-                    .on_press(Message::AskDeleteTab(tab.id)),
+                    .on_press(Message::AskDeleteTab(tab_id)),
             ]
             .spacing(scale.space_sm())
             .align_y(iced::Alignment::Center),
@@ -33,7 +34,7 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
 
         let chip: Element<'_, Message> = mouse_area(chip_content)
             .on_press(Message::BeginLongPressTab {
-                tab_id: tab.id,
+                tab_id,
                 source_index: index,
             })
             .on_enter(Message::HoverTabIndex(index + 1))
