@@ -552,15 +552,22 @@ Each phase produces a compiling, working app.
 
 **Verification:** `cargo check` ✅ `cargo test` 7/7 ✅ `cargo build` ✅
 
-### Phase 2: Data Model (medium risk, highest value)
-- Build `TreeArena` in `state/tree.rs` with methods: `get`, `get_mut`, `insert`, `remove`, `move_node`, `is_ancestor`, `children`, `walk`
-- Build `TabStore` in `state/tabs.rs` with HashMap + ordered vec + `open_for_request()` enforcing one-tab-per-request
-- Move `response`, `loading`, `active_response_tab` into `Tab`
-- Add `dirty: bool` to `Tab`, set on any edit, clear on save
-- Remove `AppState.url_input` -- always read from active tab
-- Wire `SaveRequest` to copy tab draft -> TreeArena node + clear dirty flag
-- Delete `tree_ops.rs` entirely -- all logic now in `TreeArena` methods
-- Update `app.rs` update/view to use new data structures
+### Phase 2: Data Model (medium risk, highest value) ✅ COMPLETED
+
+- [x] Build `TreeArena` in `state/tree.rs` -- O(1) get, parent back-pointers, single-pass `move_node`, O(depth) ancestor check
+- [x] Build `TabStore` in `state/tabs.rs` with HashMap + ordered vec + `open_for_request()` enforcing one-tab-per-request
+- [x] Move `response`, `loading`, `active_response_tab` into `Tab`
+- [x] Add `dirty: bool` to `Tab`, set on every edit message, cleared on `SaveRequest`
+- [x] Remove `AppState.url_input` -- URL always read from `tabs.active().url_input`
+- [x] Wire `SaveRequest` to copy tab draft (name, url, method) -> `TreeArena` node + clear dirty flag
+- [x] Delete `tree_ops.rs` entirely -- all logic now in `TreeArena` methods
+- [x] Update `app.rs` to use `TreeArena` and `TabStore` throughout
+- [x] Fix: `RequestFinished` now carries `TabId` -- response lands on the sending tab even if user switches tabs mid-flight
+- [x] Fix: `MethodChanged` no longer writes to tree immediately -- stays in draft like all other edit messages; `SaveRequest` handles sync
+- [x] Fix: `finish_sidebar_drag` uses `..` for unused `source_parent`/`source_index` (TreeArena handles positioning via back-pointers)
+- [x] Fix: `TabStore::alloc_id` made private; unused imports removed
+
+**Verification:** `cargo test` 11/11 ✅ `cargo check` ✅
 
 ### Phase 3: Message Split & Feature Modules
 - Create `features/` directory structure

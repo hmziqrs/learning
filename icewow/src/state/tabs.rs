@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use icewow_engine::HttpMethod;
 
-use crate::model::{BodyType, RequestTab, ResponseData, ResponseTab, Tab, TabId};
+use crate::model::{BodyType, RequestTab, ResponseTab, Tab, TabId};
 use crate::state::tree::NodeId;
 
 /// TabStore with O(1) lookup via HashMap + ordered display via Vec<TabId>.
@@ -24,7 +24,7 @@ impl TabStore {
         }
     }
 
-    pub fn alloc_id(&mut self) -> TabId {
+    fn alloc_id(&mut self) -> TabId {
         let id = self.next_id;
         self.next_id += 1;
         id

@@ -180,16 +180,6 @@ impl TreeArena {
         false
     }
 
-    pub fn set_request_method(&mut self, id: NodeId, method: HttpMethod) -> bool {
-        if let Some(entry) = self.nodes.get_mut(&id) {
-            if let NodeData::Request { method: ref mut m, .. } = entry.data {
-                *m = method;
-                return true;
-            }
-        }
-        false
-    }
-
     pub fn update_request_from_draft(
         &mut self,
         id: NodeId,

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::model::{
     AppState, BodyType, ClickAction, ContextMenuTarget, DeleteDialog, DragKind, DragState, HttpMethod,
-    NodeId, PendingLongPress, PressKind, RequestTab, ResponseData, ResponseTab, SidebarDropTarget, Tab,
+    NodeId, PendingLongPress, PressKind, RequestTab, ResponseData, ResponseTab, SidebarDropTarget,
     TabId,
 };
 use crate::state::tree::NodeData;
@@ -52,7 +52,7 @@ pub enum Message {
     PointerReleased,
     WindowResized(iced::Size),
     SendRequest,
-    RequestFinished(Result<ResponseData, String>),
+    RequestFinished(TabId, Result<ResponseData, String>),
     MethodChanged(HttpMethod),
     SetBodyType(BodyType),
     UpdateBodyText(String),
@@ -341,7 +341,12 @@ impl PostmanUiApp {
                 let body_text = tab.body_text.clone();
                 let form_pairs = tab.form_pairs.clone();
 
-                // Set loading on the active tab
+                // Capture the sending tab's ID so the response lands on the right tab
+                let tab_id = match self.state.tabs.active_id() {
+                    Some(id) => id,
+                    None => return Task::none(),
+                };
+
                 if let Some(tab) = self.state.tabs.active_mut() {
                     tab.loading = true;
                     tab.response = None;
@@ -349,11 +354,11 @@ impl PostmanUiApp {
 
                 return Task::perform(
                     send_engine_request(url, method, headers, body_type, body_text, form_pairs),
-                    Message::RequestFinished,
+                    move |result| Message::RequestFinished(tab_id, result),
                 );
             }
-            Message::RequestFinished(result) => {
-                if let Some(tab) = self.state.tabs.active_mut() {
+            Message::RequestFinished(tab_id, result) => {
+                if let Some(tab) = self.state.tabs.get_mut(tab_id) {
                     tab.loading = false;
                     match result {
                         Ok(response) => tab.response = Some(response),
@@ -370,9 +375,6 @@ impl PostmanUiApp {
                 if let Some(tab) = self.state.tabs.active_mut() {
                     tab.method = method;
                     tab.dirty = true;
-                    if let Some(request_id) = tab.request_id {
-                        self.state.tree.set_request_method(request_id, method);
-                    }
                 }
             }
             Message::SetBodyType(body_type) => {
@@ -704,9 +706,8 @@ impl PostmanUiApp {
     fn finish_sidebar_drag(&mut self) {
         let Some(DragState::Sidebar {
             kind,
-            source_parent,
-            source_index,
             hover,
+            ..
         }) = self.state.drag_state.clone()
         else {
             self.state.drag_state = None;

@@ -22,7 +22,7 @@ pub struct Tab {
     pub active_request_tab: RequestTab,
     pub query_params: Vec<(String, String)>,
     // Per-tab state (moved from AppState)
-    pub response: Option<crate::model::ResponseData>,
+    pub response: Option<ResponseData>,
     pub loading: bool,
     pub active_response_tab: ResponseTab,
     pub dirty: bool,
