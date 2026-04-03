@@ -5,17 +5,18 @@ use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
 use crate::model::{
     ClickAction, ContextMenuTarget, DragKind, DragState, FolderId, SidebarDropTarget, TreeNode,
 };
-use crate::ui::{components, icons, theme};
+use crate::ui::{components, icons, scale::UiScale, theme};
 
 pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
+    let scale = &app.state.ui_scale;
     let mut entries: Vec<Element<'_, Message>> = vec![project_row(app)];
 
     render_nodes(app, None, &app.state.tree_root, &[], &mut entries);
 
-    let content = column(entries).spacing(0).padding([4, 0]);
+    let content = column(entries).spacing(0).padding([scale.space_sm(), 0.0]);
 
     container(scrollable(content).id(sidebar_scroll_id()))
-        .width(Length::Fixed(280.0))
+        .width(Length::Fixed(UiScale::SIDEBAR_WIDTH))
         .height(Length::Fill)
         .style(|theme| crate::ui::styles::sidebar_panel(theme))
         .into()
@@ -23,6 +24,7 @@ pub fn view_sidebar(app: &PostmanUiApp) -> Element<'_, Message> {
 
 pub fn view_context_menu_overlay(app: &PostmanUiApp) -> Option<Element<'_, Message>> {
     let target = app.state.open_context_menu?;
+    let scale = &app.state.ui_scale;
 
     let pos = app
         .state
@@ -37,9 +39,9 @@ pub fn view_context_menu_overlay(app: &PostmanUiApp) -> Option<Element<'_, Messa
 
     let menu_items = menu_items(target);
 
-    let menu = container(column(menu_items).spacing(4))
-        .padding(6)
-        .width(Length::Fixed(210.0))
+    let menu = container(column(menu_items).spacing(scale.space_sm()))
+        .padding(scale.space_sm())
+        .width(Length::Fixed(UiScale::CONTEXT_MENU_WIDTH))
         .style(|theme| crate::ui::styles::context_menu(theme));
 
     let dismiss_layer: Element<'_, Message> =
@@ -99,17 +101,18 @@ fn menu_items(target: ContextMenuTarget) -> Vec<Element<'static, Message>> {
 }
 
 fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
+    let scale = &app.state.ui_scale;
     let row = row![
-        container(icons::lucide_icon("package", 14.0)).width(Length::Fixed(20.0)),
-        container(text(app.state.project_name.clone()).size(15)).width(Length::Fill),
-        components::icon_button(icons::lucide_icon("ellipsis", 16.0))
+        container(icons::lucide_icon("package", scale.icon_sm())).width(Length::Fixed(20.0)),
+        container(text(app.state.project_name.clone()).size(scale.text_label())).width(Length::Fill),
+        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
             .on_press(Message::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
     ]
-    .spacing(4)
+    .spacing(scale.space_sm())
     .align_y(iced::Alignment::Center);
 
     container(row)
-        .padding([4, 6])
+        .padding([scale.space_sm(), scale.space_sm()])
         .width(Length::Fill)
         .style(|theme| crate::ui::styles::tree_row(theme, true, false))
         .into()
@@ -185,6 +188,7 @@ fn folder_row<'a>(
     is_last: bool,
     folder: &'a crate::model::FolderNode,
 ) -> Element<'a, Message> {
+    let scale = &app.state.ui_scale;
     let inside_target = SidebarDropTarget::InsideFolder {
         folder_id: folder.id,
         index: folder.children.len(),
@@ -194,27 +198,27 @@ fn folder_row<'a>(
     let selected = app.state.selected_folder == Some(folder.id);
 
     let chevron = if folder.expanded {
-        icons::lucide_icon("chevron-down", 16.0)
+        icons::lucide_icon("chevron-down", scale.icon_md())
     } else {
-        icons::lucide_icon("chevron-right", 16.0)
+        icons::lucide_icon("chevron-right", scale.icon_md())
     };
 
     let content = container(
         row![
-            container(icons::lucide_icon("folder", 14.0).color(theme::MUTED_FOREGROUND))
+            container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
             components::icon_button(chevron)
                 .on_press(Message::ToggleFolder(folder.id)),
-            container(text(folder.name.clone()).size(14)).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", 16.0))
+            container(text(folder.name.clone()).size(scale.text_label())).width(Length::Fill),
+            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
                     folder.id
                 ))),
         ]
-        .spacing(4)
+        .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 0])
+    .padding([3.0, 0.0])
     .width(Length::Fill);
 
     let mut items = item_guides(ancestors, is_last);
@@ -224,7 +228,7 @@ fn folder_row<'a>(
 
     mouse_area(
         container(full_row)
-            .padding([0, 6])
+            .padding([0.0, scale.space_sm()])
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
@@ -248,6 +252,7 @@ fn request_row<'a>(
     is_last: bool,
     request: &'a crate::model::RequestNode,
 ) -> Element<'a, Message> {
+    let scale = &app.state.ui_scale;
     let selected = app.state.selected_folder.is_none()
         && app
             .state
@@ -256,7 +261,7 @@ fn request_row<'a>(
 
     let method_color = theme::method_text_color(request.method);
     let method_label = text(request.method.as_str())
-        .size(10)
+        .size(scale.text_caption())
         .color(method_color)
         .font(iced::Font {
             weight: iced::font::Weight::Bold,
@@ -268,16 +273,16 @@ fn request_row<'a>(
             container(method_label)
                 .width(Length::Fixed(36.0))
                 .align_x(iced::Alignment::End),
-            container(text(request.name.clone()).size(14)).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", 16.0))
+            container(text(request.name.clone()).size(scale.text_label())).width(Length::Fill),
+            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()))
                 .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
                     request.id,
                 ))),
         ]
-        .spacing(6)
+        .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 0])
+    .padding([3.0, 0.0])
     .width(Length::Fill);
 
     let mut items = item_guides(ancestors, is_last);
@@ -287,7 +292,7 @@ fn request_row<'a>(
 
     mouse_area(
         container(full_row)
-            .padding([0, 6])
+            .padding([0.0, scale.space_sm()])
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
     )
@@ -319,14 +324,14 @@ fn empty_folder_state(ancestors: &[bool], folder_id: FolderId) -> Element<'stati
         ]
         .spacing(2),
     )
-    .padding([3, 0])
+    .padding([3.0, 0.0])
     .width(Length::Fill);
 
     let mut items = continuation_guides(ancestors);
     items.push(hint.into());
 
     container(row(items))
-        .padding([0, 6])
+        .padding([0.0, 6.0])
         .width(Length::Fill)
         .into()
 }
@@ -339,7 +344,7 @@ fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message
     let mut items = Vec::new();
 
     // Column 0: root padding (no guide at root level)
-    items.push(Space::new().width(Length::Fixed(16.0)).into());
+    items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
 
     if depth <= 1 {
         return items; // root-level items have no connectors
@@ -351,7 +356,7 @@ fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message
         if c < ancestors.len() && ancestors[c] {
             items.push(pipe_guide());
         } else {
-            items.push(Space::new().width(Length::Fixed(16.0)).into());
+            items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
         }
     }
 
@@ -370,13 +375,13 @@ fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
-    items.push(Space::new().width(Length::Fixed(16.0)).into());
+    items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
 
     for c in 1..depth {
         if c < ancestors.len() && ancestors[c] {
             items.push(pipe_guide());
         } else {
-            items.push(Space::new().width(Length::Fixed(16.0)).into());
+            items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
         }
     }
 
@@ -388,7 +393,7 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
-    items.push(Space::new().width(Length::Fixed(16.0)).into());
+    items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
 
     if depth <= 1 {
         return items;
@@ -399,7 +404,7 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
         if c < ancestors.len() && ancestors[c] {
             items.push(pipe_guide());
         } else {
-            items.push(Space::new().width(Length::Fixed(16.0)).into());
+            items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
         }
     }
 
@@ -407,39 +412,41 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
     if pipe_at_connector {
         items.push(pipe_guide());
     } else {
-        items.push(Space::new().width(Length::Fixed(16.0)).into());
+        items.push(Space::new().width(Length::Fixed(UiScale::TREE_INDENT)).into());
     }
 
     items
 }
 
-/// │ — vertical line running full height of the row.
+/// | vertical line running full height of the row.
 fn pipe_guide<'a>() -> Element<'a, Message> {
+    let indent = UiScale::TREE_INDENT;
     row![
         container(Space::new())
             .width(Length::Fixed(1.0))
             .height(Length::Fill)
             .style(guide_style),
-        Space::new().width(Length::Fixed(15.0)),
+        Space::new().width(Length::Fixed(indent - 1.0)),
     ]
-    .width(Length::Fixed(16.0))
+    .width(Length::Fixed(indent))
     .height(Length::Fill)
     .into()
 }
 
-/// ├─ — vertical line full height + horizontal branch at center.
+/// +-- vertical line full height + horizontal branch at center.
 fn tee_guide<'a>() -> Element<'a, Message> {
+    let indent = UiScale::TREE_INDENT;
     let top = row![
         container(Space::new())
             .width(Length::Fixed(1.0))
             .height(Length::Fill)
             .style(guide_style),
-        Space::new().width(Length::Fixed(15.0)),
+        Space::new().width(Length::Fixed(indent - 1.0)),
     ]
     .height(Length::Fill);
 
     let mid = container(Space::new())
-        .width(Length::Fixed(16.0))
+        .width(Length::Fixed(indent))
         .height(Length::Fixed(1.0))
         .style(guide_style);
 
@@ -448,38 +455,39 @@ fn tee_guide<'a>() -> Element<'a, Message> {
             .width(Length::Fixed(1.0))
             .height(Length::Fill)
             .style(guide_style),
-        Space::new().width(Length::Fixed(15.0)),
+        Space::new().width(Length::Fixed(indent - 1.0)),
     ]
     .height(Length::Fill);
 
     column![top, mid, bot]
-        .width(Length::Fixed(16.0))
+        .width(Length::Fixed(indent))
         .height(Length::Fill)
         .into()
 }
 
-/// └─ — vertical line top half + horizontal branch at center.
+/// \-- vertical line top half + horizontal branch at center.
 fn corner_guide<'a>() -> Element<'a, Message> {
+    let indent = UiScale::TREE_INDENT;
     let top = row![
         container(Space::new())
             .width(Length::Fixed(1.0))
             .height(Length::Fill)
             .style(guide_style),
-        Space::new().width(Length::Fixed(15.0)),
+        Space::new().width(Length::Fixed(indent - 1.0)),
     ]
     .height(Length::Fill);
 
     let mid = container(Space::new())
-        .width(Length::Fixed(16.0))
+        .width(Length::Fixed(indent))
         .height(Length::Fixed(1.0))
         .style(guide_style);
 
     let bot = Space::new()
-        .width(Length::Fixed(16.0))
+        .width(Length::Fixed(indent))
         .height(Length::Fill);
 
     column![top, mid, bot]
-        .width(Length::Fixed(16.0))
+        .width(Length::Fixed(indent))
         .height(Length::Fill)
         .into()
 }
@@ -511,7 +519,7 @@ fn drop_line<'a>(
 
     mouse_area(
         container(row(items))
-            .padding([0, 6])
+            .padding([0.0, 6.0])
             .width(Length::Fill),
     )
     .on_enter(Message::HoverSidebarTarget(target))

@@ -1,6 +1,7 @@
 use iced::Point;
 
 pub use icewow_engine::{HttpMethod, Response as ResponseData};
+pub use crate::ui::scale::UiScale;
 
 pub type FolderId = u64;
 pub type RequestId = u64;
@@ -166,6 +167,7 @@ pub struct AppState {
     pub delete_dialog: Option<DeleteDialog>,
     pub pointer_position: Point,
     pub window_size: iced::Size,
+    pub ui_scale: UiScale,
     pub next_press_token: u64,
     pub next_folder_id: FolderId,
     pub next_request_id: RequestId,
@@ -191,6 +193,7 @@ impl AppState {
             delete_dialog: None,
             pointer_position: Point::new(0.0, 0.0),
             window_size: iced::Size::new(1300.0, 820.0),
+            ui_scale: UiScale::default(),
             next_press_token: 1,
             next_folder_id: 1,
             next_request_id: 1,

@@ -553,9 +553,9 @@ impl PostmanUiApp {
                 iced::widget::Space::new().height(Length::Fill),
                 container(
                     column![
-                        iced::widget::text("Open a request or create a new tab to get started").size(16),
+                        iced::widget::text("Open a request or create a new tab to get started").size(self.state.ui_scale.text_title()),
                     ]
-                    .spacing(8)
+                    .spacing(self.state.ui_scale.space_md())
                     .align_x(iced::Alignment::Center),
                 )
                 .center_x(Length::Fill)
@@ -599,6 +599,7 @@ impl PostmanUiApp {
     }
 
     fn view_url_bar(&self) -> Element<'_, Message> {
+        let scale = &self.state.ui_scale;
         let current_method = self
             .state
             .active_tab_ref()
@@ -610,13 +611,13 @@ impl PostmanUiApp {
             Some(current_method),
             Message::MethodChanged,
         )
-        .padding([8, 12])
+        .padding(scale.pad_button())
         .style(|theme, status| ui::styles::method_pick_list(theme, status));
 
         let input = text_input("https://api.example.com", &self.state.url_input)
             .on_input(Message::UrlChanged)
-            .padding(10)
-            .size(16)
+            .padding(scale.pad_input())
+            .size(scale.text_title())
             .width(Length::Fill);
 
         let send_label = if self.state.loading {
@@ -625,21 +626,21 @@ impl PostmanUiApp {
             "Send"
         };
 
-        let send_btn = iced::widget::button(text(send_label).size(14))
+        let send_btn = iced::widget::button(text(send_label).size(scale.text_label()))
             .on_press_maybe(if self.state.loading {
                 None
             } else {
                 Some(Message::SendRequest)
             })
-            .padding([8, 20])
+            .padding([scale.space_md(), 20.0])
             .style(|theme, status| ui::styles::send_button(theme, status));
 
         let url_row = row![method_picker, input, send_btn,]
-            .spacing(8)
+            .spacing(scale.space_md())
             .align_y(iced::Alignment::Center);
 
         container(url_row)
-            .padding(10)
+            .padding(scale.pad_panel())
             .style(|theme| ui::styles::panel(theme))
             .into()
     }
