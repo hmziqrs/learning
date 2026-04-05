@@ -87,9 +87,9 @@ pub fn update(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
             state.context_menu_position = None;
         }
         SidebarMsg::SelectRequest(request_id) => {
-            state.open_request_tab(request_id);
             state.open_context_menu = None;
             state.context_menu_position = None;
+            return Task::done(Message::Tabs(crate::features::TabsMsg::OpenForRequest(request_id)));
         }
         SidebarMsg::ToggleFolder(folder_id) => {
             if let Some(current) = state.tree.is_expanded(folder_id) {

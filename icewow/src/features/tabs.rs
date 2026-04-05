@@ -2,10 +2,12 @@ use iced::Task;
 
 use crate::app::Message;
 use crate::model::{AppState, DragState, TabId};
+use crate::state::tree::NodeId;
 
 #[derive(Debug, Clone)]
 pub enum TabsMsg {
     NewTab,
+    OpenForRequest(NodeId),
     AskDeleteTab(TabId),
     SelectTab(TabId),
     BeginLongPress {
@@ -20,6 +22,9 @@ pub fn update(state: &mut AppState, msg: TabsMsg) -> Task<Message> {
     match msg {
         TabsMsg::NewTab => {
             state.tabs.new_tab();
+        }
+        TabsMsg::OpenForRequest(request_id) => {
+            state.open_request_tab(request_id);
         }
         TabsMsg::AskDeleteTab(tab_id) => {
             state.delete_dialog = Some(crate::model::DeleteDialog::Tab(tab_id));
