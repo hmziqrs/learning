@@ -2,6 +2,7 @@ use iced::widget::{column, container, mouse_area, row, scrollable, stack, text, 
 use iced::{mouse, Background, Element, Length};
 
 use crate::app::{sidebar_scroll_id, Message, PostmanUiApp};
+use crate::features::SidebarMsg;
 use crate::model::{
     ClickAction, ContextMenuTarget, DragKind, DragState, SidebarDropTarget,
 };
@@ -47,7 +48,7 @@ pub fn view_context_menu_overlay(app: &PostmanUiApp) -> Option<Element<'_, Messa
 
     let dismiss_layer: Element<'_, Message> =
         mouse_area(container(text("")).width(Length::Fill).height(Length::Fill))
-            .on_press(Message::CloseContextMenu)
+            .on_press(Message::Sidebar(SidebarMsg::CloseContextMenu))
             .into();
 
     let position_layer: Element<'_, Message> = container(
@@ -69,33 +70,33 @@ fn menu_items(target: ContextMenuTarget) -> Vec<Element<'static, Message>> {
     match target {
         ContextMenuTarget::ProjectRoot => vec![
             components::menu_button("New Folder")
-                .on_press(Message::CreateFolder { parent: None })
+                .on_press(Message::Sidebar(SidebarMsg::CreateFolder { parent: None }))
                 .into(),
             components::menu_button("New Request")
-                .on_press(Message::CreateRequest { parent: None })
+                .on_press(Message::Sidebar(SidebarMsg::CreateRequest { parent: None }))
                 .into(),
         ],
         ContextMenuTarget::Folder(folder_id) => vec![
             components::menu_button("New Folder")
-                .on_press(Message::CreateFolder {
+                .on_press(Message::Sidebar(SidebarMsg::CreateFolder {
                     parent: Some(folder_id),
-                })
+                }))
                 .into(),
             components::menu_button("New Request")
-                .on_press(Message::CreateRequest {
+                .on_press(Message::Sidebar(SidebarMsg::CreateRequest {
                     parent: Some(folder_id),
-                })
+                }))
                 .into(),
             components::danger_button("Delete Folder")
-                .on_press(Message::AskDeleteFolder(folder_id))
+                .on_press(Message::Sidebar(SidebarMsg::AskDeleteFolder(folder_id)))
                 .into(),
         ],
         ContextMenuTarget::Request(request_id) => vec![
             components::menu_button("Open Request")
-                .on_press(Message::SelectRequest(request_id))
+                .on_press(Message::Sidebar(SidebarMsg::SelectRequest(request_id)))
                 .into(),
             components::danger_button("Delete Request")
-                .on_press(Message::AskDeleteRequest(request_id))
+                .on_press(Message::Sidebar(SidebarMsg::AskDeleteRequest(request_id)))
                 .into(),
         ],
     }
@@ -107,7 +108,7 @@ fn project_row(app: &PostmanUiApp) -> Element<'_, Message> {
         container(icons::lucide_icon("package", scale.icon_sm())).width(Length::Fixed(20.0)),
         container(text(app.state.project_name.clone()).size(scale.text_label())).width(Length::Fill),
         components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-            .on_press(Message::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
+            .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(ContextMenuTarget::ProjectRoot))),
     ]
     .spacing(scale.space_sm())
     .align_y(iced::Alignment::Center);
@@ -215,12 +216,12 @@ fn folder_row<'a>(
             container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
             components::icon_button(chevron, scale)
-                .on_press(Message::ToggleFolder(folder_id)),
+                .on_press(Message::Sidebar(SidebarMsg::ToggleFolder(folder_id))),
             container(text(folder_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(Message::ToggleContextMenu(ContextMenuTarget::Folder(
+                .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Folder(
                     folder_id
-                ))),
+                )))),
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
@@ -239,14 +240,14 @@ fn folder_row<'a>(
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
-    .on_press(Message::BeginLongPressSidebar {
+    .on_press(Message::Sidebar(SidebarMsg::BeginLongPress {
         kind: DragKind::Folder(folder_id),
         source_parent: parent,
         source_index: index,
         click_action: Some(ClickAction::SelectFolder(folder_id)),
-    })
-    .on_enter(Message::HoverSidebarTarget(inside_target))
-    .on_exit(Message::ClearSidebarHover)
+    }))
+    .on_enter(Message::Sidebar(SidebarMsg::HoverTarget(inside_target)))
+    .on_exit(Message::Sidebar(SidebarMsg::ClearHover))
     .interaction(mouse::Interaction::Grab)
     .into()
 }
@@ -285,9 +286,9 @@ fn request_row<'a>(
                 .align_x(iced::Alignment::End),
             container(text(request_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(Message::ToggleContextMenu(ContextMenuTarget::Request(
+                .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Request(
                     request_id,
-                ))),
+                )))),
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
@@ -306,12 +307,12 @@ fn request_row<'a>(
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
     )
-    .on_press(Message::BeginLongPressSidebar {
+    .on_press(Message::Sidebar(SidebarMsg::BeginLongPress {
         kind: DragKind::Request(request_id),
         source_parent: parent,
         source_index: index,
         click_action: Some(ClickAction::SelectRequest(request_id)),
-    })
+    }))
     .interaction(mouse::Interaction::Grab)
     .into()
 }
@@ -327,9 +328,9 @@ fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static,
                     .size(12)
                     .color(theme::PRIMARY),
             )
-            .on_press(Message::CreateRequest {
+            .on_press(Message::Sidebar(SidebarMsg::CreateRequest {
                 parent: Some(folder_id),
-            })
+            }))
             .interaction(mouse::Interaction::Pointer),
         ]
         .spacing(2),
@@ -520,8 +521,8 @@ fn drop_line<'a>(
             .padding([0.0, 6.0])
             .width(Length::Fill),
     )
-    .on_enter(Message::HoverSidebarTarget(target))
-    .on_exit(Message::ClearSidebarHover)
+    .on_enter(Message::Sidebar(SidebarMsg::HoverTarget(target)))
+    .on_exit(Message::Sidebar(SidebarMsg::ClearHover))
     .into()
 }
 

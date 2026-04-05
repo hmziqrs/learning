@@ -569,12 +569,20 @@ Each phase produces a compiling, working app.
 
 **Verification:** `cargo test` 11/11 ✅ `cargo check` ✅
 
-### Phase 3: Message Split & Feature Modules
-- Create `features/` directory structure
-- Extract sub-enums: `SidebarMsg`, `EditorMsg`, `ResponseMsg`, `TabsMsg`, `HttpMsg`
-- Extract update handlers into feature modules
-- Root `update()` becomes thin delegation
-- Cross-feature communication via `Task::done(Message::OtherFeature(...))` -- no direct feature imports
+### Phase 3: Message Split & Feature Modules ✅ COMPLETED
+
+- [x] Create `features/` directory structure: `features/{mod,sidebar,editor,response,tabs,http}.rs`
+- [x] Extract sub-enums: `SidebarMsg` (11 variants), `EditorMsg` (18 variants), `ResponseMsg` (1 variant), `TabsMsg` (6 variants), `HttpMsg` (2 variants)
+- [x] Extract update handlers into feature modules — each takes `&mut AppState` and returns `Task<Message>`
+- [x] Root `update()` becomes thin delegation — feature arms `return` immediately, global arms handle pointer/drag/delete
+- [x] Cross-feature communication via `Task::done(Message::OtherFeature(...))` — features return root `Message` type, no direct feature-to-feature imports
+- [x] Global messages kept in root: `PointerMoved`, `PointerReleased`, `WindowResized`, `LongPressElapsed`, `ConfirmDelete`, `CancelDelete`, `IconFontLoaded`
+- [x] `open_request_tab` moved from `PostmanUiApp` method to `AppState` method
+- [x] `send_engine_request` moved from `app.rs` to `features/http.rs`
+- [x] All view files (`ui/sidebar.rs`, `ui/tabs.rs`, `ui/main_panel.rs`, `ui/mod.rs`) updated to emit wrapped `Message::Feature(FeatureMsg::X)` variants
+- [x] `main.rs` updated with `mod features` declaration
+
+**Verification:** `cargo check` ✅ `cargo test` 11/11 ✅
 
 ### Phase 4: View Decoupling
 - Move view functions into feature `view.rs` files

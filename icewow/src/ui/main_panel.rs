@@ -2,6 +2,7 @@ use iced::widget::{button, column, container, row, scrollable, text, text_input,
 use iced::{Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
+use crate::features::{EditorMsg, ResponseMsg};
 use crate::model::{BodyType, HttpMethod, RequestTab, ResponseTab};
 use crate::ui::{components, icons, scale::UiScale, styles};
 
@@ -21,7 +22,7 @@ pub fn view_request_name_row(app: &PostmanUiApp) -> Element<'_, Message> {
     let dirty = active_tab.is_some_and(|tab| tab.dirty);
 
     let name_input = text_input("Request name", &title)
-        .on_input(Message::RequestNameChanged)
+        .on_input(|v| Message::Editor(EditorMsg::RequestNameChanged(v)))
         .size(scale.text_label())
         .width(Length::Fill);
 
@@ -30,7 +31,7 @@ pub fn view_request_name_row(app: &PostmanUiApp) -> Element<'_, Message> {
         .style(|theme, status| styles::save_button(theme, status));
 
     if dirty {
-        save_btn = save_btn.on_press(Message::SaveRequest);
+        save_btn = save_btn.on_press(Message::Editor(EditorMsg::SaveRequest));
     }
 
     let content = row![
@@ -88,7 +89,7 @@ pub fn view_request_section_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
 fn section_tab_button(label: String, tab: RequestTab, active: RequestTab, scale: &UiScale) -> Element<'static, Message> {
     let is_active = tab == active;
     button(text(label).size(scale.text_body()))
-        .on_press(Message::SetRequestTab(tab))
+        .on_press(Message::Editor(EditorMsg::SetRequestTab(tab)))
         .padding([scale.space_md(), scale.space_lg()])
         .style(move |theme, _status| styles::section_tab(theme, is_active))
         .into()
@@ -226,7 +227,7 @@ pub fn view_response_section(app: &PostmanUiApp) -> Element<'_, Message> {
 fn response_tab_button(label: String, tab: ResponseTab, active: ResponseTab, scale: &UiScale) -> Element<'static, Message> {
     let is_active = tab == active;
     button(text(label).size(scale.text_small()))
-        .on_press(Message::SetResponseTab(tab))
+        .on_press(Message::Response(ResponseMsg::SetResponseTab(tab)))
         .padding(scale.pad_chip())
         .style(move |theme, _status| styles::section_tab(theme, is_active))
         .into()
@@ -237,17 +238,17 @@ fn view_params_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Elemen
 
     for (i, (key, value)) in tab.query_params.iter().enumerate() {
         let key_input = text_input("Key", key)
-            .on_input(move |v| Message::UpdateQueryParamKey(i, v))
+            .on_input(move |v| Message::Editor(EditorMsg::UpdateQueryParamKey(i, v)))
             .width(Length::Fill)
             .size(scale.text_body());
 
         let value_input = text_input("Value", value)
-            .on_input(move |v| Message::UpdateQueryParamValue(i, v))
+            .on_input(move |v| Message::Editor(EditorMsg::UpdateQueryParamValue(i, v)))
             .width(Length::Fill)
             .size(scale.text_body());
 
         let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
-            .on_press(Message::RemoveQueryParam(i));
+            .on_press(Message::Editor(EditorMsg::RemoveQueryParam(i)));
 
         rows = rows.push(
             row![key_input, value_input, remove]
@@ -258,7 +259,7 @@ fn view_params_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Elemen
 
     rows = rows.push(
         components::secondary_button("+ Param")
-            .on_press(Message::AddQueryParam)
+            .on_press(Message::Editor(EditorMsg::AddQueryParam))
             .padding([scale.space_sm(), scale.space_md()]),
     );
 
@@ -270,17 +271,17 @@ fn view_headers_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Eleme
 
     for (i, (key, value)) in tab.headers.iter().enumerate() {
         let key_input = text_input("Header", key)
-            .on_input(move |v| Message::UpdateHeaderKey(i, v))
+            .on_input(move |v| Message::Editor(EditorMsg::UpdateHeaderKey(i, v)))
             .width(Length::Fill)
             .size(scale.text_body());
 
         let value_input = text_input("Value", value)
-            .on_input(move |v| Message::UpdateHeaderValue(i, v))
+            .on_input(move |v| Message::Editor(EditorMsg::UpdateHeaderValue(i, v)))
             .width(Length::Fill)
             .size(scale.text_body());
 
         let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
-            .on_press(Message::RemoveHeader(i));
+            .on_press(Message::Editor(EditorMsg::RemoveHeader(i)));
 
         rows = rows.push(
             row![key_input, value_input, remove]
@@ -291,7 +292,7 @@ fn view_headers_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Eleme
 
     rows = rows.push(
         components::secondary_button("+ Header")
-            .on_press(Message::AddHeader)
+            .on_press(Message::Editor(EditorMsg::AddHeader))
             .padding([scale.space_sm(), scale.space_md()]),
     );
 
@@ -312,7 +313,7 @@ fn view_body_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Element<
         selector = selector.push(
             button(label)
                 .padding(scale.pad_chip())
-                .on_press(Message::SetBodyType(bt))
+                .on_press(Message::Editor(EditorMsg::SetBodyType(bt)))
                 .style(move |theme, status| styles::body_type_button(theme, status, active)),
         );
     }
@@ -324,24 +325,24 @@ fn view_body_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Element<
         BodyType::Raw | BodyType::Json => {
             editor = editor.push(
                 text_input("Request body...", &tab.body_text)
-                    .on_input(Message::UpdateBodyText)
+                    .on_input(|v| Message::Editor(EditorMsg::UpdateBodyText(v)))
                     .size(scale.text_body()),
             );
         }
         BodyType::Form => {
             for (i, (key, value)) in tab.form_pairs.iter().enumerate() {
                 let key_input = text_input("Key", key)
-                    .on_input(move |v| Message::UpdateFormKey(i, v))
+                    .on_input(move |v| Message::Editor(EditorMsg::UpdateFormKey(i, v)))
                     .width(Length::Fill)
                     .size(scale.text_body());
 
                 let value_input = text_input("Value", value)
-                    .on_input(move |v| Message::UpdateFormValue(i, v))
+                    .on_input(move |v| Message::Editor(EditorMsg::UpdateFormValue(i, v)))
                     .width(Length::Fill)
                     .size(scale.text_body());
 
                 let remove = components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
-                    .on_press(Message::RemoveFormPair(i));
+                    .on_press(Message::Editor(EditorMsg::RemoveFormPair(i)));
 
                 editor = editor.push(
                     row![key_input, value_input, remove]
@@ -351,7 +352,7 @@ fn view_body_editor<'a>(tab: &'a crate::model::Tab, scale: &UiScale) -> Element<
             }
             editor = editor.push(
                 components::secondary_button("+ Pair")
-                    .on_press(Message::AddFormPair)
+                    .on_press(Message::Editor(EditorMsg::AddFormPair))
                     .padding([scale.space_sm(), scale.space_md()]),
             );
         }

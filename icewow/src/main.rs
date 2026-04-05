@@ -1,4 +1,5 @@
 mod app;
+mod features;
 mod model;
 mod state;
 mod ui;

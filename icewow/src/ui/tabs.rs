@@ -2,6 +2,7 @@ use iced::widget::{container, mouse_area, row, text};
 use iced::{mouse, Element, Length};
 
 use crate::app::{Message, PostmanUiApp};
+use crate::features::TabsMsg;
 use crate::model::DragState;
 use crate::ui::{components, icons, theme};
 
@@ -24,7 +25,7 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
                 title_label,
                 components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
                     .padding([scale.space_xs(), scale.space_sm()])
-                    .on_press(Message::AskDeleteTab(tab_id)),
+                    .on_press(Message::Tabs(TabsMsg::AskDeleteTab(tab_id))),
             ]
             .spacing(scale.space_sm())
             .align_y(iced::Alignment::Center),
@@ -33,11 +34,11 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         .style(move |theme| crate::ui::styles::tab_chip(theme, active));
 
         let chip: Element<'_, Message> = mouse_area(chip_content)
-            .on_press(Message::BeginLongPressTab {
+            .on_press(Message::Tabs(TabsMsg::BeginLongPress {
                 tab_id,
                 source_index: index,
-            })
-            .on_enter(Message::HoverTabIndex(index + 1))
+            }))
+            .on_enter(Message::Tabs(TabsMsg::HoverIndex(index + 1)))
             .interaction(mouse::Interaction::Grab)
             .into();
 
@@ -48,7 +49,7 @@ pub fn view_tabs(app: &PostmanUiApp) -> Element<'_, Message> {
         row![
             tabs_row.width(Length::Fill),
             components::secondary_button("+")
-                .on_press(Message::NewTab)
+                .on_press(Message::Tabs(TabsMsg::NewTab))
                 .padding(scale.pad_chip()),
         ]
         .spacing(scale.space_sm())
@@ -75,7 +76,7 @@ fn tab_drop_zone(app: &PostmanUiApp, index: usize) -> Element<'_, Message> {
             .height(Length::Fixed(28.0))
             .style(move |theme| crate::ui::styles::tab_insert(theme, active)),
     )
-    .on_enter(Message::HoverTabIndex(index))
-    .on_exit(Message::ClearTabHover)
+    .on_enter(Message::Tabs(TabsMsg::HoverIndex(index)))
+    .on_exit(Message::Tabs(TabsMsg::ClearHover))
     .into()
 }

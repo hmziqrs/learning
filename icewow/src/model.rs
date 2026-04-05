@@ -217,4 +217,17 @@ impl AppState {
         self.next_press_token += 1;
         token
     }
+
+    pub fn open_request_tab(&mut self, request_id: crate::state::tree::NodeId) {
+        use crate::state::tree::NodeData;
+
+        let info = self.tree.get(request_id).and_then(|entry| match &entry.data {
+            NodeData::Request { name, url, method } => Some((name.clone(), url.clone(), *method)),
+            _ => None,
+        });
+
+        if let Some((name, url, method)) = info {
+            self.tabs.open_for_request(request_id, name, url, method);
+        }
+    }
 }
