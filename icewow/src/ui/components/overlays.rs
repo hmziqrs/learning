@@ -30,7 +30,7 @@ pub fn delete_modal<'a>(dialog: &'a DeleteDialog, scale: &'a UiScale) -> Element
     )
     .padding(18)
     .width(Length::Fixed(UiScale::MODAL_WIDTH))
-    .style(|theme| styles::modal_card(theme));
+    .style(|theme| styles::modal_card(theme, scale));
 
     opaque(
         container(card)
@@ -55,10 +55,11 @@ pub fn drag_preview_overlay(
     let x = (pointer.x + scale.icon_sm()).clamp(8.0, (window_size.width - 260.0).max(8.0));
     let y = (pointer.y + scale.icon_sm()).clamp(8.0, (window_size.height - 80.0).max(8.0));
 
+    let drag_blur = scale.space_xl();
     let card = container(text(label).size(scale.text_label()))
         .padding([scale.space_md(), scale.space_lg()])
         .width(Length::Fixed(240.0))
-        .style(|theme| styles::drag_preview(theme));
+        .style(move |theme| styles::drag_preview(theme, drag_blur));
 
     Some(
         container(

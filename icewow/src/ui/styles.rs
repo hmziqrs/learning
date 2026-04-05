@@ -2,6 +2,7 @@ use iced::widget::{button, container, pick_list};
 use iced::{border, Background, Color, Shadow, Theme, Vector};
 
 use crate::model::HttpMethod;
+use crate::ui::scale::UiScale;
 use crate::ui::theme::*;
 
 pub fn panel(_theme: &Theme) -> container::Style {
@@ -23,20 +24,20 @@ pub fn sidebar_panel(_theme: &Theme) -> container::Style {
 pub fn context_menu(_theme: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(CARD)),
-        border: border::rounded(6).color(BORDER).width(1),
+        border: border::rounded(UiScale::RADIUS_MD).color(BORDER).width(1),
         ..container::Style::default()
     }
 }
 
-pub fn drag_preview(_theme: &Theme) -> container::Style {
+pub fn drag_preview(_theme: &Theme, shadow_blur: f32) -> container::Style {
     container::Style {
         text_color: Some(FOREGROUND),
         background: Some(Background::Color(CARD)),
-        border: border::rounded(6).color(PRIMARY).width(1),
+        border: border::rounded(UiScale::RADIUS_MD).color(PRIMARY).width(1),
         shadow: Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.35),
             offset: Vector::new(0.0, 6.0),
-            blur_radius: 16.0,
+            blur_radius: shadow_blur,
         },
         ..container::Style::default()
     }
@@ -55,7 +56,7 @@ pub fn method_badge(_theme: &Theme, method: HttpMethod) -> container::Style {
     container::Style {
         text_color: Some(colors.text),
         background: Some(Background::Color(colors.bg)),
-        border: border::rounded(4).color(colors.border).width(1),
+        border: border::rounded(UiScale::RADIUS_SM).color(colors.border).width(1),
         ..container::Style::default()
     }
 }
@@ -68,7 +69,7 @@ pub fn send_button(_theme: &Theme, status: button::Status) -> button::Style {
     let base = button::Style {
         background: Some(Background::Color(PRIMARY)),
         text_color: PRIMARY_FOREGROUND,
-        border: border::rounded(6).width(0.0).color(PRIMARY),
+        border: border::rounded(UiScale::RADIUS_MD).width(0.0).color(PRIMARY),
         ..button::Style::default()
     };
 
@@ -95,7 +96,7 @@ pub fn method_pick_list(_theme: &Theme, status: pick_list::Status) -> pick_list:
     pick_list::Style {
         text_color: FOREGROUND,
         background: Background::Color(background),
-        border: border::rounded(4).width(1).color(INPUT),
+        border: border::rounded(UiScale::RADIUS_SM).width(1).color(INPUT),
         placeholder_color: MUTED_FOREGROUND,
         handle_color: MUTED_FOREGROUND,
     }
@@ -121,7 +122,7 @@ pub fn status_badge(_theme: &Theme, status_code: u16) -> container::Style {
     container::Style {
         text_color: Some(text),
         background: Some(Background::Color(bg)),
-        border: border::rounded(6).color(border_color).width(1),
+        border: border::rounded(UiScale::RADIUS_MD).color(border_color).width(1),
         ..container::Style::default()
     }
 }
@@ -188,7 +189,7 @@ pub fn handle_button(_theme: &Theme, status: button::Status) -> button::Style {
     let mut style = button::Style {
         background: Some(Background::Color(Color::TRANSPARENT)),
         text_color: MUTED_FOREGROUND,
-        border: border::rounded(4).color(Color::TRANSPARENT).width(0),
+        border: border::rounded(UiScale::RADIUS_SM).color(Color::TRANSPARENT).width(0),
         ..button::Style::default()
     };
 
@@ -203,7 +204,7 @@ pub fn menu_button(_theme: &Theme, status: button::Status) -> button::Style {
     let mut style = button::Style {
         background: Some(Background::Color(CARD)),
         text_color: FOREGROUND,
-        border: border::rounded(4).color(BORDER).width(1),
+        border: border::rounded(UiScale::RADIUS_SM).color(BORDER).width(1),
         ..button::Style::default()
     };
 
@@ -219,13 +220,13 @@ pub fn secondary_button(_theme: &Theme, status: button::Status) -> button::Style
         button::Status::Hovered | button::Status::Pressed => button::Style {
             background: Some(Background::Color(ACCENT)),
             text_color: ACCENT_FOREGROUND,
-            border: border::rounded(4).width(1).color(BORDER),
+            border: border::rounded(UiScale::RADIUS_SM).width(1).color(BORDER),
             ..button::Style::default()
         },
         _ => button::Style {
             background: Some(Background::Color(SECONDARY)),
             text_color: SECONDARY_FOREGROUND,
-            border: border::rounded(4).width(1).color(BORDER),
+            border: border::rounded(UiScale::RADIUS_SM).width(1).color(BORDER),
             ..button::Style::default()
         },
     }
@@ -236,13 +237,13 @@ pub fn danger_button(_theme: &Theme, status: button::Status) -> button::Style {
         button::Status::Hovered | button::Status::Pressed => button::Style {
             background: Some(Background::Color(red::S600)),
             text_color: DESTRUCTIVE_FOREGROUND,
-            border: border::rounded(4).width(1).color(red::S600),
+            border: border::rounded(UiScale::RADIUS_SM).width(1).color(red::S600),
             ..button::Style::default()
         },
         _ => button::Style {
             background: Some(Background::Color(red::S900)),
             text_color: DESTRUCTIVE_FOREGROUND,
-            border: border::rounded(4).width(1).color(red::S600),
+            border: border::rounded(UiScale::RADIUS_SM).width(1).color(red::S600),
             ..button::Style::default()
         },
     }
@@ -255,10 +256,10 @@ pub fn modal_backdrop(_theme: &Theme) -> container::Style {
     }
 }
 
-pub fn modal_card(_theme: &Theme) -> container::Style {
+pub fn modal_card(_theme: &Theme, _scale: &UiScale) -> container::Style {
     container::Style {
         background: Some(Background::Color(CARD)),
-        border: border::rounded(6).color(BORDER).width(1),
+        border: border::rounded(UiScale::RADIUS_MD).color(BORDER).width(1),
         ..container::Style::default()
     }
 }
@@ -275,7 +276,7 @@ pub fn body_type_button(_theme: &Theme, status: button::Status, active: bool) ->
     button::Style {
         background: Some(Background::Color(bg)),
         text_color: if active { blue::S400 } else { MUTED_FOREGROUND },
-        border: border::rounded(4)
+        border: border::rounded(UiScale::RADIUS_SM)
             .color(if active { PRIMARY } else { Color::TRANSPARENT })
             .width(if active { 1 } else { 0 }),
         ..button::Style::default()
@@ -311,13 +312,13 @@ pub fn save_button(_theme: &Theme, status: button::Status) -> button::Style {
         button::Status::Hovered | button::Status::Pressed => button::Style {
             background: Some(Background::Color(blue::S600)),
             text_color: PRIMARY_FOREGROUND,
-            border: border::rounded(4).width(0.0).color(blue::S600),
+            border: border::rounded(UiScale::RADIUS_SM).width(0.0).color(blue::S600),
             ..button::Style::default()
         },
         _ => button::Style {
             background: Some(Background::Color(PRIMARY)),
             text_color: PRIMARY_FOREGROUND,
-            border: border::rounded(4).width(0.0).color(PRIMARY),
+            border: border::rounded(UiScale::RADIUS_SM).width(0.0).color(PRIMARY),
             ..button::Style::default()
         },
     }
