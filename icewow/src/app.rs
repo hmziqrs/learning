@@ -177,32 +177,30 @@ impl PostmanUiApp {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let right_content: Element<'_, Message> = if self.state.tabs.active_id().is_some() {
-            let url_bar = self.view_url_bar();
-            let name_row = ui::main_panel::view_request_name_row(self);
-            let section_tabs = ui::main_panel::view_request_section_tabs(self);
-            let request_content = ui::main_panel::view_request_content(self);
-            let response_section = ui::main_panel::view_response_section(self);
+        let state = &self.state;
+        let scale = &state.ui_scale;
 
-            column![
-                ui::tabs::view_tabs(self),
-                name_row,
-                url_bar,
-                section_tabs,
-                request_content,
-                response_section,
-            ]
-            .height(Length::Fill)
-            .into()
+        let right_content: Element<'_, Message> = if let Some(active_tab) = state.tabs.active() {
+            let tabs = features::tabs::view_tabs(&state.tabs, &state.drag_state, scale);
+            let name_row = features::editor::view_request_name_row(active_tab, scale);
+            let url_bar = Self::view_url_bar(state);
+            let section_tabs = features::editor::view_request_section_tabs(active_tab, scale);
+            let request_content = features::editor::view_request_content(active_tab, scale);
+            let response_section = features::editor::view_response_section(active_tab, scale);
+
+            column![tabs, name_row, url_bar, section_tabs, request_content, response_section,]
+                .height(Length::Fill)
+                .into()
         } else {
             column![
-                ui::tabs::view_tabs(self),
+                features::tabs::view_tabs(&state.tabs, &state.drag_state, scale),
                 iced::widget::Space::new().height(Length::Fill),
                 container(
                     column![
-                        iced::widget::text("Open a request or create a new tab to get started").size(self.state.ui_scale.text_title()),
+                        iced::widget::text("Open a request or create a new tab to get started")
+                            .size(scale.text_title()),
                     ]
-                    .spacing(self.state.ui_scale.space_md())
+                    .spacing(scale.space_md())
                     .align_x(iced::Alignment::Center),
                 )
                 .center_x(Length::Fill)
@@ -215,7 +213,7 @@ impl PostmanUiApp {
         };
 
         let base = row![
-            ui::sidebar::view_sidebar(self),
+            features::sidebar::view_sidebar(state),
             right_content,
         ]
         .height(Length::Fill)
@@ -226,16 +224,31 @@ impl PostmanUiApp {
             .height(Length::Fill)
             .into();
 
-        if let Some(menu_overlay) = ui::sidebar::view_context_menu_overlay(self) {
+        if let Some(menu_overlay) = state.open_context_menu.as_ref().and_then(|target| {
+            features::sidebar::view_context_menu_overlay(
+                target,
+                &state.context_menu_position,
+                state.pointer_position,
+                state.window_size,
+                scale,
+            )
+        }) {
             root = stack([root, menu_overlay]).into();
         }
 
-        if let Some(drag_overlay) = ui::drag_preview_overlay(self) {
+        if let Some(drag_overlay) = ui::components::drag_preview_overlay(
+            &state.drag_state,
+            &state.tree,
+            &state.tabs,
+            state.pointer_position,
+            state.window_size,
+            scale,
+        ) {
             root = stack([root, drag_overlay]).into();
         }
 
-        if self.state.delete_dialog.is_some() {
-            root = stack([root, ui::delete_modal(self)]).into();
+        if let Some(dialog) = &state.delete_dialog {
+            root = stack([root, ui::components::delete_modal(dialog, scale)]).into();
         }
 
         root
@@ -245,10 +258,9 @@ impl PostmanUiApp {
         crate::ui::theme::theme()
     }
 
-    fn view_url_bar(&self) -> Element<'_, Message> {
-        let scale = &self.state.ui_scale;
-        let current_method = self
-            .state
+    fn view_url_bar(state: &AppState) -> Element<'static, Message> {
+        let scale = &state.ui_scale;
+        let current_method = state
             .tabs
             .active()
             .map(|t| t.method)
@@ -262,8 +274,7 @@ impl PostmanUiApp {
         .padding(scale.pad_button())
         .style(|theme, status| ui::styles::method_pick_list(theme, status));
 
-        let url_value = self
-            .state
+        let url_value = state
             .tabs
             .active()
             .map(|t| t.url_input.clone())
@@ -275,7 +286,7 @@ impl PostmanUiApp {
             .size(scale.text_title())
             .width(Length::Fill);
 
-        let loading = self.state.tabs.active().is_some_and(|t| t.loading);
+        let loading = state.tabs.active().is_some_and(|t| t.loading);
         let send_label = if loading {
             "Sending..."
         } else {
@@ -299,36 +310,6 @@ impl PostmanUiApp {
             .padding(scale.pad_panel())
             .style(|theme| ui::styles::panel(theme))
             .into()
-    }
-
-    pub fn drag_preview_text(&self) -> Option<String> {
-        match &self.state.drag_state {
-            Some(DragState::Sidebar {
-                kind: DragKind::Folder(folder_id),
-                ..
-            }) => self
-                .state
-                .tree
-                .folder_name(*folder_id)
-                .map(|name| format!("Folder: {name}")),
-            Some(DragState::Sidebar {
-                kind: DragKind::Request(request_id),
-                ..
-            }) => self
-                .state
-                .tree
-                .get(*request_id)
-                .and_then(|e| match &e.data {
-                    crate::state::tree::NodeData::Request { name, .. } => Some(format!("Request: {name}")),
-                    _ => None,
-                }),
-            Some(DragState::Tabs { tab_id, .. }) => self
-                .state
-                .tabs
-                .get(*tab_id)
-                .map(|tab| format!("Tab: {}", tab.title)),
-            None => None,
-        }
     }
 
     fn finish_sidebar_drag(&mut self) {
