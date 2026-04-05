@@ -147,9 +147,9 @@ pub fn update(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
 
 // ── View functions ──────────────────────────────────────────────
 
-pub fn view_sidebar(state: &AppState) -> Element<'_, Message> {
+pub fn view_sidebar(state: &AppState) -> Element<'_, SidebarMsg> {
     let scale = &state.ui_scale;
-    let mut entries: Vec<Element<'_, Message>> = vec![project_row(
+    let mut entries: Vec<Element<'_, SidebarMsg>> = vec![project_row(
         &state.project_name,
         scale,
     )];
@@ -181,7 +181,7 @@ pub fn view_context_menu_overlay(
     pointer_position: iced::Point,
     window_size: iced::Size,
     scale: &UiScale,
-) -> Option<Element<'static, Message>> {
+) -> Option<Element<'static, SidebarMsg>> {
     let pos = context_menu_position.unwrap_or(pointer_position);
 
     let max_x = (window_size.width - 220.0).max(8.0);
@@ -197,12 +197,12 @@ pub fn view_context_menu_overlay(
         .width(Length::Fixed(UiScale::CONTEXT_MENU_WIDTH))
         .style(|theme| crate::ui::styles::context_menu(theme));
 
-    let dismiss_layer: Element<'static, Message> =
+    let dismiss_layer: Element<'static, SidebarMsg> =
         mouse_area(container(text("")).width(Length::Fill).height(Length::Fill))
-            .on_press(Message::Sidebar(SidebarMsg::CloseContextMenu))
+            .on_press(SidebarMsg::CloseContextMenu)
             .into();
 
-    let position_layer: Element<'static, Message> = container(
+    let position_layer: Element<'static, SidebarMsg> = container(
         column![
             Space::new().height(Length::Fixed(y)),
             row![Space::new().width(Length::Fixed(x)), menu].align_y(iced::Alignment::Start),
@@ -217,50 +217,48 @@ pub fn view_context_menu_overlay(
     Some(stack([dismiss_layer, position_layer]).into())
 }
 
-fn menu_items(target: &ContextMenuTarget) -> Vec<Element<'static, Message>> {
+fn menu_items(target: &ContextMenuTarget) -> Vec<Element<'static, SidebarMsg>> {
     match target {
         ContextMenuTarget::ProjectRoot => vec![
             components::menu_button("New Folder")
-                .on_press(Message::Sidebar(SidebarMsg::CreateFolder { parent: None }))
+                .on_press(SidebarMsg::CreateFolder { parent: None })
                 .into(),
             components::menu_button("New Request")
-                .on_press(Message::Sidebar(SidebarMsg::CreateRequest { parent: None }))
+                .on_press(SidebarMsg::CreateRequest { parent: None })
                 .into(),
         ],
         ContextMenuTarget::Folder(folder_id) => vec![
             components::menu_button("New Folder")
-                .on_press(Message::Sidebar(SidebarMsg::CreateFolder {
+                .on_press(SidebarMsg::CreateFolder {
                     parent: Some(*folder_id),
-                }))
+                })
                 .into(),
             components::menu_button("New Request")
-                .on_press(Message::Sidebar(SidebarMsg::CreateRequest {
+                .on_press(SidebarMsg::CreateRequest {
                     parent: Some(*folder_id),
-                }))
+                })
                 .into(),
             components::danger_button("Delete Folder")
-                .on_press(Message::Sidebar(SidebarMsg::AskDeleteFolder(*folder_id)))
+                .on_press(SidebarMsg::AskDeleteFolder(*folder_id))
                 .into(),
         ],
         ContextMenuTarget::Request(request_id) => vec![
             components::menu_button("Open Request")
-                .on_press(Message::Sidebar(SidebarMsg::SelectRequest(*request_id)))
+                .on_press(SidebarMsg::SelectRequest(*request_id))
                 .into(),
             components::danger_button("Delete Request")
-                .on_press(Message::Sidebar(SidebarMsg::AskDeleteRequest(*request_id)))
+                .on_press(SidebarMsg::AskDeleteRequest(*request_id))
                 .into(),
         ],
     }
 }
 
-fn project_row<'a>(project_name: &'a str, scale: &UiScale) -> Element<'a, Message> {
+fn project_row<'a>(project_name: &'a str, scale: &UiScale) -> Element<'a, SidebarMsg> {
     let row = row![
         container(icons::lucide_icon("package", scale.icon_sm())).width(Length::Fixed(20.0)),
         container(text(project_name).size(scale.text_label())).width(Length::Fill),
         components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-            .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(
-                ContextMenuTarget::ProjectRoot,
-            ))),
+            .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
     ]
     .spacing(scale.space_sm())
     .align_y(iced::Alignment::Center);
@@ -282,7 +280,7 @@ fn render_nodes<'a>(
     node_ids: &'a [NodeId],
     ancestors: &[bool],
     scale: &UiScale,
-    out: &mut Vec<Element<'a, Message>>,
+    out: &mut Vec<Element<'a, SidebarMsg>>,
 ) {
     let len = node_ids.len();
 
@@ -386,7 +384,7 @@ fn folder_row<'a>(
     folder_name: &'a str,
     expanded: bool,
     children: &[NodeId],
-) -> Element<'a, Message> {
+) -> Element<'a, SidebarMsg> {
     let inside_target = SidebarDropTarget::InsideFolder {
         folder_id,
         index: children.len(),
@@ -406,12 +404,10 @@ fn folder_row<'a>(
             container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
             components::icon_button(chevron, scale)
-                .on_press(Message::Sidebar(SidebarMsg::ToggleFolder(folder_id))),
+                .on_press(SidebarMsg::ToggleFolder(folder_id)),
             container(text(folder_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(
-                    ContextMenuTarget::Folder(folder_id)
-                ))),
+                .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Folder(folder_id))),
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
@@ -430,14 +426,14 @@ fn folder_row<'a>(
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, inside_active)),
     )
-    .on_press(Message::Sidebar(SidebarMsg::BeginLongPress {
+    .on_press(SidebarMsg::BeginLongPress {
         kind: DragKind::Folder(folder_id),
         source_parent: parent,
         source_index: index,
         click_action: Some(ClickAction::SelectFolder(folder_id)),
-    }))
-    .on_enter(Message::Sidebar(SidebarMsg::HoverTarget(inside_target)))
-    .on_exit(Message::Sidebar(SidebarMsg::ClearHover))
+    })
+    .on_enter(SidebarMsg::HoverTarget(inside_target))
+    .on_exit(SidebarMsg::ClearHover)
     .interaction(mouse::Interaction::Grab)
     .into()
 }
@@ -455,7 +451,7 @@ fn request_row<'a>(
     request_id: NodeId,
     request_name: &'a str,
     method: HttpMethod,
-) -> Element<'a, Message> {
+) -> Element<'a, SidebarMsg> {
     let selected = selected_folder.is_none()
         && tabs
             .active()
@@ -477,9 +473,7 @@ fn request_row<'a>(
                 .align_x(iced::Alignment::End),
             container(text(request_name).size(scale.text_label())).width(Length::Fill),
             components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(Message::Sidebar(SidebarMsg::ToggleContextMenu(
-                    ContextMenuTarget::Request(request_id),
-                ))),
+                .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Request(request_id))),
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
@@ -498,17 +492,17 @@ fn request_row<'a>(
             .width(Length::Fill)
             .style(move |theme| crate::ui::styles::tree_row(theme, selected, false)),
     )
-    .on_press(Message::Sidebar(SidebarMsg::BeginLongPress {
+    .on_press(SidebarMsg::BeginLongPress {
         kind: DragKind::Request(request_id),
         source_parent: parent,
         source_index: index,
         click_action: Some(ClickAction::SelectRequest(request_id)),
-    }))
+    })
     .interaction(mouse::Interaction::Grab)
     .into()
 }
 
-fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static, Message> {
+fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static, SidebarMsg> {
     let hint = container(
         column![
             text("This folder is empty.")
@@ -519,9 +513,9 @@ fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static,
                     .size(12)
                     .color(theme::PRIMARY),
             )
-            .on_press(Message::Sidebar(SidebarMsg::CreateRequest {
+            .on_press(SidebarMsg::CreateRequest {
                 parent: Some(folder_id),
-            }))
+            })
             .interaction(mouse::Interaction::Pointer),
         ]
         .spacing(2),
@@ -540,7 +534,7 @@ fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static,
 
 // ── Tree guide rendering ────────────────────────────────────
 
-fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message>> {
+fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, SidebarMsg>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
@@ -567,7 +561,7 @@ fn item_guides<'a>(ancestors: &[bool], is_last: bool) -> Vec<Element<'a, Message
     items
 }
 
-fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
+fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, SidebarMsg>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
@@ -584,7 +578,7 @@ fn continuation_guides<'a>(ancestors: &[bool]) -> Vec<Element<'a, Message>> {
     items
 }
 
-fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Element<'a, Message>> {
+fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Element<'a, SidebarMsg>> {
     let depth = ancestors.len() + 1;
     let mut items = Vec::new();
 
@@ -611,7 +605,7 @@ fn drop_line_guides<'a>(ancestors: &[bool], pipe_at_connector: bool) -> Vec<Elem
     items
 }
 
-fn pipe_guide<'a>() -> Element<'a, Message> {
+fn pipe_guide<'a>() -> Element<'a, SidebarMsg> {
     let indent = UiScale::TREE_INDENT;
     row![
         container(Space::new())
@@ -625,7 +619,7 @@ fn pipe_guide<'a>() -> Element<'a, Message> {
     .into()
 }
 
-fn tee_guide<'a>() -> Element<'a, Message> {
+fn tee_guide<'a>() -> Element<'a, SidebarMsg> {
     let indent = UiScale::TREE_INDENT;
     let top = row![
         container(Space::new())
@@ -656,7 +650,7 @@ fn tee_guide<'a>() -> Element<'a, Message> {
         .into()
 }
 
-fn corner_guide<'a>() -> Element<'a, Message> {
+fn corner_guide<'a>() -> Element<'a, SidebarMsg> {
     let indent = UiScale::TREE_INDENT;
     let top = row![
         container(Space::new())
@@ -696,7 +690,7 @@ fn drop_line<'a>(
     target: SidebarDropTarget,
     ancestors: &[bool],
     pipe_at_connector: bool,
-) -> Element<'a, Message> {
+) -> Element<'a, SidebarMsg> {
     let active = is_sidebar_hover(drag_state, target);
 
     let line_bar = container(text(""))
@@ -712,8 +706,8 @@ fn drop_line<'a>(
             .padding([0.0, 6.0])
             .width(Length::Fill),
     )
-    .on_enter(Message::Sidebar(SidebarMsg::HoverTarget(target)))
-    .on_exit(Message::Sidebar(SidebarMsg::ClearHover))
+    .on_enter(SidebarMsg::HoverTarget(target))
+    .on_exit(SidebarMsg::ClearHover)
     .into()
 }
 

@@ -181,19 +181,19 @@ impl PostmanUiApp {
         let scale = &state.ui_scale;
 
         let right_content: Element<'_, Message> = if let Some(active_tab) = state.tabs.active() {
-            let tabs = features::tabs::view_tabs(&state.tabs, &state.drag_state, scale);
-            let name_row = features::editor::view_request_name_row(active_tab, scale);
+            let tabs = features::tabs::view_tabs(&state.tabs, &state.drag_state, scale).map(Message::Tabs);
+            let name_row = features::editor::view_request_name_row(active_tab, scale).map(Message::Editor);
             let url_bar = Self::view_url_bar(state);
-            let section_tabs = features::editor::view_request_section_tabs(active_tab, scale);
-            let request_content = features::editor::view_request_content(active_tab, scale);
-            let response_section = features::editor::view_response_section(active_tab, scale);
+            let section_tabs = features::editor::view_request_section_tabs(active_tab, scale).map(Message::Editor);
+            let request_content = features::editor::view_request_content(active_tab, scale).map(Message::Editor);
+            let response_section = features::response::view_response_section(active_tab, scale).map(Message::Response);
 
             column![tabs, name_row, url_bar, section_tabs, request_content, response_section,]
                 .height(Length::Fill)
                 .into()
         } else {
             column![
-                features::tabs::view_tabs(&state.tabs, &state.drag_state, scale),
+                features::tabs::view_tabs(&state.tabs, &state.drag_state, scale).map(Message::Tabs),
                 iced::widget::Space::new().height(Length::Fill),
                 container(
                     column![
@@ -213,7 +213,7 @@ impl PostmanUiApp {
         };
 
         let base = row![
-            features::sidebar::view_sidebar(state),
+            features::sidebar::view_sidebar(state).map(Message::Sidebar),
             right_content,
         ]
         .height(Length::Fill)
@@ -224,15 +224,16 @@ impl PostmanUiApp {
             .height(Length::Fill)
             .into();
 
-        if let Some(menu_overlay) = state.open_context_menu.as_ref().and_then(|target| {
-            features::sidebar::view_context_menu_overlay(
+        if let Some(menu_overlay) = state.open_context_menu.as_ref()
+            .and_then(|target| features::sidebar::view_context_menu_overlay(
                 target,
                 &state.context_menu_position,
                 state.pointer_position,
                 state.window_size,
                 scale,
-            )
-        }) {
+            ))
+            .map(|el| el.map(Message::Sidebar))
+        {
             root = stack([root, menu_overlay]).into();
         }
 

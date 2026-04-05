@@ -1,24 +1,23 @@
 use iced::widget::{column, row, text_input};
 use iced::{Element, Length};
 
-use crate::app::Message;
 use crate::ui::scale::UiScale;
 
 /// Generic key-value pair editor.
 ///
 /// Renders a list of key/value input rows with remove buttons and an "add" button.
 /// All message construction is done via closures, so this is feature-agnostic.
-pub fn kv_editor<'a>(
+pub fn kv_editor<'a, M: Clone + 'static>(
     pairs: &'a [(String, String)],
     key_placeholder: &'a str,
     value_placeholder: &'a str,
-    on_key: impl Fn(usize, String) -> Message + Clone + 'a,
-    on_value: impl Fn(usize, String) -> Message + Clone + 'a,
-    on_remove: impl Fn(usize) -> Message + Clone + 'a,
+    on_key: impl Fn(usize, String) -> M + Clone + 'a,
+    on_value: impl Fn(usize, String) -> M + Clone + 'a,
+    on_remove: impl Fn(usize) -> M + Clone + 'a,
     on_add_label: &'a str,
-    on_add: Message,
+    on_add: M,
     scale: &'a UiScale,
-) -> Element<'a, Message> {
+) -> Element<'a, M> {
     let mut rows = column![].spacing(scale.space_sm());
 
     for (i, (key, value)) in pairs.iter().enumerate() {
