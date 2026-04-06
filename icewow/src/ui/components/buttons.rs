@@ -15,19 +15,22 @@ pub fn icon_button<'a, M: 'a>(
 }
 
 /// Context menu item button — bordered with hover highlight.
-pub fn menu_button<M>(label: &str) -> widget::Button<'_, M> {
+pub fn menu_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
     button(label)
+        .padding(scale.pad_button())
         .style(|theme, status| styles::menu_button(theme, status))
 }
 
 /// Destructive action button (Delete) — red themed.
-pub fn danger_button<M>(label: &str) -> widget::Button<'_, M> {
+pub fn danger_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
     button(label)
+        .padding(scale.pad_button())
         .style(|theme, status| styles::danger_button(theme, status))
 }
 
 /// Secondary action button (Cancel, +) — secondary themed.
-pub fn secondary_button<M>(label: &str) -> widget::Button<'_, M> {
+pub fn secondary_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
     button(label)
+        .padding(scale.pad_button())
         .style(|theme, status| styles::secondary_button(theme, status))
 }

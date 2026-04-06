@@ -53,7 +53,7 @@ Unused `S500`, `S100`-`S300`, `S600`, `S700` across color modules in `theme.rs`,
 ### Tracked in plan
 
 - [x] `badges.rs` — now takes `&UiScale`, uses `scale.text_body()`, `scale.pad_badge_method()`, `scale.pad_badge_status()`
-- [ ] `buttons.rs` `menu_button`, `danger_button`, `secondary_button` — no explicit padding set (Iced default); add `&UiScale` and `scale.pad_button()` or `scale.pad_chip()`
+- [x] `buttons.rs` `menu_button`, `danger_button`, `secondary_button` — now take `&UiScale`, use `scale.pad_button()`
 - [x] `sidebar.rs` `empty_folder_state` — now takes `&UiScale`, uses `scale.text_small()`, `scale.space_xs()`, `scale.space_sm()`
 - [x] `tabs.rs` method label — now uses `scale.text_xs()` (new method added to `UiScale`)
 
@@ -62,7 +62,7 @@ Unused `S500`, `S100`-`S300`, `S600`, `S700` across color modules in `theme.rs`,
 - [x] `overlays.rs` `delete_modal` — `.spacing(14)` → `scale.space_lg()`, `.padding(18)` → `scale.pad_modal()` (new method)
 - [x] `sidebar.rs` folder_row/request_row — `.padding([3.0, 0.0])` → `scale.space_xs()`
 - [x] `sidebar.rs` drop_line — `.padding([0.0, 6.0])` → `scale.space_sm()`; now takes `&UiScale`
-- [ ] `tabs.rs:153` `tab_drop_zone` — `.width(Length::Fixed(16.0))` / `.width(Length::Fixed(2.0))` and `.height(Length::Fixed(28.0))` hardcoded structural dimensions
+- [x] `tabs.rs` `tab_drop_zone` — widths now use `scale.space_xl()` / `scale.space_xs()`; height 28.0 kept as structural (matches tab chip height)
 
 ---
 

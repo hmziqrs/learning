@@ -23,9 +23,9 @@ pub fn delete_modal<'a>(dialog: &'a DeleteDialog, scale: &'a UiScale) -> Element
             text("Confirm Delete").size(scale.text_heading()),
             text(description).size(scale.text_label()),
             row![
-                components::secondary_button("Cancel")
+                components::secondary_button("Cancel", scale)
                     .on_press(Message::CancelDelete),
-                components::danger_button("Delete")
+                components::danger_button("Delete", scale)
                     .on_press(Message::ConfirmDelete),
             ]
             .spacing(scale.space_md()),

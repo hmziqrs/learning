@@ -81,7 +81,7 @@ pub fn update(state: &mut AppState, msg: TabsMsg) -> Task<Message> {
 pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scale: &'a UiScale) -> Element<'a, TabsMsg> {
     let mut tabs_row = row![].spacing(0).align_y(iced::Alignment::Center);
 
-    tabs_row = tabs_row.push(tab_drop_zone(drag_state, 0));
+    tabs_row = tabs_row.push(tab_drop_zone(drag_state, 0, scale));
 
     for (index, tab_id, tab) in tabs.ordered_enumerate() {
         let active = tabs.active_id() == Some(tab_id);
@@ -121,13 +121,13 @@ pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scal
             .interaction(mouse::Interaction::Grab)
             .into();
 
-        tabs_row = tabs_row.push(chip).push(tab_drop_zone(drag_state, index + 1));
+        tabs_row = tabs_row.push(chip).push(tab_drop_zone(drag_state, index + 1, scale));
     }
 
     let container = container(
         row![
             tabs_row.width(Length::Fill),
-            components::secondary_button("+")
+            components::secondary_button("+", scale)
                 .on_press(TabsMsg::NewTab)
                 .padding(scale.pad_chip()),
         ]
@@ -140,7 +140,7 @@ pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scal
     container.into()
 }
 
-fn tab_drop_zone(drag_state: &Option<DragState>, index: usize) -> Element<'static, TabsMsg> {
+fn tab_drop_zone(drag_state: &Option<DragState>, index: usize, scale: &UiScale) -> Element<'static, TabsMsg> {
     let active = matches!(
         drag_state,
         Some(DragState::Tabs {
@@ -149,10 +149,12 @@ fn tab_drop_zone(drag_state: &Option<DragState>, index: usize) -> Element<'stati
         }) if *current == index
     );
 
+    let width = if active { scale.space_xl() } else { scale.space_xs() };
+
     mouse_area(
         container(text(""))
-            .width(Length::Fixed(if active { 16.0 } else { 2.0 }))
-            .height(Length::Fixed(28.0))
+            .width(Length::Fixed(width))
+            .height(Length::Fixed(28.0)) // structural: matches tab chip height
             .style(move |theme| crate::ui::styles::tab_insert(theme, active)),
     )
     .on_enter(TabsMsg::HoverIndex(index))

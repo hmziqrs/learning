@@ -49,7 +49,7 @@ pub fn kv_editor<'a, M: Clone + 'static>(
     }
 
     rows = rows.push(
-        crate::ui::components::secondary_button(on_add_label)
+        crate::ui::components::secondary_button(on_add_label, scale)
             .on_press(on_add)
             .padding([scale.space_sm(), scale.space_md()]),
     );

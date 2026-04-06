@@ -192,7 +192,7 @@ pub fn view_context_menu_overlay(
     let x = pos.x.clamp(8.0, max_x);
     let y = pos.y.clamp(8.0, max_y);
 
-    let menu_items = menu_items(target);
+    let menu_items = menu_items(target, scale);
 
     let menu = container(column(menu_items).spacing(scale.space_sm()))
         .padding(scale.space_sm())
@@ -219,36 +219,36 @@ pub fn view_context_menu_overlay(
     Some(stack([dismiss_layer, position_layer]).into())
 }
 
-fn menu_items(target: &ContextMenuTarget) -> Vec<Element<'static, SidebarMsg>> {
+fn menu_items(target: &ContextMenuTarget, scale: &UiScale) -> Vec<Element<'static, SidebarMsg>> {
     match target {
         ContextMenuTarget::ProjectRoot => vec![
-            components::menu_button("New Folder")
+            components::menu_button("New Folder", scale)
                 .on_press(SidebarMsg::CreateFolder { parent: None })
                 .into(),
-            components::menu_button("New Request")
+            components::menu_button("New Request", scale)
                 .on_press(SidebarMsg::CreateRequest { parent: None })
                 .into(),
         ],
         ContextMenuTarget::Folder(folder_id) => vec![
-            components::menu_button("New Folder")
+            components::menu_button("New Folder", scale)
                 .on_press(SidebarMsg::CreateFolder {
                     parent: Some(*folder_id),
                 })
                 .into(),
-            components::menu_button("New Request")
+            components::menu_button("New Request", scale)
                 .on_press(SidebarMsg::CreateRequest {
                     parent: Some(*folder_id),
                 })
                 .into(),
-            components::danger_button("Delete Folder")
+            components::danger_button("Delete Folder", scale)
                 .on_press(SidebarMsg::AskDeleteFolder(*folder_id))
                 .into(),
         ],
         ContextMenuTarget::Request(request_id) => vec![
-            components::menu_button("Open Request")
+            components::menu_button("Open Request", scale)
                 .on_press(SidebarMsg::SelectRequest(*request_id))
                 .into(),
-            components::danger_button("Delete Request")
+            components::danger_button("Delete Request", scale)
                 .on_press(SidebarMsg::AskDeleteRequest(*request_id))
                 .into(),
         ],
