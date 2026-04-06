@@ -1,6 +1,10 @@
 use iced::widget::{column, container, opaque, row, text, Space};
 use iced::{Element, Length};
 
+// FIXME(Phase 4): overlays import `crate::app::Message` directly — `delete_modal` and
+// `drag_preview_overlay` return `Element<Message>` instead of a feature-specific type.
+// Needs a design decision: dedicated `OverlayMsg` sub-enum, or accept the coupling.
+
 use crate::app::Message;
 use crate::model::{DeleteDialog, DragKind, DragState};
 use crate::ui::scale::UiScale;
@@ -26,9 +30,9 @@ pub fn delete_modal<'a>(dialog: &'a DeleteDialog, scale: &'a UiScale) -> Element
             ]
             .spacing(scale.space_md()),
         ]
-        .spacing(14),
+        .spacing(scale.space_lg()),
     )
-    .padding(18)
+    .padding(scale.pad_modal())
     .width(Length::Fixed(UiScale::MODAL_WIDTH))
     .style(|theme| styles::modal_card(theme, scale));
 

@@ -52,6 +52,7 @@ impl TabStore {
         self.tabs.get_mut(&id)
     }
 
+    #[allow(dead_code)]
     pub fn ordered(&self) -> impl Iterator<Item = &Tab> {
         self.order.iter().filter_map(|id| self.tabs.get(id))
     }
@@ -63,10 +64,12 @@ impl TabStore {
             .filter_map(|(i, &id)| self.tabs.get(&id).map(|tab| (i, id, tab)))
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.order.len()
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
     }
@@ -80,6 +83,7 @@ impl TabStore {
     }
 
     /// Find the position index of a tab in the ordered list.
+    #[allow(dead_code)]
     pub fn position(&self, tab_id: TabId) -> Option<usize> {
         self.order.iter().position(|&id| id == tab_id)
     }

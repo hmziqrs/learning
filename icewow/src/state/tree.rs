@@ -62,10 +62,12 @@ impl TreeArena {
         self.nodes.get(&id)
     }
 
+    #[allow(dead_code)]
     pub fn get_mut(&mut self, id: NodeId) -> Option<&mut TreeEntry> {
         self.nodes.get_mut(&id)
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, id: NodeId) -> bool {
         self.nodes.contains_key(&id)
     }
@@ -74,6 +76,7 @@ impl TreeArena {
         &self.root_children
     }
 
+    #[allow(dead_code)]
     pub fn children_of(&self, id: NodeId) -> Option<&[NodeId]> {
         self.nodes.get(&id).map(|e| e.children.as_slice())
     }
@@ -337,6 +340,7 @@ impl TreeArena {
         result
     }
 
+    #[allow(dead_code)]
     pub fn set_name(&mut self, id: NodeId, name: String) -> bool {
         if let Some(entry) = self.nodes.get_mut(&id) {
             match &mut entry.data {

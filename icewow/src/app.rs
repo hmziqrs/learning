@@ -30,7 +30,9 @@ pub enum Message {
     LongPressElapsed(u64),
     ConfirmDelete,
     CancelDelete,
+    #[allow(dead_code)]
     SetDensity(Density),
+    #[allow(dead_code)]
     SetFontScale(f32),
 }
 
@@ -275,6 +277,9 @@ impl PostmanUiApp {
         crate::ui::theme::theme()
     }
 
+    /// Cross-feature URL bar — emits both EditorMsg (method/url changes) and HttpMsg (send).
+    /// Kept in app.rs because it inherently spans features; moving to a shared view helper
+    /// would add indirection without reducing coupling.
     fn view_url_bar(state: &AppState) -> Element<'static, Message> {
         let scale = &state.ui_scale;
         let current_method = state

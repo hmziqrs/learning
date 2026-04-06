@@ -12,6 +12,7 @@ pub enum TabsMsg {
     NewTab,
     OpenForRequest(NodeId),
     AskDeleteTab(TabId),
+    #[allow(dead_code)]
     SelectTab(TabId),
     BeginLongPress {
         tab_id: TabId,
@@ -86,7 +87,7 @@ pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scal
         let active = tabs.active_id() == Some(tab_id);
 
         let method_text_color = theme::method_text_color(tab.method);
-        let method_label = text(tab.method.as_str()).size(11).color(method_text_color);
+        let method_label = text(tab.method.as_str()).size(scale.text_xs()).color(method_text_color);
         let title_label = text(tab.title.clone()).size(scale.text_body());
 
         // Dirty indicator dot

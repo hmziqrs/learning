@@ -1,8 +1,10 @@
 /// UI density preset — controls padding and spacing multipliers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Density {
+    #[allow(dead_code)]
     Compact,
     Comfortable,
+    #[allow(dead_code)]
     Spacious,
 }
 
@@ -36,6 +38,10 @@ impl UiScale {
     pub fn text_heading(&self) -> f32 {
         20.0 * self.font_scale
     }
+    /// Extra-small text — between caption (10) and small (12). Used for method labels in tab chips.
+    pub fn text_xs(&self) -> f32 {
+        11.0 * self.font_scale
+    }
 
     // --- Icon sizes (scaled by font_scale) ---
 
@@ -45,6 +51,7 @@ impl UiScale {
     pub fn icon_md(&self) -> f32 {
         16.0 * self.font_scale
     }
+    #[allow(dead_code)]
     pub fn icon_lg(&self) -> f32 {
         20.0 * self.font_scale
     }
@@ -98,6 +105,15 @@ impl UiScale {
     pub fn pad_icon(&self) -> [f32; 2] {
         [2.0 * self.density_factor(), 6.0 * self.density_factor()]
     }
+    pub fn pad_modal(&self) -> f32 {
+        (18.0 * self.density_factor()).round()
+    }
+    pub fn pad_badge_method(&self) -> [f32; 2] {
+        [6.0 * self.density_factor(), 10.0 * self.density_factor()]
+    }
+    pub fn pad_badge_status(&self) -> [f32; 2] {
+        [4.0 * self.density_factor(), 8.0 * self.density_factor()]
+    }
 
     // --- Layout constants (not scaled -- structural) ---
 
@@ -111,6 +127,7 @@ impl UiScale {
 
     pub const RADIUS_SM: f32 = 4.0;
     pub const RADIUS_MD: f32 = 6.0;
+    #[allow(dead_code)]
     pub const RADIUS_LG: f32 = 8.0;
 }
 

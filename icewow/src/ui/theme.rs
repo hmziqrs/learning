@@ -1,3 +1,4 @@
+// Palette constants are future API surface — dead_code suppressed at module level in mod.rs.
 use iced::Color;
 use iced::Theme;
 use iced::theme::Palette;

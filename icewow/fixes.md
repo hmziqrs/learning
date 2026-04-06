@@ -6,7 +6,7 @@ Tracked issues, deferred items, and cleanup tasks from the architecture refactor
 
 ## Dead Code Warnings (all future API — keep, suppress)
 
-All 26 compiler warnings are future API surface, not dead weight. Suppress with `#[allow(dead_code)]` where appropriate.
+All 26 compiler warnings are future API surface, not dead weight. Suppressed with `#[allow(dead_code)]`.
 
 ### State/feature API (used when features grow)
 
@@ -41,10 +41,10 @@ Unused `S500`, `S100`-`S300`, `S600`, `S700` across color modules in `theme.rs`,
 
 ### Still outstanding
 
-- [ ] `view_sidebar` takes full `&AppState` — needs `project_name`, `tree`, `tabs`, `drag_state`, `selected_folder`, `ui_scale` (6 slices). Narrowing may not be worth the ergonomic cost; decide and document.
-- [ ] `view_url_bar` lives on `PostmanUiApp` (`app.rs:278-330`) — emits both `EditorMsg` and `HttpMsg`, inherently cross-feature. Either keep in `app.rs` with a comment explaining why, or move to a shared view helper.
-- [ ] `overlays.rs` imports `crate::app::Message` directly — `delete_modal` and `drag_preview_overlay` return `Element<Message>` instead of a feature-specific type. Deferred from Phase 1; needs a design decision (dedicated `OverlayMsg` sub-enum, or accept the coupling).
-- [ ] `modal_card` style (`styles.rs:251`) accepts `_scale: &UiScale` but ignores it — either use it or remove the parameter.
+- [x] `view_sidebar` takes full `&AppState` — documented with comment; narrowing deferred (not worth ergonomic cost)
+- [x] `view_url_bar` lives on `PostmanUiApp` — documented with comment explaining cross-feature nature
+- [x] `overlays.rs` imports `crate::app::Message` directly — FIXME comment added; deferred pending design decision
+- [x] `modal_card` style accepts `_scale` — documented as reserved for future density-aware modal sizing
 
 ---
 
@@ -52,19 +52,16 @@ Unused `S500`, `S100`-`S300`, `S600`, `S700` across color modules in `theme.rs`,
 
 ### Tracked in plan
 
-- [ ] `badges.rs:9,22` — `.size(13)` should use `scale.text_body()`; badges have no `&UiScale` access yet
-- [ ] `badges.rs:10` — `.padding([6, 10])` should use `scale.pad_button()`
-- [ ] `badges.rs:23` — `.padding([4, 8])` should use `scale.pad_chip()`
+- [x] `badges.rs` — now takes `&UiScale`, uses `scale.text_body()`, `scale.pad_badge_method()`, `scale.pad_badge_status()`
 - [ ] `buttons.rs` `menu_button`, `danger_button`, `secondary_button` — no explicit padding set (Iced default); add `&UiScale` and `scale.pad_button()` or `scale.pad_chip()`
-- [ ] `sidebar.rs:508-513` `empty_folder_state` — `.size(12)`, `.spacing(2)`, `.padding([3.0, 0.0])`, `.padding([0.0, 6.0])`; static function with no scale access
-- [ ] `tabs.rs:89` method label — `.size(11)` unique size between caption (10) and small (12); add `text_xs()` to `UiScale` when needed
+- [x] `sidebar.rs` `empty_folder_state` — now takes `&UiScale`, uses `scale.text_small()`, `scale.space_xs()`, `scale.space_sm()`
+- [x] `tabs.rs` method label — now uses `scale.text_xs()` (new method added to `UiScale`)
 
 ### NOT tracked in plan (oversight)
 
-- [ ] `overlays.rs:29` `delete_modal` — `.spacing(14)` should use `scale.space_lg()` (12 at default) or a new spacing token
-- [ ] `overlays.rs:31` `delete_modal` — `.padding(18)` should use a scale method (closest is `scale.pad_panel()` = 10, may need a new `pad_modal()`)
-- [ ] `sidebar.rs:415,481` — `.padding([3.0, 0.0])` on folder/request row content containers; structural but could use `scale.space_xs()`
-- [ ] `sidebar.rs:425,493` — `.padding([0.0, scale.space_sm()])` OK, but drop_line at line 707 uses `.padding([0.0, 6.0])` hardcoded
+- [x] `overlays.rs` `delete_modal` — `.spacing(14)` → `scale.space_lg()`, `.padding(18)` → `scale.pad_modal()` (new method)
+- [x] `sidebar.rs` folder_row/request_row — `.padding([3.0, 0.0])` → `scale.space_xs()`
+- [x] `sidebar.rs` drop_line — `.padding([0.0, 6.0])` → `scale.space_sm()`; now takes `&UiScale`
 - [ ] `tabs.rs:153` `tab_drop_zone` — `.width(Length::Fixed(16.0))` / `.width(Length::Fixed(2.0))` and `.height(Length::Fixed(28.0))` hardcoded structural dimensions
 
 ---

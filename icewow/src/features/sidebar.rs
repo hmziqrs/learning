@@ -147,6 +147,8 @@ pub fn update(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
 
 // ── View functions ──────────────────────────────────────────────
 
+/// Takes full `&AppState` because it needs project_name, tree, tabs, drag_state,
+/// selected_folder, and ui_scale — 6 slices. Narrowing may not be worth the ergonomic cost.
 pub fn view_sidebar(state: &AppState) -> Element<'_, SidebarMsg> {
     let scale = &state.ui_scale;
     let mut entries: Vec<Element<'_, SidebarMsg>> = vec![project_row(
@@ -290,9 +292,10 @@ fn render_nodes<'a>(
             SidebarDropTarget::Before { parent, index: 0 },
             ancestors,
             false,
+            scale,
         ));
         if let Some(folder_id) = parent {
-            out.push(empty_folder_state(ancestors, folder_id));
+            out.push(empty_folder_state(ancestors, folder_id, scale));
         }
         return;
     }
@@ -309,6 +312,7 @@ fn render_nodes<'a>(
             SidebarDropTarget::Before { parent, index },
             ancestors,
             index > 0,
+            scale,
         ));
 
         match &entry.data {
@@ -367,6 +371,7 @@ fn render_nodes<'a>(
             SidebarDropTarget::After { parent, index },
             ancestors,
             !is_last,
+            scale,
         ));
     }
 }
@@ -412,7 +417,7 @@ fn folder_row<'a>(
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
     )
-    .padding([3.0, 0.0])
+    .padding([scale.space_xs(), 0.0])
     .width(Length::Fill);
 
     let mut items = item_guides(ancestors, is_last);
@@ -478,7 +483,7 @@ fn request_row<'a>(
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
     )
-    .padding([3.0, 0.0])
+    .padding([scale.space_xs(), 0.0])
     .width(Length::Fill);
 
     let mut items = item_guides(ancestors, is_last);
@@ -502,15 +507,15 @@ fn request_row<'a>(
     .into()
 }
 
-fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static, SidebarMsg> {
+fn empty_folder_state<'a>(ancestors: &[bool], folder_id: NodeId, scale: &UiScale) -> Element<'a, SidebarMsg> {
     let hint = container(
         column![
             text("This folder is empty.")
-                .size(12)
+                .size(scale.text_small())
                 .color(theme::MUTED_FOREGROUND),
             mouse_area(
                 text("Add a request")
-                    .size(12)
+                    .size(scale.text_small())
                     .color(theme::PRIMARY),
             )
             .on_press(SidebarMsg::CreateRequest {
@@ -518,16 +523,16 @@ fn empty_folder_state(ancestors: &[bool], folder_id: NodeId) -> Element<'static,
             })
             .interaction(mouse::Interaction::Pointer),
         ]
-        .spacing(2),
+        .spacing(scale.space_xs()),
     )
-    .padding([3.0, 0.0])
+    .padding([scale.space_xs(), 0.0])
     .width(Length::Fill);
 
     let mut items = continuation_guides(ancestors);
     items.push(hint.into());
 
     container(row(items))
-        .padding([0.0, 6.0])
+        .padding([0.0, scale.space_sm()])
         .width(Length::Fill)
         .into()
 }
@@ -690,6 +695,7 @@ fn drop_line<'a>(
     target: SidebarDropTarget,
     ancestors: &[bool],
     pipe_at_connector: bool,
+    scale: &UiScale,
 ) -> Element<'a, SidebarMsg> {
     let active = is_sidebar_hover(drag_state, target);
 
@@ -703,7 +709,7 @@ fn drop_line<'a>(
 
     mouse_area(
         container(row(items))
-            .padding([0.0, 6.0])
+            .padding([0.0, scale.space_sm()])
             .width(Length::Fill),
     )
     .on_enter(SidebarMsg::HoverTarget(target))

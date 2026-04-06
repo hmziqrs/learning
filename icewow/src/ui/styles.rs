@@ -249,6 +249,7 @@ pub fn modal_backdrop(_theme: &Theme) -> container::Style {
 }
 
 pub fn modal_card(_theme: &Theme, _scale: &UiScale) -> container::Style {
+    // Scale parameter reserved for future density-aware modal sizing.
     container::Style {
         background: Some(Background::Color(CARD)),
         border: border::rounded(UiScale::RADIUS_MD).color(BORDER).width(1),

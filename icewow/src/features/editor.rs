@@ -200,7 +200,7 @@ pub fn view_request_name_row<'a>(tab: &'a Tab, scale: &'a UiScale) -> Element<'a
     }
 
     let content = row![
-        components::method_badge(method),
+        components::method_badge(method, scale),
         name_input,
         save_btn,
     ]

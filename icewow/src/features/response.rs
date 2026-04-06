@@ -53,7 +53,7 @@ pub fn view_response_section<'a>(tab: &'a Tab, scale: &'a UiScale) -> Element<'a
     };
 
     let response_header = row![
-        components::status_badge(response.status_code),
+        components::status_badge(response.status_code, scale),
         text(format!("{}ms", response.elapsed_ms)).size(scale.text_small()),
     ]
     .spacing(scale.space_md())
