@@ -102,14 +102,6 @@ pub fn method_pick_list(_theme: &Theme, status: pick_list::Status) -> pick_list:
     }
 }
 
-pub fn response_panel(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(BACKGROUND)),
-        border: border::rounded(0).color(BORDER).width(1),
-        ..container::Style::default()
-    }
-}
-
 pub fn status_badge(_theme: &Theme, status_code: u16) -> container::Style {
     let (text, bg, border_color) = if status_code >= 200 && status_code < 300 {
         (emerald::S400, emerald::S950, emerald::S600)

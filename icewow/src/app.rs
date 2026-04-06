@@ -6,6 +6,7 @@ use crate::model::{
     AppState, ClickAction, DeleteDialog, DragKind, DragState, HttpMethod,
     PressKind,
 };
+use crate::ui::scale::Density;
 use crate::ui;
 
 pub struct PostmanUiApp {
@@ -29,6 +30,8 @@ pub enum Message {
     LongPressElapsed(u64),
     ConfirmDelete,
     CancelDelete,
+    SetDensity(Density),
+    SetFontScale(f32),
 }
 
 impl PostmanUiApp {
@@ -154,26 +157,39 @@ impl PostmanUiApp {
                 self.state.delete_dialog = None;
             }
             Message::IconFontLoaded(_) => {}
+            Message::SetDensity(density) => {
+                self.state.ui_scale.density = density;
+            }
+            Message::SetFontScale(scale) => {
+                self.state.ui_scale.font_scale = scale.clamp(0.5, 3.0);
+            }
         }
 
         Task::none()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let pointer_events = event::listen_with(|event, _, _| match event {
-            iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                Some(Message::PointerMoved(position))
-            }
-            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                Some(Message::PointerReleased)
-            }
-            _ => None,
-        });
+        let needs_pointer = self.state.drag_state.is_some()
+            || self.state.pending_long_press.is_some();
+
+        let pointer_sub = if needs_pointer {
+            event::listen_with(|event, _, _| match event {
+                iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                    Some(Message::PointerMoved(position))
+                }
+                iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                    Some(Message::PointerReleased)
+                }
+                _ => None,
+            })
+        } else {
+            Subscription::none()
+        };
 
         let resize_events =
             window::resize_events().map(|(_window_id, size)| Message::WindowResized(size));
 
-        Subscription::batch(vec![pointer_events, resize_events])
+        Subscription::batch(vec![pointer_sub, resize_events])
     }
 
     pub fn view(&self) -> Element<'_, Message> {

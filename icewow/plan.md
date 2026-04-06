@@ -592,11 +592,17 @@ Each phase produces a compiling, working app.
 - Add `&UiScale` parameter to style functions that use sizing (shadow, radius in `drag_preview`, `modal_card`, etc.)
 - Show dirty indicator (dot/icon) on tab chip when `tab.dirty == true`
 
-### Phase 5: Polish
-- Gate pointer subscription on `drag.is_active()` to avoid idle message spam
-- Add depth limit to `TreeArena` insert (prevent runaway nesting)
-- Clean up dead code (`find_parent_and_index`)
-- Add `Message::SetDensity(Density)` and `Message::SetFontScale(f32)` for future settings panel
+### Phase 5: Polish ✅ COMPLETED
+
+- [x] Gate pointer subscription on `drag_state.is_some() || pending_long_press.is_some()` to avoid idle message spam
+- [x] Add `MAX_DEPTH = 32` constant and depth check in `TreeArena::insert()` (returns `bool`)
+- [x] Add `depth_of()` method for depth queries
+- [x] Remove dead `response_panel` style function
+- [x] `find_parent_and_index` is NOT dead code — used in `move_node()` and 3 tests; kept
+- [x] Add `Message::SetDensity(Density)` and `Message::SetFontScale(f32)` with handlers
+- [x] `SetFontScale` clamps to `[0.5, 3.0]` range
+
+**Verification:** `cargo check` ✅ `cargo test` 13/13 ✅
 
 ---
 

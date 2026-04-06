@@ -7,6 +7,9 @@ use crate::model::SidebarDropTarget;
 /// Unified ID for both folders and requests in the tree.
 pub type NodeId = u64;
 
+/// Maximum nesting depth for folders in the tree.
+pub const MAX_DEPTH: usize = 32;
+
 /// The flat, HashMap-based tree that replaces recursive `Vec<TreeNode>`.
 ///
 /// All lookups are O(1). Ancestor checks are O(depth) via parent back-pointers.
@@ -113,7 +116,33 @@ impl TreeArena {
 
     // ── Write operations ───────────────────────────────────────
 
-    pub fn insert(&mut self, parent: Option<NodeId>, index: usize, id: NodeId, data: NodeData) {
+    /// Returns the depth of `id` (root children = depth 0).
+    pub fn depth_of(&self, id: NodeId) -> Option<usize> {
+        let mut depth = 0;
+        let mut current = id;
+        loop {
+            let entry = self.nodes.get(&current)?;
+            match entry.parent {
+                Some(pid) => {
+                    depth += 1;
+                    current = pid;
+                }
+                None => return Some(depth),
+            }
+        }
+    }
+
+    /// Insert a node. Returns `false` if inserting as a child of `parent`
+    /// would exceed `MAX_DEPTH`.
+    pub fn insert(&mut self, parent: Option<NodeId>, index: usize, id: NodeId, data: NodeData) -> bool {
+        // Depth check: parent at depth D means child would be at D+1
+        if let Some(pid) = parent {
+            let parent_depth = self.depth_of(pid).unwrap_or(0);
+            if parent_depth + 1 >= MAX_DEPTH {
+                return false;
+            }
+        }
+
         let entry = TreeEntry {
             data,
             parent,
@@ -133,6 +162,8 @@ impl TreeArena {
                 }
             }
         }
+
+        true
     }
 
     pub fn remove(&mut self, id: NodeId) -> bool {
@@ -527,5 +558,39 @@ mod tests {
         assert!(ids.contains(&r1));
         assert!(ids.contains(&r2));
         assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn insert_rejects_exceeding_max_depth() {
+        let mut tree = TreeArena::new();
+        let mut current_parent = None;
+        let mut last_folder = None;
+
+        for i in 0..MAX_DEPTH {
+            let id = tree.alloc_folder_id();
+            let ok = tree.insert(current_parent, 0, id, NodeData::Folder {
+                name: format!("d{i}"),
+                expanded: true,
+            });
+            assert!(ok, "insert at depth {i} should succeed");
+            current_parent = Some(id);
+            last_folder = Some(id);
+        }
+
+        // One more should fail
+        let extra = tree.alloc_folder_id();
+        let ok = tree.insert(last_folder, 0, extra, NodeData::Folder {
+            name: "too-deep".to_string(),
+            expanded: true,
+        });
+        assert!(!ok, "insert at depth MAX_DEPTH should be rejected");
+    }
+
+    #[test]
+    fn depth_of_returns_correct_depth() {
+        let (tree, folder_a, _, subfolder, _, _) = sample_tree();
+
+        assert_eq!(tree.depth_of(folder_a), Some(0));
+        assert_eq!(tree.depth_of(subfolder), Some(1));
     }
 }
