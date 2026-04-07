@@ -2,6 +2,7 @@ use iced::widget::{button, container, pick_list};
 use iced::{border, Background, Color, Shadow, Theme, Vector};
 
 use crate::model::HttpMethod;
+use crate::ui::anim::lerp_color;
 use crate::ui::scale::UiScale;
 use crate::ui::theme::*;
 
@@ -65,19 +66,16 @@ fn theme_method_colors(method: HttpMethod) -> MethodColors {
     crate::ui::theme::method_colors(method)
 }
 
-pub fn send_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn send_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(PRIMARY, blue::S600, hover_t);
     let base = button::Style {
-        background: Some(Background::Color(PRIMARY)),
+        background: Some(Background::Color(bg)),
         text_color: PRIMARY_FOREGROUND,
         border: border::rounded(UiScale::RADIUS_MD).width(0.0).color(PRIMARY),
         ..button::Style::default()
     };
 
     match status {
-        button::Status::Hovered => button::Style {
-            background: Some(Background::Color(blue::S600)),
-            ..base
-        },
         button::Status::Pressed => button::Style {
             background: Some(Background::Color(blue::S700)),
             ..base
@@ -177,67 +175,73 @@ pub fn tab_insert(_theme: &Theme, active: bool) -> container::Style {
     }
 }
 
-pub fn handle_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn handle_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(Color::TRANSPARENT, WHITE_5, hover_t);
     let mut style = button::Style {
-        background: Some(Background::Color(Color::TRANSPARENT)),
+        background: Some(Background::Color(bg)),
         text_color: MUTED_FOREGROUND,
         border: border::rounded(UiScale::RADIUS_SM).color(Color::TRANSPARENT).width(0),
         ..button::Style::default()
     };
 
-    if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+    if matches!(status, button::Status::Pressed) {
         style.background = Some(Background::Color(WHITE_5));
     }
 
     style
 }
 
-pub fn menu_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn menu_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(CARD, ACCENT, hover_t);
     let mut style = button::Style {
-        background: Some(Background::Color(CARD)),
+        background: Some(Background::Color(bg)),
         text_color: FOREGROUND,
         border: border::rounded(UiScale::RADIUS_SM).color(BORDER).width(1),
         ..button::Style::default()
     };
 
-    if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+    if matches!(status, button::Status::Pressed) {
         style.background = Some(Background::Color(ACCENT));
     }
 
     style
 }
 
-pub fn secondary_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn secondary_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(SECONDARY, ACCENT, hover_t);
+    let text = lerp_color(SECONDARY_FOREGROUND, ACCENT_FOREGROUND, hover_t);
+    let base = button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: text,
+        border: border::rounded(UiScale::RADIUS_SM).width(1).color(BORDER),
+        ..button::Style::default()
+    };
+
     match status {
-        button::Status::Hovered | button::Status::Pressed => button::Style {
+        button::Status::Pressed => button::Style {
             background: Some(Background::Color(ACCENT)),
             text_color: ACCENT_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(1).color(BORDER),
-            ..button::Style::default()
+            ..base
         },
-        _ => button::Style {
-            background: Some(Background::Color(SECONDARY)),
-            text_color: SECONDARY_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(1).color(BORDER),
-            ..button::Style::default()
-        },
+        _ => base,
     }
 }
 
-pub fn danger_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn danger_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(red::S900, red::S600, hover_t);
+    let base = button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: DESTRUCTIVE_FOREGROUND,
+        border: border::rounded(UiScale::RADIUS_SM).width(1).color(red::S600),
+        ..button::Style::default()
+    };
+
     match status {
-        button::Status::Hovered | button::Status::Pressed => button::Style {
+        button::Status::Pressed => button::Style {
             background: Some(Background::Color(red::S600)),
-            text_color: DESTRUCTIVE_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(1).color(red::S600),
-            ..button::Style::default()
+            ..base
         },
-        _ => button::Style {
-            background: Some(Background::Color(red::S900)),
-            text_color: DESTRUCTIVE_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(1).color(red::S600),
-            ..button::Style::default()
-        },
+        _ => base,
     }
 }
 
@@ -300,20 +304,21 @@ pub fn section_tab(_theme: &Theme, active: bool) -> button::Style {
     }
 }
 
-pub fn save_button(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn save_button(_theme: &Theme, status: button::Status, hover_t: f32) -> button::Style {
+    let bg = lerp_color(PRIMARY, blue::S600, hover_t);
+    let base = button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: PRIMARY_FOREGROUND,
+        border: border::rounded(UiScale::RADIUS_SM).width(0.0).color(blue::S600),
+        ..button::Style::default()
+    };
+
     match status {
-        button::Status::Hovered | button::Status::Pressed => button::Style {
-            background: Some(Background::Color(blue::S600)),
-            text_color: PRIMARY_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(0.0).color(blue::S600),
-            ..button::Style::default()
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(blue::S700)),
+            ..base
         },
-        _ => button::Style {
-            background: Some(Background::Color(PRIMARY)),
-            text_color: PRIMARY_FOREGROUND,
-            border: border::rounded(UiScale::RADIUS_SM).width(0.0).color(PRIMARY),
-            ..button::Style::default()
-        },
+        _ => base,
     }
 }
 

@@ -3,11 +3,13 @@ use iced::{Element, Length, Task};
 
 use crate::app::Message;
 use crate::model::{AppState, ResponseTab, Tab};
+use crate::ui::anim::ButtonId;
 use crate::ui::{components, scale::UiScale, styles};
 
 #[derive(Debug, Clone)]
 pub enum ResponseMsg {
     SetResponseTab(ResponseTab),
+    ButtonHover(ButtonId, bool),
 }
 
 pub fn update(state: &mut AppState, msg: ResponseMsg) -> Task<Message> {
@@ -16,6 +18,11 @@ pub fn update(state: &mut AppState, msg: ResponseMsg) -> Task<Message> {
             if let Some(tab) = state.tabs.active_mut() {
                 tab.active_response_tab = response_tab;
             }
+        }
+        ResponseMsg::ButtonHover(id, hovered) => {
+            state
+                .button_anims
+                .set_hover(id, hovered, iced::time::Instant::now());
         }
     }
     Task::none()

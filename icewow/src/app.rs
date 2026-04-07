@@ -1,4 +1,4 @@
-use iced::widget::{column, container, pick_list, row, stack, text, text_input};
+use iced::widget::{column, container, mouse_area, pick_list, row, stack, text, text_input};
 use iced::{event, font, mouse, window, Element, Length, Subscription, Task, Theme};
 
 use crate::features;
@@ -6,6 +6,7 @@ use crate::model::{
     AppState, ClickAction, DeleteDialog, DragKind, DragState, HttpMethod,
     PressKind,
 };
+use crate::ui::anim::ButtonId;
 use crate::ui::scale::Density;
 use crate::ui;
 
@@ -34,6 +35,8 @@ pub enum Message {
     SetDensity(Density),
     #[allow(dead_code)]
     SetFontScale(f32),
+    ButtonHover(ButtonId, bool),
+    AnimFrame(iced::time::Instant),
 }
 
 impl PostmanUiApp {
@@ -165,6 +168,15 @@ impl PostmanUiApp {
             Message::SetFontScale(scale) => {
                 self.state.ui_scale.font_scale = scale.clamp(0.5, 3.0);
             }
+            Message::ButtonHover(id, hovered) => {
+                self.state
+                    .button_anims
+                    .set_hover(id, hovered, iced::time::Instant::now());
+            }
+            Message::AnimFrame(_now) => {
+                // Animation state is read lazily via hover_t() at view time.
+                // This message just drives re-renders while animating.
+            }
         }
 
         Task::none()
@@ -191,7 +203,17 @@ impl PostmanUiApp {
         let resize_events =
             window::resize_events().map(|(_window_id, size)| Message::WindowResized(size));
 
-        Subscription::batch(vec![pointer_sub, resize_events])
+        let anim_sub = if self
+            .state
+            .button_anims
+            .is_animating(iced::time::Instant::now())
+        {
+            iced::time::every(std::time::Duration::from_millis(16)).map(Message::AnimFrame)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch(vec![pointer_sub, resize_events, anim_sub])
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -315,6 +337,9 @@ impl PostmanUiApp {
             "Send"
         };
 
+        let send_id = ButtonId::Send;
+        let send_hover_t = state.button_anims.hover_t(&send_id, iced::time::Instant::now());
+
         let send_btn = iced::widget::button(text(send_label).size(scale.text_label()))
             .on_press_maybe(if loading {
                 None
@@ -322,7 +347,11 @@ impl PostmanUiApp {
                 Some(Message::Http(features::HttpMsg::SendRequest))
             })
             .padding([scale.space_md(), 20.0])
-            .style(|theme, status| ui::styles::send_button(theme, status));
+            .style(move |theme, status| ui::styles::send_button(theme, status, send_hover_t));
+
+        let send_btn = mouse_area(send_btn)
+            .on_enter(Message::ButtonHover(send_id.clone(), true))
+            .on_exit(Message::ButtonHover(send_id, false));
 
         let url_row = row![method_picker, input, send_btn,]
             .spacing(scale.space_md())

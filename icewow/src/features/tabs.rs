@@ -5,6 +5,7 @@ use crate::app::Message;
 use crate::model::{AppState, DragState, TabId};
 use crate::state::TabStore;
 use crate::state::tree::NodeId;
+use crate::ui::anim::ButtonId;
 use crate::ui::{components, icons, scale::UiScale, theme};
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,7 @@ pub enum TabsMsg {
     },
     HoverIndex(usize),
     ClearHover,
+    ButtonHover(ButtonId, bool),
 }
 
 // ── Update handler ─────────────────────────────────────────────
@@ -72,6 +74,11 @@ pub fn update(state: &mut AppState, msg: TabsMsg) -> Task<Message> {
                 *hover_index = None;
             }
         }
+        TabsMsg::ButtonHover(id, hovered) => {
+            state
+                .button_anims
+                .set_hover(id, hovered, iced::time::Instant::now());
+        }
     }
     Task::none()
 }
@@ -102,7 +109,7 @@ pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scal
                 method_label,
                 title_label,
                 dirty_dot,
-                components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale)
+                components::icon_button(icons::lucide_icon("x", scale.icon_sm()), scale, 0.0)
                     .padding([scale.space_xs(), scale.space_sm()])
                     .on_press(TabsMsg::AskDeleteTab(tab_id)),
             ]
@@ -127,7 +134,7 @@ pub fn view_tabs<'a>(tabs: &'a TabStore, drag_state: &'a Option<DragState>, scal
     let container = container(
         row![
             tabs_row.width(Length::Fill),
-            components::secondary_button("+", scale)
+            components::secondary_button("+", scale, 0.0)
                 .on_press(TabsMsg::NewTab)
                 .padding(scale.pad_chip()),
         ]

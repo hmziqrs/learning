@@ -9,6 +9,7 @@ use crate::model::{
 use crate::state::tree::{NodeData, NodeId};
 use crate::state::TabStore;
 use crate::state::TreeArena;
+use crate::ui::anim::{ButtonAnimations, ButtonId};
 use crate::ui::{components, icons, scale::UiScale, theme};
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,7 @@ pub enum SidebarMsg {
     },
     HoverTarget(SidebarDropTarget),
     ClearHover,
+    ButtonHover(ButtonId, bool),
 }
 
 // ── Update handler ─────────────────────────────────────────────
@@ -141,6 +143,11 @@ pub fn update(state: &mut AppState, msg: SidebarMsg) -> Task<Message> {
                 *hover = None;
             }
         }
+        SidebarMsg::ButtonHover(id, hovered) => {
+            state
+                .button_anims
+                .set_hover(id, hovered, iced::time::Instant::now());
+        }
     }
     Task::none()
 }
@@ -156,6 +163,8 @@ pub fn view_sidebar(state: &AppState) -> Element<'_, SidebarMsg> {
         scale,
     )];
 
+    let now = iced::time::Instant::now();
+
     render_nodes(
         &state.tree,
         &state.tabs,
@@ -165,6 +174,8 @@ pub fn view_sidebar(state: &AppState) -> Element<'_, SidebarMsg> {
         state.tree.root_children(),
         &[],
         scale,
+        &state.button_anims,
+        now,
         &mut entries,
     );
 
@@ -222,33 +233,33 @@ pub fn view_context_menu_overlay(
 fn menu_items(target: &ContextMenuTarget, scale: &UiScale) -> Vec<Element<'static, SidebarMsg>> {
     match target {
         ContextMenuTarget::ProjectRoot => vec![
-            components::menu_button("New Folder", scale)
+            components::menu_button("New Folder", scale, 0.0)
                 .on_press(SidebarMsg::CreateFolder { parent: None })
                 .into(),
-            components::menu_button("New Request", scale)
+            components::menu_button("New Request", scale, 0.0)
                 .on_press(SidebarMsg::CreateRequest { parent: None })
                 .into(),
         ],
         ContextMenuTarget::Folder(folder_id) => vec![
-            components::menu_button("New Folder", scale)
+            components::menu_button("New Folder", scale, 0.0)
                 .on_press(SidebarMsg::CreateFolder {
                     parent: Some(*folder_id),
                 })
                 .into(),
-            components::menu_button("New Request", scale)
+            components::menu_button("New Request", scale, 0.0)
                 .on_press(SidebarMsg::CreateRequest {
                     parent: Some(*folder_id),
                 })
                 .into(),
-            components::danger_button("Delete Folder", scale)
+            components::danger_button("Delete Folder", scale, 0.0)
                 .on_press(SidebarMsg::AskDeleteFolder(*folder_id))
                 .into(),
         ],
         ContextMenuTarget::Request(request_id) => vec![
-            components::menu_button("Open Request", scale)
+            components::menu_button("Open Request", scale, 0.0)
                 .on_press(SidebarMsg::SelectRequest(*request_id))
                 .into(),
-            components::danger_button("Delete Request", scale)
+            components::danger_button("Delete Request", scale, 0.0)
                 .on_press(SidebarMsg::AskDeleteRequest(*request_id))
                 .into(),
         ],
@@ -259,7 +270,7 @@ fn project_row<'a>(project_name: &'a str, scale: &UiScale) -> Element<'a, Sideba
     let row = row![
         container(icons::lucide_icon("package", scale.icon_sm())).width(Length::Fixed(20.0)),
         container(text(project_name).size(scale.text_label())).width(Length::Fill),
-        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
+        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale, 0.0)
             .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::ProjectRoot)),
     ]
     .spacing(scale.space_sm())
@@ -282,6 +293,8 @@ fn render_nodes<'a>(
     node_ids: &'a [NodeId],
     ancestors: &[bool],
     scale: &UiScale,
+    button_anims: &ButtonAnimations,
+    now: iced::time::Instant,
     out: &mut Vec<Element<'a, SidebarMsg>>,
 ) {
     let len = node_ids.len();
@@ -332,6 +345,8 @@ fn render_nodes<'a>(
                     name,
                     *expanded,
                     &entry.children,
+                    button_anims,
+                    now,
                 ));
                 if *expanded {
                     let mut child_ancestors = ancestors.to_vec();
@@ -345,6 +360,8 @@ fn render_nodes<'a>(
                         &entry.children,
                         &child_ancestors,
                         scale,
+                        button_anims,
+                        now,
                         out,
                     );
                 }
@@ -362,6 +379,8 @@ fn render_nodes<'a>(
                     node_id,
                     name,
                     *method,
+                    button_anims,
+                    now,
                 ));
             }
         }
@@ -389,6 +408,8 @@ fn folder_row<'a>(
     folder_name: &'a str,
     expanded: bool,
     children: &[NodeId],
+    button_anims: &ButtonAnimations,
+    now: iced::time::Instant,
 ) -> Element<'a, SidebarMsg> {
     let inside_target = SidebarDropTarget::InsideFolder {
         folder_id,
@@ -404,15 +425,34 @@ fn folder_row<'a>(
         icons::lucide_icon("chevron-right", scale.icon_md())
     };
 
+    let toggle_id = ButtonId::FolderToggle(folder_id.into());
+    let menu_id = ButtonId::ItemMenu(folder_id.into());
+    let toggle_hover_t = button_anims.hover_t(&toggle_id, now);
+    let menu_hover_t = button_anims.hover_t(&menu_id, now);
+
+    let toggle_btn: Element<'_, SidebarMsg> = mouse_area(
+        components::icon_button(chevron, scale, toggle_hover_t)
+            .on_press(SidebarMsg::ToggleFolder(folder_id)),
+    )
+    .on_enter(SidebarMsg::ButtonHover(toggle_id.clone(), true))
+    .on_exit(SidebarMsg::ButtonHover(toggle_id, false))
+    .into();
+
+    let menu_btn: Element<'_, SidebarMsg> = mouse_area(
+        components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale, menu_hover_t)
+            .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Folder(folder_id))),
+    )
+    .on_enter(SidebarMsg::ButtonHover(menu_id.clone(), true))
+    .on_exit(SidebarMsg::ButtonHover(menu_id, false))
+    .into();
+
     let content = container(
         row![
             container(icons::lucide_icon("folder", scale.icon_sm()).color(theme::MUTED_FOREGROUND))
                 .width(Length::Fixed(18.0)),
-            components::icon_button(chevron, scale)
-                .on_press(SidebarMsg::ToggleFolder(folder_id)),
+            toggle_btn,
             container(text(folder_name).size(scale.text_label())).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Folder(folder_id))),
+            menu_btn,
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),
@@ -456,6 +496,8 @@ fn request_row<'a>(
     request_id: NodeId,
     request_name: &'a str,
     method: HttpMethod,
+    button_anims: &ButtonAnimations,
+    now: iced::time::Instant,
 ) -> Element<'a, SidebarMsg> {
     let selected = selected_folder.is_none()
         && tabs
@@ -471,14 +513,28 @@ fn request_row<'a>(
             ..iced::Font::default()
         });
 
+    let menu_id = ButtonId::ItemMenu(request_id.into());
+    let menu_hover_t = button_anims.hover_t(&menu_id, now);
+
+    let menu_btn: Element<'_, SidebarMsg> = mouse_area(
+        components::icon_button(
+            icons::lucide_icon("ellipsis", scale.icon_md()),
+            scale,
+            menu_hover_t,
+        )
+        .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Request(request_id))),
+    )
+    .on_enter(SidebarMsg::ButtonHover(menu_id.clone(), true))
+    .on_exit(SidebarMsg::ButtonHover(menu_id, false))
+    .into();
+
     let content = container(
         row![
             container(method_label)
                 .width(Length::Fixed(36.0))
                 .align_x(iced::Alignment::End),
             container(text(request_name).size(scale.text_label())).width(Length::Fill),
-            components::icon_button(icons::lucide_icon("ellipsis", scale.icon_md()), scale)
-                .on_press(SidebarMsg::ToggleContextMenu(ContextMenuTarget::Request(request_id))),
+            menu_btn,
         ]
         .spacing(scale.space_sm())
         .align_y(iced::Alignment::Center),

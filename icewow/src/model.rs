@@ -1,6 +1,7 @@
 use iced::Point;
 
 pub use icewow_engine::HttpMethod;
+pub use crate::ui::anim::ButtonAnimations;
 pub use crate::ui::scale::UiScale;
 pub use crate::state::tree::NodeId;
 
@@ -160,6 +161,7 @@ pub struct AppState {
     pub ui_scale: UiScale,
     pub next_press_token: u64,
     pub selected_folder: Option<NodeId>,
+    pub button_anims: ButtonAnimations,
 }
 
 impl AppState {
@@ -209,6 +211,7 @@ impl AppState {
             ui_scale: UiScale::default(),
             next_press_token: 1,
             selected_folder: None,
+            button_anims: ButtonAnimations::new(),
         }
     }
 

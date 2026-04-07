@@ -38,6 +38,7 @@ pub fn kv_editor<'a, M: Clone + 'static>(
         let remove = crate::ui::components::icon_button(
             crate::ui::icons::lucide_icon("x", scale.icon_sm()),
             scale,
+            0.0,
         )
         .on_press(on_remove_clone(i));
 
@@ -49,7 +50,7 @@ pub fn kv_editor<'a, M: Clone + 'static>(
     }
 
     rows = rows.push(
-        crate::ui::components::secondary_button(on_add_label, scale)
+        crate::ui::components::secondary_button(on_add_label, scale, 0.0)
             .on_press(on_add)
             .padding([scale.space_sm(), scale.space_md()]),
     );

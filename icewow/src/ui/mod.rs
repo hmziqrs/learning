@@ -1,3 +1,4 @@
+pub mod anim;
 pub mod components;
 pub mod icons;
 pub mod scale;

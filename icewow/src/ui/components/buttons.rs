@@ -8,29 +8,30 @@ use crate::ui::styles;
 pub fn icon_button<'a, M: 'a>(
     icon: impl Into<Element<'a, M>>,
     scale: &UiScale,
+    hover_t: f32,
 ) -> widget::Button<'a, M> {
     button(icon)
         .padding(scale.pad_icon())
-        .style(|theme, status| styles::handle_button(theme, status))
+        .style(move |theme, status| styles::handle_button(theme, status, hover_t))
 }
 
 /// Context menu item button — bordered with hover highlight.
-pub fn menu_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
+pub fn menu_button<'a, M: 'a>(label: &'a str, scale: &UiScale, hover_t: f32) -> widget::Button<'a, M> {
     button(label)
         .padding(scale.pad_button())
-        .style(|theme, status| styles::menu_button(theme, status))
+        .style(move |theme, status| styles::menu_button(theme, status, hover_t))
 }
 
 /// Destructive action button (Delete) — red themed.
-pub fn danger_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
+pub fn danger_button<'a, M: 'a>(label: &'a str, scale: &UiScale, hover_t: f32) -> widget::Button<'a, M> {
     button(label)
         .padding(scale.pad_button())
-        .style(|theme, status| styles::danger_button(theme, status))
+        .style(move |theme, status| styles::danger_button(theme, status, hover_t))
 }
 
 /// Secondary action button (Cancel, +) — secondary themed.
-pub fn secondary_button<'a, M: 'a>(label: &'a str, scale: &UiScale) -> widget::Button<'a, M> {
+pub fn secondary_button<'a, M: 'a>(label: &'a str, scale: &UiScale, hover_t: f32) -> widget::Button<'a, M> {
     button(label)
         .padding(scale.pad_button())
-        .style(|theme, status| styles::secondary_button(theme, status))
+        .style(move |theme, status| styles::secondary_button(theme, status, hover_t))
 }

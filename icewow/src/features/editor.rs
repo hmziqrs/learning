@@ -3,6 +3,7 @@ use iced::{Element, Length, Task};
 
 use crate::app::Message;
 use crate::model::{AppState, BodyType, HttpMethod, RequestTab, Tab};
+use crate::ui::anim::ButtonId;
 use crate::ui::{components, scale::UiScale, styles};
 
 #[derive(Debug, Clone)]
@@ -26,6 +27,7 @@ pub enum EditorMsg {
     SetRequestTab(RequestTab),
     SaveRequest,
     RequestNameChanged(String),
+    ButtonHover(ButtonId, bool),
 }
 
 // ── Update handler ─────────────────────────────────────────────
@@ -174,6 +176,11 @@ pub fn update(state: &mut AppState, msg: EditorMsg) -> Task<Message> {
                 tab.dirty = true;
             }
         }
+        EditorMsg::ButtonHover(id, hovered) => {
+            state
+                .button_anims
+                .set_hover(id, hovered, iced::time::Instant::now());
+        }
     }
     Task::none()
 }
@@ -193,7 +200,7 @@ pub fn view_request_name_row<'a>(tab: &'a Tab, scale: &'a UiScale) -> Element<'a
 
     let mut save_btn = button(text("Save").size(scale.text_body()))
         .padding([scale.space_sm(), scale.space_lg()])
-        .style(|theme, status| styles::save_button(theme, status));
+        .style(|theme, status| styles::save_button(theme, status, 0.0));
 
     if dirty {
         save_btn = save_btn.on_press(EditorMsg::SaveRequest);
