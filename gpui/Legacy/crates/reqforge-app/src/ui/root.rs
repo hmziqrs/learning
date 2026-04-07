@@ -4,11 +4,18 @@
 //! response viewer, and environment selector.
 
 use crate::app_state::AppState;
-use gpui::{div, px, AppContext, Context, EventEmitter, Render, Window, IntoElement, Styled, ParentElement, Entity, Subscription};
-use gpui_component::{h_flex, v_flex, ActiveTheme, StyledExt};
+use gpui::{
+    AppContext, Context, Entity, EventEmitter, IntoElement, ParentElement, Render, Styled,
+    Subscription, Window, div, px,
+};
+use gpui_component::{
+    ActiveTheme, StyledExt, h_flex,
+    input::{Input, InputState},
+    v_flex,
+};
 
 // Import the real components
-use super::{SidebarPanel, RequestTabBar, RequestEditor, ResponseViewer, EnvSelector};
+use super::{EnvSelector, RequestEditor, RequestTabBar, ResponseViewer, SidebarPanel};
 
 /// Root view of the ReqForge application.
 ///
@@ -63,20 +70,22 @@ impl RootView {
 impl EventEmitter<()> for RootView {}
 
 impl Render for RootView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let input = cx.new(|cx| InputState::new(window, cx).default_value("John Doe"));
+
         h_flex()
             .size_full()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            // Left: Sidebar (fixed 300px)
-            .child(
-                div()
-                    .w(px(300.0))
-                    .h_full()
-                    .border_r_1()
-                    .border_color(cx.theme().border)
-                    .child(self.sidebar.clone())
-            )
+            // DEBUG: Sidebar disabled to isolate input bug
+            // .child(
+            //     div()
+            //         .w(px(300.0))
+            //         .h_full()
+            //         .border_r_1()
+            //         .border_color(cx.theme().border)
+            //         .child(self.sidebar.clone())
+            // )
             // Right: Main area (flex-1)
             .child(
                 v_flex()
@@ -92,24 +101,24 @@ impl Render for RootView {
                             .border_b_1()
                             .border_color(cx.theme().border)
                             .child(div().text_sm().font_semibold().child("ReqForge"))
-                            .child(self.env_selector.clone())
+                            .child(self.env_selector.clone()),
                     )
-                    // Tab bar
-                    .child(self.tab_bar.clone())
-                    // Request editor (top half)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h(px(200.0))
-                            .child(self.request_editor.clone())
-                    )
-                    // Response viewer (bottom half)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h(px(200.0))
-                            .child(self.response_viewer.clone())
-                    )
+                    .child(Input::new(&input).cleanable(true)), // DEBUG: Tab bar disabled
+                                                                // .child(self.tab_bar.clone())
+                                                                // DEBUG: Request editor disabled
+                                                                // .child(
+                                                                //     div()
+                                                                //         .flex_1()
+                                                                //         .min_h(px(200.0))
+                                                                //         .child(self.request_editor.clone())
+                                                                // )
+                                                                // DEBUG: Response viewer disabled
+                                                                // .child(
+                                                                //     div()
+                                                                //         .flex_1()
+                                                                //         .min_h(px(200.0))
+                                                                //         .child(self.response_viewer.clone())
+                                                                // )
             )
     }
 }
