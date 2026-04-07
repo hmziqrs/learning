@@ -1,0 +1,44 @@
+{
+  "name": "Complex API Request",
+  "method": "PUT",
+  "url": "https://jsonplaceholder.typicode.com/posts/1",
+  "headers": [
+    {
+      "key": "Content-Type",
+      "value": "application/json",
+      "enabled": true,
+      "description": "JSON content type"
+    },
+    {
+      "key": "Authorization",
+      "value": "Bearer abc123def456",
+      "enabled": true,
+      "description": "Bearer token authentication"
+    },
+    {
+      "key": "Accept",
+      "value": "application/vnd.api+json",
+      "enabled": true,
+      "description": "Accept API version"
+    }
+  ],
+  "query_params": [
+    {
+      "key": "include",
+      "value": "comments,author",
+      "enabled": true,
+      "description": "Include related resources"
+    },
+    {
+      "key": "fields[posts]",
+      "value": "id,title,body",
+      "enabled": true,
+      "description": "Specific fields to return"
+    }
+  ],
+  "body": {
+    "type": "Raw",
+    "content": "{\n  \"id\": 1,\n  \"title\": \"Updated Title\",\n  \"body\": \"This is the updated content of the post.\",\n  \"userId\": 1,\n  \"published\": true,\n  \"tags\": [\"updated\", \"api\", \"example\"]\n}",
+    "content_type": "Json"
+  }
+}

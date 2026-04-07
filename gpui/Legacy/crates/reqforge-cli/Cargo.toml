@@ -1,0 +1,17 @@
+[package]
+name = "reqforge-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "reqforge-cli"
+path = "src/main.rs"
+
+[dependencies]
+reqforge-core = { path = "../reqforge-core" }
+reqwest.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+clap = { version = "4.5", features = ["derive"] }
+uuid.workspace = true
+chrono.workspace = true
